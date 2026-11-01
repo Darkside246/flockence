@@ -1,0 +1,37 @@
+name: Flockence Blink transport and OAuth tests
+
+on:
+  pull_request:
+    paths:
+      - "integrations/blink/**"
+      - "services/blink/**"
+      - ".github/workflows/blink-adapter.yml"
+  push:
+    branches: [main]
+    paths:
+      - "integrations/blink/**"
+      - "services/blink/**"
+      - ".github/workflows/blink-adapter.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blink-adapter:
+    name: Test BlinkPy and curl_cffi compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/blink/requirements.txt
+      - name: Install sidecar dependencies
+        run: python -m pip install -r services/blink/requirements.txt
+      - name: Run adapter and OAuth regression tests
+        run: python -m unittest discover -s integrations/blink/tests -v
+      - name: Compile sidecar and integration modules
+        run: python -m compileall -q integrations/blink services/blink

@@ -1,0 +1,1080 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BusinessType {
+  FARMER
+}
+
+enum RecordStatus {
+  ACTUAL
+  ESTIMATE
+  FORECAST
+  CONFIGURATION
+}
+
+enum BatchStatus {
+  PLANNED
+  ACTIVE
+  SLAUGHTERED
+  CLOSED
+}
+
+enum ProductionType {
+  BROILER
+  LAYER
+}
+
+enum EggGrade {
+  SMALL
+  MEDIUM
+  LARGE
+  EXTRA_LARGE
+  JUMBO
+  UNGRADED
+}
+
+enum LayerStage {
+  CHICK
+  GROWER
+  PULLET
+  PRE_LAY
+  LAYING
+  MOLT
+  SPENT
+  CLOSED
+}
+
+enum SlaughterDecisionMode {
+  AGE_TARGET
+  WEIGHT_TARGET
+  AGE_OR_WEIGHT
+  MANUAL
+}
+
+enum TransportType {
+  CHICK_DELIVERY
+  LIVE_BIRD_TO_PROCESSOR
+  LIVE_BIRD_MARKET
+  PROCESSED_MEAT
+  EGG_DELIVERY
+  OTHER
+}
+
+enum ProcessingOutputStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  HOUSEHOLD
+  DAMAGED
+  DISPOSED
+  CONDEMNED
+}
+
+enum ProductStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  HOUSEHOLD
+  DAMAGED
+  DISPOSED
+  PACKED
+  CONDEMNED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  WIPAY
+  BIMPAY
+  OTHER
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  PREPARING
+  READY
+  OUT_FOR_DELIVERY
+  COMPLETED
+  CANCELLED
+}
+
+enum InventoryMovementType {
+  PRODUCTION
+  RECEIPT
+  SALE
+  HOUSEHOLD
+  ADJUSTMENT
+  PACKING
+  DAMAGE
+  DISPOSAL
+  RESERVATION
+  RELEASE
+}
+
+enum AllocationMethod {
+  FARM_WIDE
+  EQUAL_ACTIVE_BATCH
+  PER_BIRD
+  PERCENTAGE
+  MANUAL
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  WORKER
+  READ_ONLY
+}
+
+enum HealthCaseStatus {
+  OPEN
+  MONITORING
+  RESOLVED
+  CLOSED
+}
+
+enum HealthSeverity {
+  LOW
+  MODERATE
+  HIGH
+  URGENT
+}
+
+enum HealthConfidence {
+  SUSPECTED
+  LIKELY
+  CONFIRMED
+  RULED_OUT
+  UNKNOWN
+}
+
+enum TreatmentStatus {
+  ACTIVE
+  WITHDRAWAL_CLEARED
+  COMPLETED
+  STOPPED
+}
+
+enum DiagnosticResultStatus {
+  PENDING
+  NEGATIVE
+  POSITIVE
+  INCONCLUSIVE
+}
+
+model RateLimitBucket {
+  keyHash String @id
+  count Int
+  resetAt DateTime
+  @@index([resetAt])
+}
+
+model Farm {
+  id String @id @default(cuid())
+  name String
+  businessType BusinessType @default(FARMER)
+  currency String @default("BBD")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  batches Batch[]
+  expenses Expense[]
+  recurringExpenses RecurringExpense[]
+  transportExpenses TransportationExpense[]
+  transportEvents TransportEvent[]
+  sales Sale[]
+  settings Setting[]
+  products Product[]
+  suppliers Supplier[]
+  customers Customer[]
+  users User[]
+  auditLogs AuditLog[]
+  productionPlans ProductionPlan[]
+  healthCases HealthCase[]
+  treatments Treatment[]
+  healthObservations HealthObservation[]
+  diagnosticTests DiagnosticTest[]
+  equipment Equipment[]
+  farmTasks FarmTask[]
+  biosecurityLogs BiosecurityLog[]
+  weatherSnapshots WeatherSnapshot[]
+  dailyFlockChecks DailyFlockCheck[]
+  storageLocations StorageLocation[]
+  storageTemperatureLogs StorageTemperatureLog[]
+  inventoryMovements InventoryMovement[]
+  manureRecords ManureRecord[]
+  visionMedia VisionMedia[]
+  eggCollections EggCollection[]
+  eggPackRuns EggPackRun[]
+  layerStageEvents LayerStageEvent[]
+}
+
+model DailyFlockCheck {
+  id String @id @default(cuid())
+  farmId String
+  batchId String
+  date DateTime
+  liveCount Int
+  feedKg Decimal? @db.Decimal(12,3)
+  waterLiters Decimal? @db.Decimal(12,3)
+  avgWeightKg Decimal? @db.Decimal(10,3)
+  weightSampleQuantity Int?
+  temperatureC Decimal? @db.Decimal(6,2)
+  humidityPercent Decimal? @db.Decimal(6,2)
+  ammoniaPpm Decimal? @db.Decimal(7,2)
+  litterCondition String?
+  pantingObserved Boolean @default(false)
+  wingSpreadingObserved Boolean @default(false)
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([batchId, date])
+  @@index([farmId, date])
+  @@index([batchId, date])
+}
+
+
+model LayerStageEvent {
+  id String @id @default(cuid())
+  farmId String
+  batchId String
+  fromStage LayerStage?
+  toStage LayerStage
+  date DateTime
+  reason String?
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([farmId, date])
+  @@index([batchId, date])
+}
+
+model EggCollection {
+  id String @id @default(cuid())
+  farmId String
+  batchId String
+  date DateTime
+  liveHens Int @default(0)
+  totalEggs Int
+  saleableEggs Int
+  dirtyEggs Int @default(0)
+  crackedEggs Int @default(0)
+  floorEggs Int @default(0)
+  rejectedEggs Int @default(0)
+  withdrawalBlocked Boolean @default(false)
+  withdrawalNotes String?
+  averageEggWeightG Decimal? @db.Decimal(8,2)
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  grades EggCollectionGrade[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([batchId, date])
+  @@index([farmId, date])
+  @@index([batchId, date])
+}
+
+model EggCollectionGrade {
+  id String @id @default(cuid())
+  eggCollectionId String
+  grade EggGrade
+  quantity Int
+  inventoryItemId String? @unique
+  eggCollection EggCollection @relation(fields: [eggCollectionId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  @@unique([eggCollectionId, grade])
+  @@index([grade])
+}
+
+model EggPackRun {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  date DateTime
+  grade EggGrade
+  packSize Int
+  packCount Int
+  totalEggs Int
+  packCode String @unique
+  packedAt DateTime
+  bestBeforeDate DateTime?
+  notes String?
+  outputInventoryItemId String? @unique
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  outputInventoryItem InventoryItem? @relation("EggPackOutput", fields: [outputInventoryItemId], references: [id], onDelete: SetNull)
+  inputs EggPackInput[]
+  createdAt DateTime @default(now())
+  @@index([farmId, date])
+  @@index([batchId, date])
+}
+
+model EggPackInput {
+  id String @id @default(cuid())
+  packRunId String
+  inventoryItemId String
+  quantityEggs Int
+  packRun EggPackRun @relation(fields: [packRunId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  @@unique([packRunId, inventoryItemId])
+  @@index([inventoryItemId])
+}
+
+model WeatherSnapshot {
+  id String @id @default(cuid())
+  farmId String
+  provider String
+  observedAt DateTime
+  fetchedAt DateTime
+  latitude Decimal @db.Decimal(9,6)
+  longitude Decimal @db.Decimal(9,6)
+  tempC Decimal @db.Decimal(6,2)
+  feelsLikeC Decimal @db.Decimal(6,2)
+  humidityPercent Decimal @db.Decimal(6,2)
+  windKph Decimal @db.Decimal(7,2)
+  precipitationMm Decimal @db.Decimal(7,2)
+  condition String
+  heatRisk String
+  heatAdvice String
+  forecastJson String
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  @@index([farmId, fetchedAt])
+  @@index([farmId, observedAt])
+}
+
+model User {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  email String @unique
+  role UserRole @default(OWNER)
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  auditLogs AuditLog[]
+  healthCases HealthCase[]
+  treatments Treatment[]
+  farmTasks FarmTask[]
+  @@index([farmId, role])
+}
+
+model Batch {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  traceCode String @unique @default(cuid())
+  status BatchStatus @default(PLANNED)
+  recordStatus RecordStatus @default(ACTUAL)
+  startDate DateTime
+  species String @default("BROILER_CHICKEN")
+  productionType ProductionType?
+  layerStage LayerStage?
+  breed String?
+  strain String?
+  sex String?
+  hatchery String?
+  sourceLot String?
+  placementQuality String?
+  placementNotes String?
+  hatchDate DateTime?
+  purchaseDate DateTime?
+  lifecycleDateSource String @default("START_DATE")
+  expectedSlaughter DateTime?
+  targetSlaughterAgeDays Int @default(42)
+  slaughterDecisionMode SlaughterDecisionMode @default(AGE_OR_WEIGHT)
+  targetLiveWeightKg Decimal? @db.Decimal(10,3)
+  targetDressedWeightKg Decimal? @db.Decimal(10,3)
+  actualSlaughter DateTime?
+  initialChicks Int
+  supplierId String?
+  chickCostMinor Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  birdCounts BirdCount[]
+  mortalityEvents MortalityEvent[]
+  feedPurchases FeedPurchase[]
+  feedUsage FeedUsage[]
+  beddingPurchases BeddingPurchase[]
+  beddingUsage BeddingUsage[]
+  expenses Expense[]
+  slaughterEvents SlaughterEvent[]
+  processingOutputs ProcessingOutput[]
+  transportEvents TransportEvent[]
+  inventory InventoryItem[]
+  weights WeightRecord[]
+  sales SaleItem[]
+  householdUses HouseholdConsumption[]
+  manureRecords ManureRecord[]
+  transportExpenses TransportationExpense[]
+  healthCases HealthCase[]
+  healthObservations HealthObservation[]
+  treatments Treatment[]
+  diagnosticTests DiagnosticTest[]
+  farmTasks FarmTask[]
+  dailyFlockChecks DailyFlockCheck[]
+  eggCollections EggCollection[]
+  eggPackRuns EggPackRun[]
+  layerStageEvents LayerStageEvent[]
+  @@index([farmId, status])
+}
+
+model BirdCount {
+  id String @id @default(cuid())
+  batchId String
+  date DateTime
+  liveCount Int
+  note String?
+  createdAt DateTime @default(now())
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  @@index([batchId, date])
+}
+
+model MortalityEvent {
+  id String @id @default(cuid())
+  batchId String
+  date DateTime
+  quantity Int
+  reason String?
+  notes String?
+  createdAt DateTime @default(now())
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  @@index([batchId, date])
+}
+
+model FeedPurchase {
+  id String @id @default(cuid())
+  farmId String?
+  batchId String?
+  date DateTime
+  feedType String
+  bagSizeKg Decimal @db.Decimal(10,3)
+  quantityBags Decimal @db.Decimal(10,3)
+  unitCostMinor Int
+  supplierId String?
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  @@index([batchId, date])
+}
+
+model FeedUsage {
+  id String @id @default(cuid())
+  batchId String
+  date DateTime
+  feedType String
+  quantityKg Decimal @db.Decimal(12,3)
+  costMinor Int
+  note String?
+  createdAt DateTime @default(now())
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  @@index([batchId, date])
+}
+
+model BeddingPurchase {
+  id String @id @default(cuid())
+  farmId String?
+  batchId String?
+  date DateTime
+  material String
+  quantity Decimal @db.Decimal(12,3)
+  unit String
+  unitCostMinor Int
+  supplierId String?
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  @@index([batchId, date])
+}
+
+model BeddingUsage {
+  id String @id @default(cuid())
+  batchId String
+  date DateTime
+  material String
+  quantity Decimal @db.Decimal(12,3)
+  unit String
+  costMinor Int
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+}
+
+model Expense {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  date DateTime
+  category String
+  description String
+  amountMinor Int
+  recordStatus RecordStatus @default(ACTUAL)
+  economicCost Boolean @default(true)
+  allocationMethod AllocationMethod @default(FARM_WIDE)
+  allocationPercent Decimal? @db.Decimal(7,4)
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([farmId, date])
+  @@index([batchId, date])
+}
+
+model RecurringExpense {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  category String
+  amountMinor Int
+  frequency String @default("MONTHLY")
+  nextDueDate DateTime
+  allocationMethod AllocationMethod @default(FARM_WIDE)
+  active Boolean @default(true)
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  @@index([farmId, active, nextDueDate])
+}
+
+model TransportationExpense {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  date DateTime
+  purpose String
+  distanceKm Decimal? @db.Decimal(10,2)
+  fuelMinor Int @default(0)
+  otherMinor Int @default(0)
+  actualCashMinor Int @default(0)
+  economicMinor Int @default(0)
+  allocationMethod AllocationMethod @default(FARM_WIDE)
+  allocationPercent Decimal? @db.Decimal(7,4)
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  @@index([farmId, date])
+  @@index([batchId, date])
+}
+
+model SlaughterEvent {
+  id String @id @default(cuid())
+  batchId String
+  date DateTime
+  sentQuantity Int
+  slaughtered Int
+  condemned Int @default(0)
+  slaughterCostMinor Int
+  liveWeightKg Decimal? @db.Decimal(12,3)
+  dressedWeightKg Decimal? @db.Decimal(12,3)
+  chillingCompletedAt DateTime?
+  notes String?
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  processingOutputs ProcessingOutput[]
+  transportEvents TransportEvent[]
+  createdAt DateTime @default(now())
+  @@index([batchId, date])
+}
+
+model ProcessingOutput {
+  id String @id @default(cuid())
+  batchId String
+  slaughterEventId String?
+  productName String
+  category String
+  quantity Decimal @db.Decimal(12,3)
+  unit String
+  weightKg Decimal? @db.Decimal(12,3)
+  unitPriceMinor Int?
+  costBasisMinor Int @default(0)
+  status ProcessingOutputStatus @default(AVAILABLE)
+  notes String?
+  inventoryItemId String?
+  storageLocationId String?
+  lotCode String?
+  packedAt DateTime?
+  useByDate DateTime?
+  storageState String?
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  slaughterEvent SlaughterEvent? @relation(fields: [slaughterEventId], references: [id], onDelete: SetNull)
+  storageLocation StorageLocation? @relation(fields: [storageLocationId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([batchId, status])
+  @@index([productName, status])
+}
+
+model TransportEvent {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  slaughterEventId String?
+  type TransportType
+  departureAt DateTime
+  arrivalAt DateTime?
+  origin String?
+  destination String?
+  carrier String?
+  vehicle String?
+  driverName String?
+  crateCount Int?
+  birdsLoaded Int?
+  birdsArrived Int?
+  birdsDeadOnArrival Int @default(0)
+  distanceKm Decimal? @db.Decimal(10,2)
+  journeyMinutes Int?
+  ambientTempC Decimal? @db.Decimal(6,2)
+  feedWithdrawalHours Decimal? @db.Decimal(6,2)
+  waterAvailable Boolean?
+  welfareCheckCompleted Boolean @default(false)
+  sanitationCompleted Boolean @default(false)
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  slaughterEvent SlaughterEvent? @relation(fields: [slaughterEventId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([farmId, departureAt])
+  @@index([batchId, departureAt])
+}
+
+model Product {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  unit String
+  defaultPriceMinor Int?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  inventory InventoryItem[]
+  @@unique([farmId, name])
+}
+
+model InventoryItem {
+  id String @id @default(cuid())
+  productId String
+  batchId String?
+  quantity Decimal @db.Decimal(12,3)
+  weightKg Decimal? @db.Decimal(12,3)
+  costBasisMinor Int @default(0)
+  sellingPriceMinor Int?
+  status ProductStatus @default(AVAILABLE)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  saleItems SaleItem[]
+  processingOutputs ProcessingOutput[]
+  inventoryMovements InventoryMovement[]
+  eggCollectionGrades EggCollectionGrade[]
+  eggPackRunOutput EggPackRun? @relation("EggPackOutput")
+  eggPackInputs EggPackInput[]
+  storageLocationId String?
+  lotCode String?
+  packedAt DateTime?
+  useByDate DateTime?
+  storageState String?
+  storageLocation StorageLocation? @relation(fields: [storageLocationId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([productId, status])
+  @@index([batchId, status])
+}
+
+model StorageLocation {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  type String
+  capacityKg Decimal? @db.Decimal(12,3)
+  temperatureTargetC Decimal? @db.Decimal(6,2)
+  temperatureMinC Decimal? @db.Decimal(6,2)
+  temperatureMaxC Decimal? @db.Decimal(6,2)
+  active Boolean @default(true)
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  inventoryItems InventoryItem[]
+  processingOutputs ProcessingOutput[]
+  temperatureLogs StorageTemperatureLog[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([farmId, type, active])
+}
+
+model StorageTemperatureLog {
+  id String @id @default(cuid())
+  farmId String
+  storageLocationId String
+  date DateTime
+  temperatureC Decimal @db.Decimal(6,2)
+  measuredBy String?
+  notes String?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  storageLocation StorageLocation @relation(fields: [storageLocationId], references: [id], onDelete: Cascade)
+  @@index([farmId, date])
+  @@index([storageLocationId, date])
+}
+
+model InventoryMovement {
+  id String @id @default(cuid())
+  farmId String
+  inventoryItemId String?
+  productId String?
+  batchId String?
+  date DateTime @default(now())
+  movementType InventoryMovementType
+  quantity Decimal @db.Decimal(12,3)
+  unit String
+  weightKg Decimal? @db.Decimal(12,3)
+  referenceType String?
+  referenceId String?
+  fromLocationId String?
+  toLocationId String?
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  @@index([farmId, date])
+  @@index([productId, date])
+  @@index([batchId, date])
+  @@index([inventoryItemId, date])
+}
+
+model ManureRecord {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  date DateTime
+  material String
+  quantity Decimal @db.Decimal(12,3)
+  unit String
+  disposition String
+  amountMinor Int @default(0)
+  transportMinor Int @default(0)
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  @@index([farmId, date])
+  @@index([batchId, date])
+}
+
+model Sale {
+  id String @id @default(cuid())
+  farmId String
+  date DateTime
+  customerId String?
+  customerName String?
+  totalMinor Int
+  amountPaidMinor Int @default(0)
+  paymentStatus PaymentStatus @default(UNPAID)
+  paymentMethod PaymentMethod?
+  recordStatus RecordStatus @default(ACTUAL)
+  orderStatus OrderStatus @default(COMPLETED)
+  fulfillmentMethod String?
+  deliveryAddress String?
+  source String @default("MANUAL")
+  externalId String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items SaleItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([farmId, date])
+  @@index([farmId, orderStatus, date])
+  @@unique([farmId, externalId])
+}
+
+model SaleItem {
+  id String @id @default(cuid())
+  saleId String
+  batchId String?
+  inventoryItemId String?
+  description String
+  quantity Decimal @db.Decimal(12,3)
+  weightKg Decimal? @db.Decimal(12,3)
+  unitPriceMinor Int
+  totalMinor Int
+  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+}
+
+model HouseholdConsumption {
+  id String @id @default(cuid())
+  batchId String?
+  date DateTime
+  product String
+  quantity Decimal @db.Decimal(12,3)
+  weightKg Decimal? @db.Decimal(12,3)
+  estimatedValueMinor Int
+  cashReceivedMinor Int @default(0)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+}
+
+model WeightRecord {
+  id String @id @default(cuid())
+  batchId String
+  date DateTime
+  scope String
+  quantity Int
+  avgWeightKg Decimal @db.Decimal(10,3)
+  liveOrDressed String
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Setting {
+  id String @id @default(cuid())
+  farmId String
+  key String
+  value String
+  updatedAt DateTime @updatedAt
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  @@unique([farmId, key])
+}
+
+model Supplier {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  phone String?
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batches Batch[]
+  feedPurchases FeedPurchase[]
+  beddingPurchases BeddingPurchase[]
+}
+
+model Customer {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  phone String?
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  sales Sale[]
+  @@index([farmId, name])
+  @@index([farmId, phone])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  farmId String
+  userId String?
+  action String
+  entity String
+  entityId String?
+  beforeJson String?
+  afterJson String?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([farmId, createdAt])
+}
+
+model ProductionPlan {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  batchSize Int
+  staggerWeeks Int @default(3)
+  targetSlaughterWeeks Int @default(6)
+  expectedMortalityPercent Decimal @db.Decimal(6,3)
+  startDate DateTime
+  active Boolean @default(true)
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  @@index([farmId, active])
+}
+
+model HealthCase {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  openedByUserId String?
+  caseNumber String
+  openedAt DateTime @default(now())
+  closedAt DateTime?
+  status HealthCaseStatus @default(OPEN)
+  severity HealthSeverity @default(MODERATE)
+  confidence HealthConfidence @default(UNKNOWN)
+  title String
+  summary String?
+  affectedCount Int @default(0)
+  deathsCount Int @default(0)
+  suspectedCause String?
+  confirmedDiagnosis String?
+  isolationRecommended Boolean @default(false)
+  movementRestricted Boolean @default(false)
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  openedBy User? @relation(fields: [openedByUserId], references: [id], onDelete: SetNull)
+  observations HealthObservation[]
+  treatments Treatment[]
+  diagnosticTests DiagnosticTest[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([farmId, caseNumber])
+  @@index([farmId, status, severity])
+  @@index([batchId, openedAt])
+}
+
+model HealthObservation {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  healthCaseId String?
+  observedAt DateTime
+  symptom String
+  category String?
+  affectedCount Int @default(1)
+  severity HealthSeverity @default(MODERATE)
+  notes String?
+  temperatureC Decimal? @db.Decimal(6,2)
+  humidityPercent Decimal? @db.Decimal(6,2)
+  waterChange Boolean?
+  feedChange Boolean?
+  ventilationIssue Boolean?
+  beddingIssue Boolean?
+  imageUrl String?
+  visionMediaId String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  visionMedia VisionMedia? @relation(fields: [visionMediaId], references: [id], onDelete: SetNull)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  healthCase HealthCase? @relation(fields: [healthCaseId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  @@index([farmId, observedAt])
+  @@index([batchId, observedAt])
+  @@index([healthCaseId, observedAt])
+}
+
+model VisionMedia {
+  id String @id @default(cuid())
+  farmId String
+  storageKey String @unique
+  mimeType String
+  byteSize Int
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  observations HealthObservation[]
+  @@index([farmId, createdAt])
+}
+
+model Treatment {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  healthCaseId String?
+  administeredByUserId String?
+  productName String
+  activeIngredient String?
+  reason String?
+  startedAt DateTime
+  endedAt DateTime?
+  status TreatmentStatus @default(ACTIVE)
+  doseText String?
+  route String?
+  frequency String?
+  durationDays Int?
+  withdrawalDays Int?
+  withdrawalClearsAt DateTime?
+  veterinarian String?
+  instructions String?
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  healthCase HealthCase? @relation(fields: [healthCaseId], references: [id], onDelete: SetNull)
+  administeredBy User? @relation(fields: [administeredByUserId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([farmId, status, withdrawalClearsAt])
+  @@index([batchId, startedAt])
+}
+
+model DiagnosticTest {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  healthCaseId String?
+  testDate DateTime
+  laboratory String?
+  testName String
+  sampleType String?
+  sampleCount Int?
+  status DiagnosticResultStatus @default(PENDING)
+  resultSummary String?
+  confirmedCondition String?
+  reportReference String?
+  reportUrl String?
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  healthCase HealthCase? @relation(fields: [healthCaseId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([farmId, testDate])
+  @@index([healthCaseId, testDate])
+}
+
+model Equipment {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  category String
+  serialNumber String?
+  purchaseDate DateTime?
+  maintenanceDue DateTime?
+  status String @default("ACTIVE")
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([farmId, category])
+}
+
+model FarmTask {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  assignedToUserId String?
+  title String
+  description String?
+  dueAt DateTime?
+  priority HealthSeverity @default(MODERATE)
+  completedAt DateTime?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  assignedTo User? @relation(fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([farmId, completedAt, dueAt])
+}
+
+model BiosecurityLog {
+  id String @id @default(cuid())
+  farmId String
+  date DateTime
+  area String
+  eventType String
+  visitorCount Int?
+  equipmentMoved Boolean?
+  footwearChanged Boolean?
+  clothingChanged Boolean?
+  disinfectionCompleted Boolean?
+  notes String?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([farmId, date])
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Flockence",
+  "short_name": "Flockence",
+  "description": "Intelligent poultry management by Flockence",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050a12",
+  "theme_color": "#050a12",
+  "icons": []
+}

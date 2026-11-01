@@ -1,0 +1,138 @@
+/* =====================================================================
+   Flockence Cyber-Crystal: character and depth layer.
+   Layered elevation, feature hero, icon tiles, framed cameras, brand signature.
+   Loaded after crystal.css; scoped to the crystal theme.
+   ===================================================================== */
+html[data-theme="crystal"] {
+  --cx-shadow-1: inset 0 1px 0 rgba(162, 233, 255, .07), 0 1px 2px rgba(0, 0, 0, .45), 0 10px 26px -10px rgba(0, 0, 0, .65);
+  --cx-shadow-2: inset 0 1px 0 rgba(162, 233, 255, .11), 0 2px 5px rgba(0, 0, 0, .40), 0 22px 46px -16px rgba(0, 0, 0, .75), 0 0 0 1px rgba(105, 217, 245, .08);
+  --cx-shadow-glow: inset 0 1px 0 rgba(162, 233, 255, .16), 0 2px 5px rgba(0, 0, 0, .4), 0 26px 54px -16px rgba(0, 0, 0, .8), 0 0 0 1px rgba(53, 224, 208, .45), 0 0 40px -12px rgba(53, 224, 208, .45);
+  --shadow-card: var(--cx-shadow-1);
+  --shadow-hover: var(--cx-shadow-glow);
+  --cx-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+}
+
+/* fine grain over the canvas so large dark areas are not flat */
+html[data-theme="crystal"] .shell {
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%27160%27><filter id=%27n%27><feTurbulence type=%27fractalNoise%27 baseFrequency=%27.9%27 numOctaves=%272%27 stitchTiles=%27stitch%27/><feColorMatrix values=%270 0 0 0 .6  0 0 0 0 .85  0 0 0 0 1  0 0 0 .05 0%27/></filter><rect width=%27100%25%27 height=%27100%25%27 filter=%27url(%2523n)%27/></svg>"),
+    radial-gradient(1100px 520px at 78% -8%, rgba(53, 224, 208, .11), transparent 62%),
+    radial-gradient(900px 600px at -6% 30%, rgba(105, 217, 245, .07), transparent 60%),
+    linear-gradient(115deg, transparent 0 46%, rgba(105, 217, 245, .03) 46% 47%, transparent 47% 100%),
+    linear-gradient(62deg, transparent 0 62%, rgba(53, 224, 208, .025) 62% 63%, transparent 63% 100%),
+    linear-gradient(180deg, var(--cx-bg-0), #060d17) !important;
+}
+
+/* raised surfaces: layered shadow, and a lift on hover */
+html[data-theme="crystal"] .cx-kpi, html[data-theme="crystal"] .cx-cam, html[data-theme="crystal"] .cx-widget,
+html[data-theme="crystal"] .cx-prod-card, html[data-theme="crystal"] a.card, html[data-theme="crystal"] .cx-timeline {
+  box-shadow: var(--cx-shadow-2) !important;
+  transition: transform .22s cubic-bezier(.2, .7, .2, 1), box-shadow .22s ease, border-color .22s ease;
+}
+html[data-theme="crystal"] .cx-kpi:hover, html[data-theme="crystal"] .cx-cam:hover, html[data-theme="crystal"] .cx-widget:hover,
+html[data-theme="crystal"] .cx-prod-card:hover, html[data-theme="crystal"] a.card:hover {
+  transform: translateY(-3px); box-shadow: var(--cx-shadow-glow) !important; border-color: var(--cx-edge-hot) !important;
+}
+
+/* buttons: raised, with a lit top edge; primary glows */
+html[data-theme="crystal"] .button, html[data-theme="crystal"] button.button {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .02)), rgba(105, 217, 245, .06) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), 0 8px 16px -10px rgba(0, 0, 0, .9);
+}
+html[data-theme="crystal"] .button:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 12px 22px -10px rgba(53, 224, 208, .45); }
+html[data-theme="crystal"] .button-primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 12px 26px -10px rgba(53, 224, 208, .75) !important; }
+
+/* ---------- feature hero ---------- */
+.cx-hero {
+  position: relative; overflow: hidden; margin: 0 0 24px; padding: 38px 36px 26px; border-radius: 24px;
+  border: 1px solid rgba(105, 217, 245, .22);
+  background:
+    radial-gradient(900px 360px at 88% -25%, rgba(53, 224, 208, .26), transparent 62%),
+    radial-gradient(620px 320px at -4% 125%, rgba(105, 217, 245, .16), transparent 60%),
+    linear-gradient(135deg, #11304a 0%, #0a1d2f 52%, #07121e 100%);
+  box-shadow: inset 0 1px 0 rgba(162, 233, 255, .16), 0 2px 6px rgba(0, 0, 0, .4), 0 34px 70px -28px rgba(0, 0, 0, .85), 0 0 80px -34px rgba(53, 224, 208, .35);
+}
+.cx-hero-art { position: absolute; inset: 0; pointer-events: none; }
+.cx-hero-art i { position: absolute; display: block; clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%); }
+.cx-hero-art i:nth-child(1) { right: -50px; top: -70px; width: 360px; height: 360px; transform: rotate(24deg); background: linear-gradient(135deg, rgba(105, 217, 245, .20), rgba(105, 217, 245, 0) 70%); }
+.cx-hero-art i:nth-child(2) { right: 120px; top: 30px; width: 210px; height: 210px; transform: rotate(-12deg); background: linear-gradient(160deg, rgba(53, 224, 208, .16), rgba(53, 224, 208, 0) 70%); }
+.cx-hero-art i:nth-child(3) { right: -10px; bottom: -90px; width: 260px; height: 260px; transform: rotate(48deg); background: linear-gradient(200deg, rgba(162, 233, 255, .10), rgba(162, 233, 255, 0) 70%); }
+.cx-hero-body { position: relative; z-index: 1; max-width: 760px; }
+.cx-hero-kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: #35e0d0; }
+.cx-hero-title { margin: 12px 0 14px; font-family: var(--cx-serif); font-weight: 500; font-size: clamp(32px, 4.6vw, 54px); line-height: 1.04; letter-spacing: -.022em; color: #edf8fc; text-shadow: 0 2px 24px rgba(0, 0, 0, .45); }
+.cx-hero-title em { font-style: italic; color: #35e0d0; text-shadow: 0 0 30px rgba(53, 224, 208, .45); }
+.cx-hero-sub { margin: 0 0 22px; max-width: 58ch; font-size: 14.5px; line-height: 1.6; color: #a7bbc8; }
+.cx-hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.cx-action {
+  display: inline-flex; align-items: center; gap: 9px; padding: 10px 15px 10px 10px; border-radius: 13px; text-decoration: none;
+  font-size: 13px; font-weight: 600; color: #edf8fc !important; border: 1px solid rgba(105, 217, 245, .24);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .02)), rgba(8, 21, 34, .55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 10px 20px -12px rgba(0, 0, 0, .95);
+  transition: transform .2s cubic-bezier(.2, .7, .2, 1), box-shadow .2s ease, border-color .2s ease;
+}
+.cx-action:hover { transform: translateY(-2px); border-color: rgba(53, 224, 208, .6); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 14px 26px -12px rgba(53, 224, 208, .55); }
+.cx-action-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: #35e0d0; background: rgba(53, 224, 208, .12); border: 1px solid rgba(53, 224, 208, .28); }
+.cx-action:first-child { background: linear-gradient(180deg, #5ceee0, #25c9bb); color: #03121a !important; border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 14px 28px -12px rgba(53, 224, 208, .85); }
+.cx-action:first-child .cx-action-icon { color: #03121a; background: rgba(3, 18, 26, .14); border-color: rgba(3, 18, 26, .18); }
+.cx-hero-chips { position: relative; z-index: 1; margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(105, 217, 245, .14); }
+
+/* ---------- KPI icon tiles ---------- */
+.cx-kpi { position: relative; }
+html[data-theme="crystal"] .cx-kpi .metric-label::before { display: none !important; }
+.cx-kpi-icon {
+  position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: #35e0d0;
+  background: linear-gradient(145deg, rgba(53, 224, 208, .22), rgba(105, 217, 245, .05)); border: 1px solid rgba(53, 224, 208, .32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 8px 16px -8px rgba(53, 224, 208, .55);
+}
+.cx-kpis > .cx-kpi:nth-child(even) .cx-kpi-icon { color: #69d9f5; background: linear-gradient(145deg, rgba(105, 217, 245, .22), rgba(105, 217, 245, .04)); border-color: rgba(105, 217, 245, .34); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 8px 16px -8px rgba(105, 217, 245, .55); }
+.cx-kpi .metric-value { font-size: clamp(26px, 2.5vw, 34px); text-shadow: 0 2px 18px rgba(0, 0, 0, .4); }
+
+/* ---------- section headers with presence ---------- */
+.cx-section-head { padding-bottom: 12px; border-bottom: 1px solid transparent; border-image: linear-gradient(90deg, rgba(105, 217, 245, .30), rgba(105, 217, 245, 0) 70%) 1; }
+.cx-section-head h3 { display: flex; align-items: center; gap: 11px; font-size: 19px; letter-spacing: -.01em; }
+.cx-section-head h3::before { content: ""; width: 4px; height: 1.05em; border-radius: 3px; background: linear-gradient(180deg, #35e0d0, #69d9f5); box-shadow: 0 0 12px rgba(53, 224, 208, .6); flex: none; }
+
+/* ---------- camera prints: framed, with viewfinder corners ---------- */
+.cx-cam { border-radius: 16px !important; border: 1px solid rgba(105, 217, 245, .26) !important; }
+.cx-cam::before {
+  content: ""; position: absolute; inset: 36px 12px 34px 12px; z-index: 2; pointer-events: none; opacity: .5; transition: opacity .25s ease, inset .25s ease;
+  background:
+    linear-gradient(#35e0d0, #35e0d0) top left / 16px 2px no-repeat, linear-gradient(#35e0d0, #35e0d0) top left / 2px 16px no-repeat,
+    linear-gradient(#35e0d0, #35e0d0) top right / 16px 2px no-repeat, linear-gradient(#35e0d0, #35e0d0) top right / 2px 16px no-repeat,
+    linear-gradient(#35e0d0, #35e0d0) bottom left / 16px 2px no-repeat, linear-gradient(#35e0d0, #35e0d0) bottom left / 2px 16px no-repeat,
+    linear-gradient(#35e0d0, #35e0d0) bottom right / 16px 2px no-repeat, linear-gradient(#35e0d0, #35e0d0) bottom right / 2px 16px no-repeat;
+}
+.cx-cam:hover::before { opacity: 1; inset: 32px 8px 30px 8px; }
+
+/* ---------- brand signature and sidebar depth ---------- */
+html[data-theme="crystal"] .nav::after {
+  display: block !important; content: "Powered by Oriya." !important; white-space: normal; margin: 10px 8px 2px; padding: 12px 6px 4px;
+  background: none; border: 0; border-top: 1px solid rgba(105, 217, 245, .14); border-radius: 0; box-shadow: none;
+  text-align: center; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: #718b9c; font-weight: 600;
+}
+html[data-theme="crystal"] .shell .nav { box-shadow: 20px 0 54px rgba(0, 0, 0, .5), inset -1px 0 0 rgba(105, 217, 245, .10) !important; }
+html[data-theme="crystal"] .shell .nav a.active { box-shadow: inset 2px 0 var(--cx-teal), 0 10px 22px -14px rgba(53, 224, 208, .6) !important; }
+
+/* ---------- responsive tuning ---------- */
+@media (max-width: 760px) {
+  .cx-hero { padding: 26px 20px 20px; border-radius: 20px; }
+  .cx-hero-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cx-action { padding-right: 10px; font-size: 12.5px; }
+  .cx-hero-art i:nth-child(2) { display: none; }
+  html[data-theme="crystal"] .cx-kpi:hover, html[data-theme="crystal"] .cx-cam:hover { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="crystal"] .cx-kpi:hover, html[data-theme="crystal"] .cx-cam:hover, html[data-theme="crystal"] .cx-widget:hover,
+  html[data-theme="crystal"] .cx-prod-card:hover, html[data-theme="crystal"] a.card:hover, .cx-action:hover { transform: none; }
+}
+
+/* the app's global span color rule must not wash out hero button labels */
+.cx-action span:not(.cx-action-icon) { color: #edf8fc !important; }
+.cx-action:first-child span:not(.cx-action-icon) { color: #03121a !important; }
+.cx-hero-body { max-width: 940px; }
+.cx-hero-title { max-width: 18ch; }
+@media (max-width: 760px) { .cx-hero-title { max-width: none; } }
+
+/* a camera that is still loading shows a shimmer instead of an empty frame */
+.cx-cam-wait { position: absolute; inset: 0; z-index: 0; }
+.cx-section-head .button, .cx-section-head a.button { white-space: nowrap; }

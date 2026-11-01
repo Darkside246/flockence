@@ -1,0 +1,93 @@
+name: Flockence CI
+
+on:
+  push:
+    branches: [main]
+  # Run validation for feature-to-feature PRs as well as PRs targeting main.
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: flockence-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Validate database, types and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: chicken_op
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ci -d chicken_op"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/chicken_op
+      AUTH_SECRET: ci-secret-abcdefghijklmnopqrstuvwxyz-123456
+      AUTH_COOKIE_SECURE: "false"
+      APP_URL: http://localhost:3000
+      METRICS_SECRET: ci-metrics-secret
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install npm
+        run: npm install -g npm@11.6.0
+
+      - name: Install dependencies
+        run: |
+          set -o pipefail
+          npm install --no-audit --no-fund 2>&1 | tee ci-npm-install.log
+
+      - name: Validate Prisma
+        run: |
+          set -o pipefail
+          npx prisma validate 2>&1 | tee ci-prisma-validate.log
+
+      - name: Generate Prisma
+        run: |
+          set -o pipefail
+          npx prisma generate 2>&1 | tee ci-prisma-generate.log
+
+      - name: Push disposable schema
+        run: |
+          set -o pipefail
+          npx prisma db push --skip-generate 2>&1 | tee ci-prisma-db-push.log
+
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee ci-tests.log
+
+      - name: Type check
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee ci-typecheck.log
+
+      - name: Production build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee ci-build.log
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flockence-ci-diagnostics
+          path: ci-*.log
+          if-no-files-found: warn
+          retention-days: 7

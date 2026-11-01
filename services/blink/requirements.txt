@@ -1,0 +1,5 @@
+# Keep BlinkPy and curl_cffi pinned as a tested compatibility pair.
+blinkpy==0.25.9
+curl-cffi==0.17.0
+fastapi
+uvicorn[standard]

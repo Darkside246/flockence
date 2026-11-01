@@ -1,0 +1,89 @@
+/* =====================================================================
+   Flockence Cyber-Crystal: farm photography.
+   Free stock photos (see public/brand/CREDITS.md), cropped, tinted and faded into
+   the glass so the app feels like a family poultry farm while staying professional.
+   Swap an image by replacing the file in public/brand/ with one of the same name.
+   ===================================================================== */
+
+/* ---------- dashboard hero: a chick in a basket of eggs, fading in from the right ---------- */
+.cx-hero-photo {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 44%; z-index: 0; pointer-events: none;
+  /* hen-dusk.jpg is your own photo if you add it; until then the chick photo shows through */
+  background: url("/brand/hen-dusk.jpg") 50% 22% / cover no-repeat, url("/brand/chick-eggs.jpg") 50% 40% / cover no-repeat;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, .6) 28%, #000 62%);
+  mask-image: linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, .6) 28%, #000 62%);
+  filter: saturate(1.02) contrast(1.05); opacity: 1;
+}
+/* a blurred, brightened copy behind the sharp photo makes it glow into the glass */
+.cx-hero-photo::before {
+  content: ""; position: absolute; inset: -30px; z-index: -1; background: inherit; filter: blur(34px) saturate(1.5); opacity: .55;
+}
+/* teal tint and a darkened floor so the headline and buttons stay readable */
+.cx-hero-photo::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, rgba(8, 24, 38, .55) 0%, rgba(8, 24, 38, 0) 55%, rgba(53, 224, 208, .10) 100%),
+    linear-gradient(0deg, rgba(5, 10, 18, .55), transparent 38%);
+}
+/* keep the buttons in the left column so the photo has clear space on the right */
+.cx-hero-actions { max-width: 540px; }
+.cx-hero-chips { max-width: 100%; }
+
+/* ---------- page banners: a slice of farm photo on the right of every page header ---------- */
+html[data-theme="crystal"] .shell .topbar > .brand::after {
+  content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 46%; z-index: 0; pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(10, 28, 45, .82), rgba(10, 28, 45, .12) 58%, rgba(53, 224, 208, .12)),
+    url("/brand/chick-eggs.jpg") 50% 40% / cover no-repeat;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 62%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 62%);
+  opacity: .9; filter: saturate(.92);
+}
+html[data-banner="eggs"][data-theme="crystal"] .shell .topbar > .brand::after {
+  background:
+    linear-gradient(90deg, rgba(10, 28, 45, .82), rgba(10, 28, 45, .12) 58%, rgba(53, 224, 208, .12)),
+    url("/brand/eggs-hands.jpg") 50% 62% / cover no-repeat;
+}
+html[data-banner="hens"][data-theme="crystal"] .shell .topbar > .brand::after {
+  background:
+    linear-gradient(90deg, rgba(10, 28, 45, .82), rgba(10, 28, 45, .12) 58%, rgba(53, 224, 208, .12)),
+    url("/brand/hen-dusk.jpg") 50% 30% / cover no-repeat, url("/brand/hen-chicks.jpg") 50% 56% / cover no-repeat;
+}
+
+/* ---------- sign-in, sign-up and reset: the farmyard behind the card ---------- */
+html[data-theme="crystal"] .auth-shell { position: relative; isolation: isolate; }
+html[data-theme="crystal"] .auth-shell::before {
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(5, 10, 18, .45) 0%, rgba(5, 10, 18, .88) 72%),
+    radial-gradient(900px 480px at 80% -10%, rgba(53, 224, 208, .16), transparent 60%),
+    url("/brand/hen-dusk.jpg") 50% 30% / cover no-repeat, url("/brand/hen-chicks.jpg") 50% 56% / cover no-repeat;
+  filter: blur(2px) saturate(.9);
+}
+html[data-theme="crystal"] .auth-card { position: relative; z-index: 1; }
+
+/* ---------- phones ---------- */
+@media (max-width: 760px) {
+  .cx-hero-photo {
+    top: 0; bottom: auto; width: 100%; height: 236px; opacity: 1; background-position: 50% 46%;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0%, #000 52%, transparent 100%);
+  }
+  .cx-hero { padding-top: 188px; }
+  .cx-hero-title, .cx-hero-kicker { text-shadow: 0 2px 18px rgba(0, 0, 0, .85); }
+  html[data-theme="crystal"] .shell .topbar > .brand::after { width: 100%; opacity: .26; -webkit-mask-image: linear-gradient(90deg, transparent 10%, #000 100%); mask-image: linear-gradient(90deg, transparent 10%, #000 100%); }
+}
+
+/* banner badges sit on top of the photo: give them their own dark glass so they stay legible */
+html[data-theme="crystal"] .shell .topbar .brand .badge {
+  background: rgba(5, 10, 18, .72) !important; border: 1px solid rgba(53, 224, 208, .45) !important; color: #35e0d0 !important;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: 0 6px 16px -8px rgba(0, 0, 0, .9);
+}
+
+/* primary buttons keep their teal: the raised-button rule must not win over them */
+html[data-theme="crystal"] .button.button-primary, html[data-theme="crystal"] button.button.button-primary {
+  background: linear-gradient(180deg, #5ceee0, #25c9bb) !important; color: #03121a !important; border-color: transparent !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 12px 26px -10px rgba(53, 224, 208, .75) !important;
+}
+html[data-theme="crystal"] .button.button-primary:hover { background: linear-gradient(180deg, #7ff3e8, #35e0d0) !important; }
+html[data-theme="crystal"] .button.button-primary span { color: #03121a !important; }

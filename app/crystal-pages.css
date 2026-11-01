@@ -1,0 +1,87 @@
+/* =====================================================================
+   Flockence Cyber-Crystal: page banners and shared page furniture.
+   Every page already carries a hidden header with its real title, description
+   and badge. Show it as a feature banner so all pages share the same character.
+   ===================================================================== */
+
+/* The legacy header becomes a banner. It must not use transform or filter:
+   the navigation is nested inside it on some pages and is position: fixed. */
+html[data-theme="crystal"] .shell .topbar,
+html[data-theme="crystal"] .shell .topbar:has(> .bottom-nav) {
+  display: block !important; position: static; background: none !important; border: 0 !important; box-shadow: none !important;
+  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
+  margin: 70px 22px 0 calc(var(--sidebar-w) + 22px) !important; padding: 0 !important; min-height: 0 !important; max-width: 1320px;
+  width: min(1320px, calc(100% - var(--sidebar-w) - 44px)); border-radius: 0 !important;
+}
+html[data-theme="crystal"] .shell .topbar > .brand,
+html[data-theme="crystal"] .shell .topbar:has(> .bottom-nav) > .brand {
+  display: flex !important; align-items: center; justify-content: space-between; gap: 18px; max-width: none; margin: 0;
+  position: relative; overflow: hidden; padding: 26px 30px; border-radius: 22px; border: 1px solid rgba(105, 217, 245, .22);
+  background:
+    radial-gradient(640px 220px at 96% -30%, rgba(53, 224, 208, .22), transparent 62%),
+    radial-gradient(420px 220px at -2% 130%, rgba(105, 217, 245, .12), transparent 62%),
+    linear-gradient(135deg, #10283a 0%, #0a1c2d 55%, #07121e 100%);
+  box-shadow: inset 0 1px 0 rgba(162, 233, 255, .14), 0 2px 5px rgba(0, 0, 0, .4), 0 26px 54px -26px rgba(0, 0, 0, .85), 0 0 60px -30px rgba(53, 224, 208, .3);
+}
+/* one crystal facet in the corner */
+html[data-theme="crystal"] .shell .topbar > .brand::before {
+  content: ""; position: absolute; right: -40px; top: -60px; width: 230px; height: 230px; transform: rotate(26deg); pointer-events: none;
+  background: linear-gradient(135deg, rgba(105, 217, 245, .16), rgba(105, 217, 245, 0) 70%);
+  clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+}
+html[data-theme="crystal"] .shell .topbar > .brand > * { position: relative; z-index: 1; }
+html[data-theme="crystal"] .shell .topbar .brand .hero-kicker { margin: 0 0 8px; }
+html[data-theme="crystal"] .shell .topbar .brand h1 {
+  margin: 0; font-family: var(--cx-serif); font-weight: 500; font-size: clamp(28px, 3.4vw, 40px); line-height: 1.08; letter-spacing: -.02em;
+  color: #edf8fc !important; text-shadow: 0 2px 22px rgba(0, 0, 0, .45);
+}
+html[data-theme="crystal"] .shell .topbar .brand p { margin: 8px 0 0; max-width: 62ch; font-size: 14px; line-height: 1.55; color: #a7bbc8 !important; }
+html[data-theme="crystal"] .shell .topbar .brand .badge { flex: none; align-self: flex-start; white-space: nowrap; }
+html[data-theme="crystal"] .shell .topbar .brand-main { display: block; }
+html[data-theme="crystal"] .shell .topbar .brand-mark { display: none; }
+
+/* the content that follows a banner needs less top space than a page without one */
+html[data-theme="crystal"] .shell .topbar ~ .main { padding-top: 22px; }
+
+/* ---------- shared page furniture ---------- */
+html[data-theme="crystal"] .section-head h3, html[data-theme="crystal"] .section-head h2 { letter-spacing: -.01em; }
+html[data-theme="crystal"] .main .section-head > div > h3 { display: flex; align-items: center; gap: 10px; }
+html[data-theme="crystal"] .main .section-head > div > h3::before {
+  content: ""; width: 4px; height: 1em; border-radius: 3px; flex: none;
+  background: linear-gradient(180deg, #35e0d0, #69d9f5); box-shadow: 0 0 10px rgba(53, 224, 208, .55);
+}
+html[data-theme="crystal"] .main .card { box-shadow: var(--cx-shadow-1) !important; }
+html[data-theme="crystal"] .main .row.card { transition: transform .2s cubic-bezier(.2, .7, .2, 1), box-shadow .2s ease, border-color .2s ease; }
+html[data-theme="crystal"] .main a.row.card:hover { transform: translateY(-2px); }
+
+/* forms and tables */
+html[data-theme="crystal"] .main label { color: #a7bbc8 !important; letter-spacing: .02em; }
+html[data-theme="crystal"] .main table { border-collapse: separate; border-spacing: 0; width: 100%; }
+html[data-theme="crystal"] .main th {
+  text-align: left; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; color: #718b9c !important;
+  padding: 10px 12px; border-bottom: 1px solid rgba(105, 217, 245, .18);
+}
+html[data-theme="crystal"] .main td { padding: 12px; border-bottom: 1px solid rgba(105, 217, 245, .08); }
+html[data-theme="crystal"] .main tbody tr { transition: background .15s ease; }
+html[data-theme="crystal"] .main tbody tr:hover { background: rgba(53, 224, 208, .05); }
+html[data-theme="crystal"] .main .empty, html[data-theme="crystal"] .main .empty-chart { border-radius: 14px; }
+html[data-theme="crystal"] .main .empty strong { font-family: var(--cx-serif); font-weight: 500; font-size: 18px; }
+
+/* ---------- phones and tablets ---------- */
+@media (max-width: 980px) {
+  html[data-theme="crystal"] .shell .topbar, html[data-theme="crystal"] .shell .topbar:has(> .bottom-nav) {
+    margin-left: calc(var(--sidebar-w) + 18px) !important; margin-right: 14px !important; width: auto;
+  }
+}
+@media (max-width: 760px) {
+  html[data-theme="crystal"] .shell .topbar, html[data-theme="crystal"] .shell .topbar:has(> .bottom-nav) {
+    margin: 14px 12px 0 !important; width: auto; border-radius: 0 !important;
+  }
+  html[data-theme="crystal"] .shell .topbar > .brand { padding: 20px 18px; border-radius: 18px; flex-direction: column; align-items: flex-start; gap: 12px; }
+  html[data-theme="crystal"] .shell .topbar .brand h1 { font-size: 27px; }
+  html[data-theme="crystal"] .shell .topbar .brand p { font-size: 13.5px; }
+  html[data-theme="crystal"] .shell .topbar ~ .main { padding-top: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="crystal"] .main a.row.card:hover { transform: none; }
+}

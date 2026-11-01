@@ -1,0 +1,22 @@
+node_modules/
+.next/
+.env
+.env.local
+prisma/*.db
+npm-debug.log*
+.DS_Store
+public/uploads/
+
+# Private Farm Vision uploads. Persist this directory on the application volume.
+storage/vision/
+
+# Database backup files contain sensitive farm and customer records.
+backups/
+
+# Optional Python connector environments and bytecode.
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+# Local Blink sidecar logs
+sidecar*.log

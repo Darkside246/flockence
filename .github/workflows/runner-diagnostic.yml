@@ -1,0 +1,19 @@
+name: GitHub-hosted runner diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runner-smoke:
+    name: Confirm hosted runner startup
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Print runner availability
+        run: |
+          echo "GitHub-hosted runner started successfully."
+          echo "Runner OS: ${RUNNER_OS:-unknown}"
+          echo "Runner architecture: ${RUNNER_ARCH:-unknown}"
