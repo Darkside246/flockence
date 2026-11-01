@@ -21,12 +21,12 @@ from blinkpy.auth import Auth, BlinkTwoFARequiredError
 from blinkpy.blinkpy import Blink
 from blinkpy.livestream import BlinkLiveStream
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 import rtsp
 from immi import extract_transport_stream_packets, patch_liveview_auth_header
-from settings import DATA_DIR, FFMPEG, LIVE_DIR, TOKEN, require_token, slug as _slug
+from settings import DATA_DIR, FFMPEG, LIVE_DIR, MIN_TOKEN_LENGTH, TOKEN, client_allowed, credentials_encrypted, open_credentials, require_token, seal_credentials, slug as _slug
 from transport import DEFAULT_IMPERSONATE, CurlCffiAiohttpAdapter
 
 log = logging.getLogger("flockence.blink")
@@ -68,26 +68,34 @@ def _ffmpeg_log_tail(path: Path, limit: int = 4000) -> str:
 
 
 async def _save_credentials():
-    """Persist tokens only; never the account password."""
+    """Persist tokens only; never the account password. Encrypted when BLINK_CREDENTIALS_KEY is set."""
     attrs = dict(state.blink.auth.login_attributes)
     attrs.pop("password", None)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    CRED_FILE.write_text(json.dumps(attrs))
+    tmp = CRED_FILE.with_suffix(".tmp")
+    tmp.write_text(seal_credentials(attrs))
     try:
-        os.chmod(CRED_FILE, 0o600)
+        os.chmod(tmp, 0o600)
     except OSError:
         pass
+    tmp.replace(CRED_FILE)
+    if not credentials_encrypted():
+        log.warning("The Blink login is saved WITHOUT encryption; set BLINK_CREDENTIALS_KEY to encrypt it")
 
 
 async def _try_resume():
     if not CRED_FILE.exists():
         return
     try:
+        attrs, was_plain = open_credentials(CRED_FILE.read_text())
         blink = Blink(session=state.session)
-        blink.auth = Auth(json.loads(CRED_FILE.read_text()), no_prompt=True, session=state.session)
+        blink.auth = Auth(attrs, no_prompt=True, session=state.session)
         if await blink.start():
             state.blink = blink
             log.info("Resumed Blink session")
+            if was_plain and credentials_encrypted():
+                await _save_credentials()
+                log.info("Rewrote the saved Blink login encrypted")
     except Exception:
         log.exception("Could not resume saved Blink session; log in again")
 
@@ -96,6 +104,8 @@ async def _try_resume():
 async def lifespan(_: FastAPI):
     if not TOKEN:
         raise RuntimeError("BLINK_SIDECAR_TOKEN must be set")
+    if len(TOKEN) < MIN_TOKEN_LENGTH:
+        log.error("BLINK_SIDECAR_TOKEN is shorter than %d characters; replace it with a long random value", MIN_TOKEN_LENGTH)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     # One persistent session covers OAuth, MFA, token refresh and camera calls.
     # Recreating it between steps would lose the cookies/session state Blink expects.
@@ -118,7 +128,19 @@ async def lifespan(_: FastAPI):
             state.session = None
 
 
-app = FastAPI(title="Flockence camera sidecar", lifespan=lifespan, dependencies=[Depends(require_token)])
+app = FastAPI(title="Flockence camera sidecar", lifespan=lifespan, dependencies=[Depends(require_token)],
+              docs_url=None, redoc_url=None, openapi_url=None)
+
+
+@app.middleware("http")
+async def only_this_machine(request, call_next):
+    # Refused before the token is even looked at: the sidecar is never a public service.
+    if not client_allowed(request.client.host if request.client else None):
+        return JSONResponse({"detail": "Forbidden"}, status_code=403)
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 app.include_router(rtsp.router)
 
 

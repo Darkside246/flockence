@@ -39,7 +39,7 @@ and `devdb` (an embedded Postgres plus MediaMTX, used for earlier testing).
 | --- | --- | --- |
 | Database | Docker container `flockence-postgres-dev` on `127.0.0.1:54329` (database `flockence_dev`) | `DATABASE_URL` in `.env` points at it. Apply schema with `npx prisma db push`. |
 | App (production) | `npm run build` then `npm run start -- -H 127.0.0.1 -p 3001` | **Preferred.** Pages answer in about 10 to 60 ms. Needs sign-in. |
-| App (development) | `npm run dev -- -H 127.0.0.1` | Auto-signs everyone in as a dev owner. Each page compiles on first visit (2 to 8 s). Run `node scripts/warm-dev.mjs http://127.0.0.1:<port>` after starting to pre-compile everything. |
+| App (development) | `npm run dev -- -H 127.0.0.1` | Signs in like production (the dev auto-login was removed in the 2026-11-01 security review: it showed the cameras to anyone who could reach a dev server). Each page compiles on first visit (2 to 8 s). Run `node scripts/warm-dev.mjs http://127.0.0.1:<port>` after starting to pre-compile everything. |
 | Camera service | from `services/blink`: its own `.venv`, `uvicorn app:app --host 127.0.0.1 --port 8765` | Needs `BLINK_SIDECAR_TOKEN` (same value as in `.env`) and `FFMPEG_PATH`. See section 5. |
 | Preview launcher | `D:\Flockence\.claude\launch.json` (outside the repo) | Entries `flockence` (dev) and `flockence-prod` (port 3001, `autoPort: false`). |
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
+import { currentUserOrRoleResponse } from "@/lib/current-user";
 import { blinkConfigured, blinkFetch } from "@/lib/blink-sidecar";
+import { auditCameraAction, cameraRequestAllowed, cameraViewRoles, hardenCameraHeaders } from "@/lib/camera-guard";
 
 // Allow-listed pass-through to the camera sidecar. Anything not matched here is a 404,
 // so the sidecar's surface is never exposed wholesale.
@@ -24,16 +25,19 @@ async function relay(upstream: Response) {
     const v = upstream.headers.get(h);
     if (v) headers.set(h, v);
   }
-  headers.set("cache-control", "no-store");
+  hardenCameraHeaders(headers);
   return new Response(upstream.body, { status: upstream.status, headers });
 }
 
 const notConfigured = () => NextResponse.json({ error: "Camera service is not configured." }, { status: 503 });
 const notRunning = () => NextResponse.json({ error: "Camera service is not running." }, { status: 503 });
 
+const tooMany = () => NextResponse.json({ error: "Too many camera requests. Wait a minute." }, { status: 429, headers: { "retry-after": "60" } });
+
 export async function GET(request: Request, ctx: Ctx) {
-  const session = await currentUserOrResponse(request);
+  const session = await currentUserOrRoleResponse(request, cameraViewRoles());
   if (session.response) return session.response;
+  if (!cameraRequestAllowed(session.user.id)) return tooMany();
   const segments = (await ctx.params).path;
   const path = segments.join("/");
   if (!matches(VIEW_GET, path)) return NextResponse.json({ error: "Not found." }, { status: 404 });
@@ -53,7 +57,11 @@ async function mutate(request: Request, ctx: Ctx, method: "POST" | "DELETE", own
   if (!owner && !matches(manageList, path)) return NextResponse.json({ error: "Not found." }, { status: 404 });
   const session = await currentUserOrRoleResponse(request, owner ? ["OWNER"] : ["OWNER", "MANAGER"]);
   if (session.response) return session.response;
+  if (!cameraRequestAllowed(session.user.id)) return tooMany();
   if (!blinkConfigured()) return notConfigured();
+  const live = /^cameras\/([^/]+)\/live\/(start|stop)$/.exec(path);
+  if (live) await auditCameraAction(session.user.id, `CAMERA_LIVE_${live[2].toUpperCase()}`, decodeURIComponent(live[1]));
+  else if (path === "imports/clips" || method === "DELETE") await auditCameraAction(session.user.id, method === "DELETE" ? "CAMERA_CLIP_DELETE" : "CAMERA_CLIP_IMPORT", path);
   try {
     // A clip upload is streamed straight through (never buffered here); its details travel in the query string.
     if (method === "POST" && path === "imports/clips") {

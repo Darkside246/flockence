@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { pushToOriya } from "@/lib/oriya";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -20,6 +21,8 @@ function authorized(request: Request) {
 
 export async function POST(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  const limit = await checkRateLimit("oriya:push", 30, 60_000);
+  if (!limit.allowed) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   const url = new URL(request.url);
   const pictures = url.searchParams.get("pictures") ?? "thumbnail";
   if (!["none", "thumbnail", "fresh"].includes(pictures)) return NextResponse.json({ error: "INVALID_PICTURES" }, { status: 400 });

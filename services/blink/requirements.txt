@@ -3,3 +3,4 @@ blinkpy==0.25.9
 curl-cffi==0.17.0
 fastapi
 uvicorn[standard]
+cryptography==50.0.2

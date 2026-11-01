@@ -9,7 +9,14 @@ export function daysBetween(start: Date, end = new Date()) {
   const endDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
   return Math.max(0, Math.round((endDay - startDay) / 86400000));
 }
-export async function ensureFarm() { return prisma.farm.upsert({ where: { id: FARM_ID }, update: {}, create: { id: FARM_ID, name: "Alchemy Farms", currency: "BBD" } }); }
+// The farm row is made once per server process (security review 2026-11-01): this used to run a database write on every
+// request, including every unsigned and forged one, so a flood of bad requests loaded the database for free.
+let farmReady: Promise<unknown> | null = null;
+export async function ensureFarm() {
+  farmReady ??= prisma.farm.upsert({ where: { id: FARM_ID }, update: {}, create: { id: FARM_ID, name: "Alchemy Farms", currency: "BBD" } })
+    .catch((error) => { farmReady = null; throw error; });
+  return farmReady;
+}
 
 export async function dashboardData() {
   await ensureFarm();

@@ -8,20 +8,11 @@ export async function requireCurrentUser(request: Request) {
   const token = cookieHeader.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`))?.slice(`${SESSION_COOKIE}=`.length);
   const sessionUserId = token ? await userIdFromSession(decodeURIComponent(token)) : null;
 
-  let userId = sessionUserId || null;
-  if (!userId && process.env.NODE_ENV !== "production") {
-    userId = request.headers.get("x-user-id") || process.env.CHICKEN_OP_USER_ID || null;
-    if (!userId) {
-      const devUser = await prisma.user.upsert({
-        where: { email: "dev@chicken-op.local" },
-        update: { farmId: FARM_ID, name: "Chicken Op Local User", role: "OWNER" },
-        create: { farmId: FARM_ID, name: "Chicken Op Local User", email: "dev@chicken-op.local", role: "OWNER" },
-        select: { id: true }
-      });
-      userId = devUser.id;
-    }
-  }
-
+  // No sign-in, no user, in every mode (security review 2026-11-01). There used to be a development shortcut that
+  // signed every request in as the owner whenever NODE_ENV was not "production" and trusted an x-user-id header, so a
+  // dev server reachable on a network showed the camera feed to anyone; a Host-header check cannot make it safe
+  // (the caller controls that header), so it is gone. Sign in with the owner account (scripts/bootstrap-local-owner.mjs).
+  const userId = sessionUserId || null;
   if (!userId) throw new Error("AUTH_REQUIRED");
   const user = await prisma.user.findFirst({ where: { id: userId, farmId: FARM_ID }, select: { id: true, farmId: true, name: true, email: true, role: true } });
   if (!user) throw new Error("USER_NOT_FOUND");
