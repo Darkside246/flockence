@@ -36,10 +36,15 @@ if (response.status === 401) {
 } else if (body.error === "LINK_NOT_SET_UP") {
   console.error("Flockence's Oriya settings are missing or wrong: ORIYA_URL (https://oriya.si), ORIYA_LINK_KEY_ID (cop_...) and ORIYA_LINK_SECRET (32+ characters). Restart Flockence after fixing them.");
 } else if (body.check && typeof body.check.status === "number" && body.check.status !== 201) {
-  const hint = { 401: "Oriya refused the key or secret: copy both again from Oriya (Farm > Poultry), exactly, then restart Flockence.",
-    403: "Oriya's link is off: CHICKEN_OP_LINK=on on the Oriya server, and 'Turn the link on' in Oriya (Farm > Poultry).",
-    400: "Oriya refused the message format: tell Claude." }[body.check.status];
-  if (hint) console.error(hint);
+  const byReason = {
+    NOT_ORIYA: "The refusal did not come from Oriya. Something in between (usually Cloudflare's bot protection or firewall rules) blocked the request.",
+    LINK_OFF: "Oriya says the link is off: CHICKEN_OP_LINK=on must reach the Oriya app, the farm's link must be on (Farm > Poultry), and the farm account must be active (or have Internal access).",
+    UNKNOWN_KEY: "Oriya does not know this key id: copy ORIYA_LINK_KEY_ID again from Oriya, exactly, then restart Flockence.",
+    BAD_SIGNATURE: "Oriya says the secret does not match: copy ORIYA_LINK_SECRET again from Oriya, exactly, then restart Flockence.",
+    TOO_OLD: "Oriya says the request is too old: check this PC's clock and time zone are correct (Windows Settings > Time > Set time automatically).",
+    INVALID_EVENT: "Oriya refused the message format: tell Claude.",
+  };
+  console.error(byReason[body.check.reason] ?? `Oriya refused with status ${body.check.status} (${body.check.reason ?? "no reason"}). Tell Claude.`);
 }
 const snaps = Array.isArray(body.snapshots) ? body.snapshots : [];
 console.log(JSON.stringify({ status: response.status, check: body.check ?? body.error ?? null, pictures: snaps.map((s) => ({ camera: s.camera, status: s.status, alerts: s.alerts })) }));

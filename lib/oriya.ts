@@ -131,7 +131,14 @@ async function keepAlerts(answer: OriyaAnswer, source: string) {
   return alerts.length;
 }
 
-export interface PushOutcome { check: { status: number; alerts: number } | null; snapshots: Array<{ camera: string; status: number | string; alerts: number }> }
+/** Who refused, in a fixed word: Oriya's own reason code, or NOT_ORIYA when the answer was not Oriya's JSON (a Cloudflare block page, for example). */
+function refusalReason(reply: { status: number; json: unknown }): string {
+  if (reply.status === 201) return "ACCEPTED";
+  const reason = (reply.json as { reason?: unknown } | null)?.reason;
+  return typeof reason === "string" && /^[A-Z_]{3,40}$/.test(reason) ? reason : "NOT_ORIYA";
+}
+
+export interface PushOutcome { check: { status: number; alerts: number; reason: string } | null; snapshots: Array<{ camera: string; status: number | string; alerts: number }> }
 
 /**
  * One scheduled run: send today's numbers, then (optionally) pictures from each allowed camera. "fresh" pictures
@@ -143,7 +150,7 @@ export async function pushToOriya(options: { house: string; pictures: "none" | "
   const outcome: PushOutcome = { check: null, snapshots: [] };
   const check = await currentFlockCheck(options.house);
   const sent = await postToOriya(config, "/api/public/farm/chicken-op/flock-checks", check);
-  outcome.check = { status: sent.status, alerts: sent.status === 201 ? await keepAlerts(sent.json as OriyaAnswer, "farm numbers") : 0 };
+  outcome.check = { status: sent.status, alerts: sent.status === 201 ? await keepAlerts(sent.json as OriyaAnswer, "farm numbers") : 0, reason: refusalReason(sent) };
   if (options.pictures === "none") return outcome;
   for (const code of allowedCameras(process.env).keys()) {
     const fresh = options.pictures === "fresh";
