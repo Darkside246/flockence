@@ -26,11 +26,13 @@ test("accepts only a fresh, correctly signed body", () => {
 });
 
 test("link settings: HTTPS on oriya.si only, a real key id and a long secret", () => {
-  const good = { ORIYA_URL: "https://app.oriya.si", ORIYA_LINK_KEY_ID: KEY, ORIYA_LINK_SECRET: SECRET };
-  assert.deepEqual(oriyaLinkConfig(good), { baseUrl: "https://app.oriya.si", keyId: KEY, secret: SECRET });
-  assert.equal(oriyaLinkConfig({ ...good, ORIYA_URL: "http://app.oriya.si" }), null);
+  const good = { ORIYA_URL: "https://oriya.si", ORIYA_LINK_KEY_ID: KEY, ORIYA_LINK_SECRET: SECRET };
+  assert.deepEqual(oriyaLinkConfig(good), { baseUrl: "https://oriya.si", keyId: KEY, secret: SECRET });
+  assert.equal(oriyaLinkConfig({ ...good, ORIYA_URL: "https://www.oriya.si" })?.baseUrl, "https://www.oriya.si");
+  assert.equal(oriyaLinkConfig({ ...good, ORIYA_URL: "https://notoriya.si" }), null);
+  assert.equal(oriyaLinkConfig({ ...good, ORIYA_URL: "http://oriya.si" }), null);
   assert.equal(oriyaLinkConfig({ ...good, ORIYA_URL: "https://oriya.si.evil.example" }), null);
-  assert.equal(oriyaLinkConfig({ ...good, ORIYA_URL: "https://user:pw@app.oriya.si" }), null);
+  assert.equal(oriyaLinkConfig({ ...good, ORIYA_URL: "https://user:pw@oriya.si" }), null);
   assert.equal(oriyaLinkConfig({ ...good, ORIYA_LINK_SECRET: "short" }), null);
   assert.equal(oriyaLinkConfig({ ...good, ORIYA_LINK_KEY_ID: "abc" }), null);
 });

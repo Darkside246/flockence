@@ -60,7 +60,7 @@ Flockence checks the signature and window, accepts each `requestId` once (kept i
 
 | Name | Meaning |
 | --- | --- |
-| `ORIYA_URL` | Oriya's address, HTTPS on `oriya.si` (`ORIYA_ALLOWED_HOST` to change the domain). |
+| `ORIYA_URL` | Oriya's address, `https://oriya.si` (HTTPS on oriya.si or an address under it) (`ORIYA_ALLOWED_HOST` to change the domain). |
 | `ORIYA_LINK_KEY_ID`, `ORIYA_LINK_SECRET` | From Oriya: Farm settings > Chicken Op link. Never paste them in chat. |
 | `ORIYA_CAMERAS` | `code=Blink camera name, ...`; Oriya sees the code only. |
 | `ORIYA_HOUSE` | House name sent with each check. |
@@ -78,8 +78,21 @@ On Oriya's server: `CHICKEN_OP_LINK=on`, `FLOCKENCE_URL=https://flockence.oriya.
 - Keep the Blink fixes when upgrading BlinkPy (curl_cffi iOS Safari fingerprint, real `liveview_token`, the 9-byte
   `0x0C` message, 188-byte MPEG-TS framing). The NordVPN DNS settings belong to the owner's PC; leave them off on the droplet.
 
-## Not done yet
+## Tested live with Oriya (2026-11-01)
 
-- Not run against live Blink cameras or the live Oriya server; tested with unit tests, a type check of the whole project
-  and a cross-check against Oriya's own signing and schemas.
-- A Flockence screen for Oriya alerts beyond the existing Health pages.
+Both apps ran together over HTTPS at their real names (`oriya.si`, `flockence.oriya.si`, test certificate): this app
+(`next dev`) on its own Postgres with real farm records, and Oriya's real farm link routes and services. Only the Blink
+cameras (a stand-in sidecar on 127.0.0.1:8765 returning a real JPEG) and Oriya's vision model were stand-ins.
+
+- `node scripts/oriya-push.mjs fresh` sent the numbers (6 heat deaths, 50 kg feed left) and 3 fresh pictures from each
+  of two cameras; Oriya returned DEATH_SPIKE, FEED_RUNNING_OUT and DEAD_BIRD; all four were saved as health observations.
+- Oriya's "check camera now" fetched 3 fresh pictures from "Coop 1" and got DEAD_BIRD back.
+- Refused live: replayed request (409), wrong signature and 10-minute-old timestamp (401), unlisted camera (404), extra
+  field such as a camera address (400), push without or with a wrong token (401).
+- Fixed by the live run: a syntax error in `scripts/oriya-push.mjs`.
+
+## Still to do on the real servers
+
+- Run against the real Blink sidecar and cameras on the Flockence droplet, and the real Oriya at `https://oriya.si`
+  with its vision model set.
+- A Flockence screen for Oriya's alerts beyond the existing Health pages.

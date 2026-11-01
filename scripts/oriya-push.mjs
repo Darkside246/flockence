@@ -14,7 +14,7 @@ function env(name) {
 }
 
 const pictures = process.argv[2] ?? "thumbnail";
-const house = process.argv[3] ?? env("ORIYA_HOUSE") || "Main";
+const house = process.argv[3] || env("ORIYA_HOUSE") || "Main";
 const token = env("ORIYA_PUSH_TOKEN");
 const base = env("FLOCKENCE_LOCAL_URL") || "http://127.0.0.1:3000";
 if (!token) { console.error("ORIYA_PUSH_TOKEN is not set."); process.exit(2); }
