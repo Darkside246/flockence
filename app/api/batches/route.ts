@@ -65,7 +65,22 @@ export async function POST(request: Request) {
     if (expectedSlaughter) expectedSlaughter.setUTCDate(expectedSlaughter.getUTCDate() + targetSlaughterAgeDays);
     const targetLiveWeightKg = productionType === "BROILER" && input.targetLiveWeightKg != null && input.targetLiveWeightKg !== "" ? Number(input.targetLiveWeightKg) : null;
     if (targetLiveWeightKg !== null && (!Number.isFinite(targetLiveWeightKg) || targetLiveWeightKg <= 0)) return NextResponse.json({ error: "Target live weight must be positive." }, { status: 400 });
+    // The chick dealer: one of this farm's suppliers, or a new one named here (owner, 2026-11-02). A supplier id from
+    // anywhere else is refused.
+    const newDealerName = typeof input.newDealerName === "string" ? input.newDealerName.trim().slice(0, 80) : "";
+    let supplierId: string | null = null;
+    if (!newDealerName && input.supplierId) {
+      const supplier = await prisma.supplier.findFirst({ where: { id: String(input.supplierId), farmId: FARM_ID }, select: { id: true } });
+      if (!supplier) return NextResponse.json({ error: "That chick dealer was not found." }, { status: 400 });
+      supplierId = supplier.id;
+    }
+    const chickCostMinor = Number(input.chickCostMinor ?? 0);
+    if (!Number.isSafeInteger(chickCostMinor) || chickCostMinor < 0 || chickCostMinor > 1_000_000) return NextResponse.json({ error: "Enter a price per chick of 0 or more." }, { status: 400 });
     const batch = await prisma.$transaction(async (tx) => {
+      if (newDealerName) {
+        const existing = await tx.supplier.findFirst({ where: { farmId: FARM_ID, name: { equals: newDealerName, mode: "insensitive" } }, select: { id: true } });
+        supplierId = existing?.id ?? (await tx.supplier.create({ data: { farmId: FARM_ID, name: newDealerName, notes: "Chick dealer" }, select: { id: true } })).id;
+      }
       const created = await tx.batch.create({ data: {
         farmId: FARM_ID, name: input.name, startDate, hatchDate, purchaseDate,
         species,
@@ -79,11 +94,11 @@ export async function POST(request: Request) {
         placementQuality: input.placementQuality ? String(input.placementQuality).trim().toUpperCase() : null,
         placementNotes: input.placementNotes ? String(input.placementNotes).trim() : null,
         lifecycleDateSource: hatchDate ? "HATCH_DATE" : purchaseDate ? "PURCHASE_DATE_ESTIMATE" : "START_DATE",
-        initialChicks: input.initialChicks, chickCostMinor: Math.max(0, input.chickCostMinor ?? 0),
+        initialChicks: input.initialChicks, chickCostMinor,
         expectedSlaughter, targetSlaughterAgeDays,
         slaughterDecisionMode: productionType === "BROILER" ? (input.slaughterDecisionMode || "AGE_OR_WEIGHT") : "MANUAL",
         targetLiveWeightKg, targetDressedWeightKg: null,
-        supplierId: input.supplierId || null, status: "ACTIVE", recordStatus: "ACTUAL"
+        supplierId, status: "ACTIVE", recordStatus: "ACTUAL"
       } });
       await tx.birdCount.create({ data: { batchId: created.id, date: startDate, liveCount: input.initialChicks, note: "Initial count" } });
       if (layerStage) {
