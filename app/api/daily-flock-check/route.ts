@@ -33,10 +33,14 @@ export async function POST(request: Request) {
     await ensureFarm();
     const input = await request.json();
     const batchId = String(input.batchId || "");
-    const liveCount = Number(input.liveCount);
+    // Owner, 2026-11-02: deaths are easy to record, live birds are hard to count. The live count is optional: left
+    // blank, it is worked out from the starting birds, recorded deaths and birds sent to slaughter; a number typed in
+    // is a head count and becomes the new starting point.
+    const counted = input.liveCount !== "" && input.liveCount != null;
+    const countedLive = counted ? Number(input.liveCount) : null;
     const dateText = String(input.date || "");
-    if (!batchId || !dateText || !Number.isSafeInteger(liveCount) || liveCount < 0) {
-      return NextResponse.json({ error: "Batch, date and a non-negative live bird count are required." }, { status: 400 });
+    if (!batchId || !dateText || (counted && (!Number.isSafeInteger(countedLive) || countedLive! < 0))) {
+      return NextResponse.json({ error: "Batch and date are required, and a counted live bird number must be a whole number of 0 or more." }, { status: 400 });
     }
 
     const batch = await prisma.batch.findFirst({ where: { id: batchId, farmId: FARM_ID }, select: { id: true, startDate: true, initialChicks: true } });
@@ -46,7 +50,7 @@ export async function POST(request: Request) {
     if (!date || !isCalendarDateNotFuture(date)) {
       return NextResponse.json({ error: "Enter a valid current or historical calendar date for the flock check." }, { status: 400 });
     }
-    if (liveCount > batch.initialChicks) {
+    if (countedLive != null && countedLive > batch.initialChicks) {
       return NextResponse.json({ error: "Live bird count cannot exceed the flock's initial bird count." }, { status: 400 });
     }
     const batchStartDate = new Date(`${batch.startDate.toISOString().slice(0, 10)}T00:00:00.000Z`);
@@ -77,7 +81,7 @@ export async function POST(request: Request) {
     if (avgWeightKg != null && weightSampleQuantity == null) {
       return NextResponse.json({ error: "Weight sample quantity is required when average weight is recorded." }, { status: 400 });
     }
-    if (avgWeightKg != null && weightSampleQuantity != null && weightSampleQuantity > liveCount) {
+    if (avgWeightKg != null && weightSampleQuantity != null && countedLive != null && weightSampleQuantity > countedLive) {
       return NextResponse.json({ error: "Weight sample quantity cannot exceed the live bird count recorded for that day." }, { status: 400 });
     }
     if (humidityPercent != null && humidityPercent > 100) return NextResponse.json({ error: "Humidity cannot exceed 100%." }, { status: 400 });
@@ -120,8 +124,13 @@ export async function POST(request: Request) {
         ],
         date,
       );
-      if (maximumOnFarmCount == null || liveCount > maximumOnFarmCount) {
+      if (maximumOnFarmCount == null) throw new Error("The live bird count for that date could not be worked out from the flock's records.");
+      if (countedLive != null && countedLive > maximumOnFarmCount) {
         throw new Error("Observed live bird count cannot exceed the reconciled on-farm count for that date.");
+      }
+      const liveCount = countedLive ?? maximumOnFarmCount;
+      if (avgWeightKg != null && weightSampleQuantity != null && weightSampleQuantity > liveCount) {
+        throw new Error("Weight sample quantity cannot exceed the live bird count for that day.");
       }
 
       const weightRecord = avgWeightKg != null
@@ -151,10 +160,13 @@ export async function POST(request: Request) {
         },
       });
 
-      // Append a new dated snapshot so same-day corrections remain ordered after earlier flock events.
-      await tx.birdCount.create({
-        data: { batchId, date, liveCount, note: "Recorded from daily flock check." },
-      });
+      // A head count becomes a new dated snapshot (ordered after earlier flock events); a worked-out count is not
+      // stored as one, so it can never hide a death recorded later for the same day.
+      if (countedLive != null) {
+        await tx.birdCount.create({
+          data: { batchId, date, liveCount: countedLive, note: "Head count from daily flock check." },
+        });
+      }
 
       if (avgWeightKg != null) {
         if (weightRecord) {

@@ -11,6 +11,7 @@ import {
 } from "@/lib/climate.mjs";
 import { loadReferenceFrame, saveReferenceFrame } from "@/lib/frame-store";
 import { pollSwitchbot } from "@/lib/thermometers";
+import { reconcileLiveBirdsFromSnapshot } from "@/lib/poultry-metrics.mjs";
 
 /**
  * Flockence's side of "Oriya is the brain" (docs/ORIYA_LINK.md). Flockence collects the farm numbers and Blink
@@ -116,7 +117,12 @@ export async function currentFlockCheck(house: string) {
   const since = new Date(now.getTime() - 24 * 3_600_000);
   const batches = await prisma.batch.findMany({
     where: { farmId: FARM_ID, status: "ACTIVE" },
-    select: { id: true, initialChicks: true, startDate: true, birdCounts: { orderBy: { date: "desc" }, take: 1, select: { liveCount: true } }, mortalityEvents: { select: { quantity: true, date: true, reason: true } } },
+    select: {
+      id: true, initialChicks: true, startDate: true,
+      birdCounts: { where: { date: { lte: now } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 1, select: { liveCount: true, date: true, createdAt: true } },
+      mortalityEvents: { select: { quantity: true, date: true, reason: true, createdAt: true } },
+      slaughterEvents: { select: { sentQuantity: true, date: true, createdAt: true } },
+    },
   });
   const batchIds = batches.map((b) => b.id);
   const [purchases, used, used24, healthCases] = await Promise.all([
@@ -131,7 +137,11 @@ export async function currentFlockCheck(house: string) {
   let oldestDays: number | undefined;
   for (const batch of batches) {
     const dead = batch.mortalityEvents.reduce((sum, m) => sum + m.quantity, 0);
-    alive += batch.birdCounts[0]?.liveCount ?? Math.max(0, batch.initialChicks - dead);
+    // The same count Flockence shows: the last head count (or the starting birds) minus deaths and birds sent since.
+    alive += reconcileLiveBirdsFromSnapshot(batch.initialChicks, batch.birdCounts[0] ?? null, [
+      ...batch.mortalityEvents.map((m) => ({ quantity: m.quantity, date: m.date, createdAt: m.createdAt })),
+      ...batch.slaughterEvents.map((e) => ({ quantity: e.sentQuantity, date: e.date, createdAt: e.createdAt })),
+    ], now) ?? Math.max(0, batch.initialChicks - dead);
     for (const m of batch.mortalityEvents) {
       if (m.date < since) continue;
       deaths += m.quantity;

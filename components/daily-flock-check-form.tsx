@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { calendarDateInTimeZone } from "@/lib/poultry-metrics.mjs";
 
-type Batch = { id: string; name: string; initialChicks: number; status: string; productionType?: string | null; species?: string };
+type Batch = { id: string; name: string; initialChicks: number; status: string; productionType?: string | null; species?: string; liveBirdCount?: number | null };
 
 type DailyCheckPayload = {
   batchId: string;
   date: string;
-  liveCount: number;
+  /** null: worked out from the starting birds, deaths and birds sent to slaughter. */
+  liveCount: number | null;
   feedKg: number | null;
   waterLiters: number | null;
   avgWeightKg: number | null;
@@ -148,15 +149,16 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
-    if (!batchId || !date || !Number.isSafeInteger(Number(liveCount)) || Number(liveCount) < 0) {
-      setMessage("Batch, date and a valid live bird count are required.");
+    const counted = liveCount.trim() !== "";
+    if (!batchId || !date || (counted && (!Number.isSafeInteger(Number(liveCount)) || Number(liveCount) < 0))) {
+      setMessage("Choose the batch and date. A counted live bird number must be a whole number.");
       return;
     }
 
     const payload: DailyCheckPayload = {
       batchId,
       date,
-      liveCount: Number(liveCount),
+      liveCount: counted ? Number(liveCount) : null,
       feedKg: numberOrNull(feedKg),
       waterLiters: numberOrNull(waterLiters),
       avgWeightKg: numberOrNull(avgWeightKg),
@@ -207,7 +209,8 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
     <form className="form grid2" onSubmit={submit}>
       <label>Batch<select value={batchId} onChange={event => setBatchId(event.target.value)} required><option value="">Select batch</option>{batches.filter(batch => batch.status === "ACTIVE").map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
       <label>Date<input value={date} type="date" max={today()} onChange={event => setDate(event.target.value)} required/></label>
-      <label>Live birds<input value={liveCount} onChange={event => setLiveCount(event.target.value)} type="number" min="0" max={selectedBatch?.initialChicks ?? undefined} step="1" required/></label>
+      <label>Live birds (only if you counted them)<input value={liveCount} onChange={event => setLiveCount(event.target.value)} type="number" min="0" max={selectedBatch?.initialChicks ?? undefined} step="1" placeholder={selectedBatch?.liveBirdCount != null ? String(selectedBatch.liveBirdCount) : "Worked out for you"} aria-describedby="live-birds-hint"/>
+        <small id="live-birds-hint" className="muted">{selectedBatch?.liveBirdCount != null ? `Worked out from your records: ${selectedBatch.liveBirdCount} (starting birds minus deaths and birds sent). ` : "Worked out from your records. "}Leave blank unless you did a head count; just record deaths as they happen.</small></label>
       <label>Feed used kg<input value={feedKg} onChange={event => setFeedKg(event.target.value)} type="number" min="0" step="0.001"/></label>
       <label>Water used litres<input value={waterLiters} onChange={event => setWaterLiters(event.target.value)} type="number" min="0" step="0.1"/></label>
       <label>Average weight kg<input value={avgWeightKg} onChange={event => setAvgWeightKg(event.target.value)} type="number" min="0" step="0.001"/></label>
