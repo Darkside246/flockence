@@ -148,3 +148,21 @@ cameras (a stand-in sidecar on 127.0.0.1:8765 returning a real JPEG) and Oriya's
 - Run against the real Blink sidecar and cameras on the Flockence droplet, and the real Oriya at `https://oriya.si`
   with its vision model set.
 - A Flockence screen for Oriya's alerts beyond the existing Health pages.
+
+## Planned next (owner, 2026-11-02) - not built yet
+
+**Camera rounds (Flockence):** cameras one at a time, one minute apart (camera 1 at :01, camera 2 at :02, camera 3 at
+:03), a 30-second Live View clip each, every hour; frames taken from each clip (about 1 per second) and a few sent to
+Oriya; nothing kept but findings. **Pen report every 4 hours.** **Quiet hours** (default 22:00-04:00, the farmer can
+change it): no reports, only urgent alerts. **Morning report** on the night (sleep, deaths, motion). **Motion clips**
+(Blink motion detection is on): Flockence pulls new clips, takes frames, Oriya judges; normal = say nothing, something
+out of place (rat, predator, bird down, feeder or drinker problem) = report. Settings live on a Flockence settings
+screen; Oriya writes the reports and alerts, Flockence shows them.
+
+**Tuning (owner's review of the research):** use an earlier picture 15-45 minutes old (not 5 or 120); check every 15
+minutes whenever the heat index is 79 or more (covers 15:00-19:00 without a fixed time); tell the AI, when humidity is
+80%+ or the dew point gap is 2.5 C or less, to look at the floor by the waterers for dark, shiny or caked patches birds
+avoid in both pictures; when the heat index is 79+, to look for a dense ring of birds at the waterer that does not
+disperse (low or hot water), and for spread or drooping wings and birds packed against walls or fans; send the
+temperature difference between thermometers (hot corner). Buffington and Tao-Xin indexes are not needed (within 0.03 of
+NRC in the farm's data). Optional: a smart fan relay switched by the heat index.
