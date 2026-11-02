@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { FARM_ID } from "@/lib/operations";
+import { currentFarmId } from "@/lib/operations";
 
 export type HeatRisk = "LOW" | "WATCH" | "HIGH";
 export interface WeatherHour {
@@ -42,7 +42,7 @@ function asNumber(value: unknown, fallback = 0) {
   return Number.isFinite(n) ? n : fallback;
 }
 async function settingValue(key: string) {
-  const row = await prisma.setting.findUnique({ where: { farmId_key: { farmId: FARM_ID, key } } });
+  const row = await prisma.setting.findUnique({ where: { farmId_key: { farmId: currentFarmId(), key } } });
   return row?.value?.trim() ?? "";
 }
 export async function getFarmWeather(): Promise<{ configured: false; reason: string } | { configured: true; weather: FarmWeather }> {
@@ -61,7 +61,7 @@ export async function getFarmWeather(): Promise<{ configured: false; reason: str
   if (cached && cached.expiresAt > Date.now()) return { configured: true, weather: cached.weather };
 
   const latest = await prisma.weatherSnapshot.findFirst({
-    where: { farmId: FARM_ID, latitude: latitude, longitude: longitude },
+    where: { farmId: currentFarmId(), latitude: latitude, longitude: longitude },
     orderBy: { fetchedAt: "desc" },
   });
   if (latest && latest.fetchedAt.getTime() + cacheMinutes * 60_000 > Date.now()) {
@@ -117,7 +117,7 @@ export async function getFarmWeather(): Promise<{ configured: false; reason: str
   };
   await prisma.weatherSnapshot.create({
     data: {
-      farmId: FARM_ID,
+      farmId: currentFarmId(),
       provider: "WeatherAPI.com",
       observedAt: new Date(payload?.current?.last_updated_epoch ? Number(payload.current.last_updated_epoch) * 1000 : Date.now()),
       fetchedAt: new Date(weather.fetchedAt),

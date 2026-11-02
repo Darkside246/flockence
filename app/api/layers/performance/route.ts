@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { currentUserOrResponse } from "@/lib/current-user";
 import { calculateHenDayProduction } from "@/lib/poultry-metrics.mjs";
 
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 
   const endExclusive = new Date(toDate.getTime() + 86400000);
   const layerWhere = {
-    farmId: FARM_ID,
+    farmId: currentFarmId(),
     OR: [
       { productionType: "LAYER" as const },
       { productionType: null, species: "LAYER" },
@@ -70,9 +70,9 @@ export async function GET(request: Request) {
     }),
     prisma.eggCollection.findMany({
       where: {
-        farmId: FARM_ID,
+        farmId: currentFarmId(),
         date: { gte: fromDate, lt: endExclusive },
-        batch: { farmId: FARM_ID, OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
+        batch: { farmId: currentFarmId(), OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
         ...(batchId ? { batchId } : {}),
       },
       select: {
@@ -85,7 +85,7 @@ export async function GET(request: Request) {
     }),
     prisma.feedUsage.findMany({
       where: {
-        batch: { farmId: FARM_ID, OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
+        batch: { farmId: currentFarmId(), OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
         date: { gte: fromDate, lt: endExclusive },
         ...(batchId ? { batchId } : {}),
       },
@@ -96,9 +96,9 @@ export async function GET(request: Request) {
     prisma.eggCollection.groupBy({
       by: ["batchId"],
       where: {
-        farmId: FARM_ID,
+        farmId: currentFarmId(),
         date: { lt: endExclusive },
-        batch: { farmId: FARM_ID, OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
+        batch: { farmId: currentFarmId(), OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
         ...(batchId ? { batchId } : {}),
       },
       _sum: { totalEggs: true },
@@ -107,7 +107,7 @@ export async function GET(request: Request) {
       by: ["batchId"],
       where: {
         date: { lt: endExclusive },
-        batch: { farmId: FARM_ID, OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
+        batch: { farmId: currentFarmId(), OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
         ...(batchId ? { batchId } : {}),
       },
       _sum: { quantity: true },

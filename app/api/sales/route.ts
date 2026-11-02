@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { getWithdrawalBlockers } from "@/lib/withdrawal";
 import { recordInventoryMovement } from "@/lib/inventory-ledger";
 import { lockFlockOperations } from "@/lib/poultry-lock";
@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const session = await currentUserOrResponse(request);
   if (session.response) return session.response;
   await ensureFarm();
-  return NextResponse.json(await prisma.sale.findMany({ where: { farmId: FARM_ID }, orderBy: { date: "desc" }, include: { items: true }, take: 100 }));
+  return NextResponse.json(await prisma.sale.findMany({ where: { farmId: currentFarmId() }, orderBy: { date: "desc" }, include: { items: true }, take: 100 }));
 }
 
 export async function POST(request: Request) {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     }
     const saleDayEnd = new Date(saleDate);
     saleDayEnd.setUTCDate(saleDayEnd.getUTCDate() + 1);
-    if (input.externalId) { const existing = await prisma.sale.findFirst({ where: { farmId: FARM_ID, externalId: String(input.externalId) }, include: { items: true } }); if (existing) return NextResponse.json(existing, { status: 200 }); }
+    if (input.externalId) { const existing = await prisma.sale.findFirst({ where: { farmId: currentFarmId(), externalId: String(input.externalId) }, include: { items: true } }); if (existing) return NextResponse.json(existing, { status: 200 }); }
 
     const items = input.items.map((item: any) => {
       const quantity = Number(item.quantity);
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       }
       if (item.inventoryItemId) {
         const inventory = await prisma.inventoryItem.findFirst({
-          where: { id: item.inventoryItemId, product: { farmId: FARM_ID }, status: { in: ["AVAILABLE", "RESERVED"] } },
+          where: { id: item.inventoryItemId, product: { farmId: currentFarmId() }, status: { in: ["AVAILABLE", "RESERVED"] } },
           select: { id: true, batchId: true, quantity: true },
         });
         if (!inventory || Number(inventory.quantity) < item.quantity) return NextResponse.json({ error: "Not enough inventory available for one of the sale items." }, { status: 409 });
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
           if (blockers.length) return NextResponse.json({ error: "SALE_BLOCKED_WITHDRAWAL", blockers }, { status: 409 });
         }
       } else if (item.batchId) {
-        const batch = await prisma.batch.findFirst({ where: { id: item.batchId, farmId: FARM_ID }, select: { id: true } });
+        const batch = await prisma.batch.findFirst({ where: { id: item.batchId, farmId: currentFarmId() }, select: { id: true } });
         if (!batch) return NextResponse.json({ error: "Sale flock was not found in this farm." }, { status: 404 });
       }
     }
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
       await lockFlockOperations(tx, sourceBatchIds);
       const blockers = await tx.treatment.findMany({
         where: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           batchId: { in: sourceBatchIds },
           startedAt: { lt: saleDayEnd },
           OR: [
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
 
       const created = await tx.sale.create({
         data: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           date: saleDate,
           customerName: input.customerName || null,
           totalMinor,
@@ -128,7 +128,7 @@ export async function POST(request: Request) {
         const inventory = await tx.inventoryItem.findUnique({ where: { id: item.inventoryItemId }, select: { productId: true, batchId: true, product: { select: { unit: true } } } });
         if (inventory) {
           await recordInventoryMovement(tx, {
-            farmId: FARM_ID,
+            farmId: currentFarmId(),
             inventoryItemId: item.inventoryItemId,
             productId: inventory.productId,
             batchId: item.batchId || inventory.batchId,

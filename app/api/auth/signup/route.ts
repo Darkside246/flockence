@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { createSession, hashPassword, setSessionCookie, normalizeEmail, validatePassword } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { DEFAULT_FARM_ID, runAsFarm } from "@/lib/farm-scope";
 
 const inviteHash = (value: string) => createHash("sha256").update(value).digest("hex");
 const validRoles = ["OWNER", "MANAGER", "WORKER", "READ_ONLY"] as const;
@@ -16,7 +17,12 @@ function constantTimeSecretMatch(expected: string, supplied: string) {
     && timingSafeEqual(expectedBytes, suppliedBytes);
 }
 
+/** Local accounts are made only on this install's own farm (the PC); farms from Oriya sign in with Oriya. */
 export async function POST(request: Request) {
+  return runAsFarm(DEFAULT_FARM_ID, () => signup(request));
+}
+
+async function signup(request: Request) {
   try {
     await ensureFarm();
     const body = await request.json();
@@ -45,12 +51,12 @@ export async function POST(request: Request) {
     const passwordHash = await hashPassword(password);
     const user = await prisma.$transaction(async (tx) => {
       // Serialize first-owner claims and invitation checks for this farm.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${FARM_ID}, 0))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${currentFarmId()}, 0))`;
 
       const existing = await tx.user.findUnique({ where: { email }, select: { id: true } });
       if (existing) throw new Error("ACCOUNT_ALREADY_EXISTS");
 
-      const userCount = await tx.user.count({ where: { farmId: FARM_ID } });
+      const userCount = await tx.user.count({ where: { farmId: currentFarmId() } });
       let assignedRole: typeof validRoles[number] = userCount === 0 ? "OWNER" : "WORKER";
       if (process.env.NODE_ENV === "production") {
         if (userCount === 0) {
@@ -59,7 +65,7 @@ export async function POST(request: Request) {
         } else {
           const inviteKey = "FARM_INVITE::" + inviteHash(inviteCode);
           const invite = inviteCode ? await tx.setting.findUnique({
-            where: { farmId_key: { farmId: FARM_ID, key: inviteKey } },
+            where: { farmId_key: { farmId: currentFarmId(), key: inviteKey } },
           }) : null;
 
           if (invite) {
@@ -82,11 +88,11 @@ export async function POST(request: Request) {
       }
 
       const created = await tx.user.create({
-        data: { farmId: FARM_ID, name, email, role: assignedRole },
+        data: { farmId: currentFarmId(), name, email, role: assignedRole },
       });
       await tx.setting.upsert({
-        where: { farmId_key: { farmId: FARM_ID, key: `AUTH_PASSWORD::${created.id}` } },
-        create: { farmId: FARM_ID, key: `AUTH_PASSWORD::${created.id}`, value: passwordHash },
+        where: { farmId_key: { farmId: currentFarmId(), key: `AUTH_PASSWORD::${created.id}` } },
+        create: { farmId: currentFarmId(), key: `AUTH_PASSWORD::${created.id}`, value: passwordHash },
         update: { value: passwordHash },
       });
       return created;

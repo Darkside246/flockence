@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 
 type TraceItem = {
   stage: string;
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
     const batch = batchId
       ? await prisma.batch.findFirst({
-          where: { id: batchId, farmId: FARM_ID },
+          where: { id: batchId, farmId: currentFarmId() },
           include: {
             mortalityEvents: true,
             feedPurchases: true,
@@ -67,7 +67,7 @@ export async function GET(request: Request) {
         })
       : traceCode
         ? await prisma.batch.findFirst({
-            where: { farmId: FARM_ID, traceCode },
+            where: { farmId: currentFarmId(), traceCode },
             include: {
               mortalityEvents: true,
               feedPurchases: true,
@@ -96,26 +96,26 @@ export async function GET(request: Request) {
 
     const [inventory, inventoryMovements, storageLocations, sales, transportExpenses] = await Promise.all([
       prisma.inventoryItem.findMany({
-        where: { batchId: batch.id, product: { farmId: FARM_ID } },
+        where: { batchId: batch.id, product: { farmId: currentFarmId() } },
         include: { product: true },
         orderBy: { createdAt: "asc" },
       }),
       prisma.inventoryMovement.findMany({
-        where: { farmId: FARM_ID, batchId: batch.id },
+        where: { farmId: currentFarmId(), batchId: batch.id },
         orderBy: { date: "asc" },
         include: { inventoryItem: { include: { product: true } } },
       }),
       prisma.storageLocation.findMany({
-        where: { farmId: FARM_ID, inventoryItems: { some: { batchId: batch.id } } },
+        where: { farmId: currentFarmId(), inventoryItems: { some: { batchId: batch.id } } },
         include: { temperatureLogs: { orderBy: { date: "asc" } } },
       }),
       prisma.sale.findMany({
-        where: { farmId: FARM_ID },
+        where: { farmId: currentFarmId() },
         include: { items: { include: { inventoryItem: { include: { product: true } } } }, customer: true },
         orderBy: { date: "asc" },
       }),
       prisma.transportationExpense.findMany({
-        where: { farmId: FARM_ID, batchId: batch.id },
+        where: { farmId: currentFarmId(), batchId: batch.id },
         orderBy: { date: "asc" },
       }),
     ]);

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { ensureFarm, FARM_ID } from "@/lib/operations";
+import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { recordInventoryMovement } from "@/lib/inventory-ledger";
 
 export async function GET(request: Request) {
   const session = await currentUserOrResponse(request);
   if (session.response) return session.response;
   await ensureFarm();
-  return NextResponse.json(await prisma.householdConsumption.findMany({ where: { batch: { farmId: FARM_ID } }, orderBy: { date: "desc" }, include: { batch: true } }));
+  return NextResponse.json(await prisma.householdConsumption.findMany({ where: { batch: { farmId: currentFarmId() } }, orderBy: { date: "desc" }, include: { batch: true } }));
 }
 
 export async function POST(request: Request) {
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     await ensureFarm();
     const input = await request.json();
     if (!input.product || !input.date || Number(input.quantity) <= 0) return NextResponse.json({ error: "Product, date and quantity are required." }, { status: 400 });
-    const batch = input.batchId ? await prisma.batch.findFirst({ where: { id: input.batchId, farmId: FARM_ID } }) : null;
+    const batch = input.batchId ? await prisma.batch.findFirst({ where: { id: input.batchId, farmId: currentFarmId() } }) : null;
     if (input.batchId && !batch) return NextResponse.json({ error: "Batch not found." }, { status: 404 });
     const quantity = Number(input.quantity);
     const weightKg = input.weightKg == null || input.weightKg === "" ? null : Number(input.weightKg);
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       if (!inventoryId) {
         const candidate = await tx.inventoryItem.findFirst({
           where: {
-            product: { farmId: FARM_ID, name: String(input.product).trim() },
+            product: { farmId: currentFarmId(), name: String(input.product).trim() },
             ...(batch?.id ? { batchId: batch.id } : {}),
             status: "AVAILABLE",
             quantity: { gte: quantity },
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       }
       if (inventoryId) {
         const deducted = await tx.inventoryItem.updateMany({
-          where: { id: inventoryId, product: { farmId: FARM_ID }, status: "AVAILABLE", quantity: { gte: quantity } },
+          where: { id: inventoryId, product: { farmId: currentFarmId() }, status: "AVAILABLE", quantity: { gte: quantity } },
           data: { quantity: { decrement: quantity } },
         });
         if (deducted.count !== 1) throw new Error("Inventory changed before household use could be recorded.");
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
         if (inventory) {
           await tx.inventoryItem.updateMany({ where: { id: inventoryId, quantity: 0 }, data: { status: "HOUSEHOLD" } });
           await recordInventoryMovement(tx, {
-            farmId: FARM_ID,
+            farmId: currentFarmId(),
             inventoryItemId: inventoryId,
             productId: inventory.productId,
             batchId: batch?.id || inventory.batchId,

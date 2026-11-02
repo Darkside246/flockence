@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ensureFarm, FARM_ID } from "@/lib/operations";
+import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { authorizeAuraIntegration } from "@/lib/aura-integration";
 
 export async function GET(request: Request) {
   if (!authorizeAuraIntegration(request)) return NextResponse.json({ error: "INVALID_INTEGRATION_TOKEN" }, { status: 401 });
   await ensureFarm();
   const rows = await prisma.inventoryItem.findMany({
-    where: { product: { farmId: FARM_ID }, status: "AVAILABLE" },
+    where: { product: { farmId: currentFarmId() }, status: "AVAILABLE" },
     include: { product: true, batch: true },
     orderBy: [{ createdAt: "asc" }],
   });
@@ -24,6 +24,6 @@ export async function GET(request: Request) {
       products.set(row.productId, { productId: row.productId, name: row.product.name, unit: row.product.unit, availableQuantity: quantity, priceMinor });
     }
   }
-  const farm = await prisma.farm.findUnique({ where: { id: FARM_ID }, select: { id: true, name: true, currency: true } });
-  return NextResponse.json({ farm: farm ?? { id: FARM_ID, name: "Farm", currency: "BBD" }, products: Array.from(products.values()) });
+  const farm = await prisma.farm.findUnique({ where: { id: currentFarmId() }, select: { id: true, name: true, currency: true } });
+  return NextResponse.json({ farm: farm ?? { id: currentFarmId(), name: "Farm", currency: "BBD" }, products: Array.from(products.values()) });
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { recordInventoryMovement } from "@/lib/inventory-ledger";
 import { assertHarvestAllowed } from "@/lib/withdrawal";
 import { lockFlockOperations } from "@/lib/poultry-lock";
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const batchId = searchParams.get("batchId");
   const rows = await prisma.processingOutput.findMany({
-    where: { batch: { farmId: FARM_ID }, ...(batchId ? { batchId } : {}) },
+    where: { batch: { farmId: currentFarmId() }, ...(batchId ? { batchId } : {}) },
     orderBy: { createdAt: "desc" },
     include: { batch: true, slaughterEvent: true, inventoryItem: { include: { product: true } } }
   });
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     if (!input.batchId || !input.slaughterEventId || !Array.isArray(input.outputs) || input.outputs.length === 0) {
       return NextResponse.json({ error: "Batch, a recorded slaughter event and at least one processing output are required." }, { status: 400 });
     }
-    const batch = await prisma.batch.findFirst({ where: { id: input.batchId, farmId: FARM_ID } });
+    const batch = await prisma.batch.findFirst({ where: { id: input.batchId, farmId: currentFarmId() } });
     if (!batch) return NextResponse.json({ error: "Batch not found." }, { status: 404 });
     if (batch.productionType === "LAYER" || batch.species.toUpperCase() === "LAYER") {
       return NextResponse.json({ error: "Egg production is managed through egg collection and grading, not the broiler processing pack." }, { status: 409 });
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
 
     const locationIds = Array.from(new Set(outputs.map((x: { storageLocationId: string | null }) => x.storageLocationId).filter(Boolean)));
     if (locationIds.length) {
-      const locations = await prisma.storageLocation.findMany({ where: { farmId: FARM_ID, id: { in: locationIds as string[] }, active: true }, select: { id: true } });
+      const locations = await prisma.storageLocation.findMany({ where: { farmId: currentFarmId(), id: { in: locationIds as string[] }, active: true }, select: { id: true } });
       if (locations.length !== locationIds.length) return NextResponse.json({ error: "One or more storage locations are invalid." }, { status: 400 });
     }
 
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
 
       const withdrawalBlockers = await tx.treatment.findMany({
         where: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           batchId: batch.id,
           startedAt: { lt: processingDayEnd },
           OR: [
@@ -142,9 +142,9 @@ export async function POST(request: Request) {
       const rows = [];
       for (const x of outputs) {
         const product = x.category === "WASTE" ? null : await tx.product.upsert({
-          where: { farmId_name: { farmId: FARM_ID, name: x.productName } },
+          where: { farmId_name: { farmId: currentFarmId(), name: x.productName } },
           update: x.unit ? { unit: x.unit } : {},
-          create: { farmId: FARM_ID, name: x.productName, unit: x.unit, defaultPriceMinor: x.unitPriceMinor }
+          create: { farmId: currentFarmId(), name: x.productName, unit: x.unit, defaultPriceMinor: x.unitPriceMinor }
         });
         const inventory = product ? await tx.inventoryItem.create({
           data: {
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
           include: { inventoryItem: { include: { product: true } } }
         });
         if (inventory && product) await recordInventoryMovement(tx, {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           inventoryItemId: inventory.id,
           productId: product.id,
           batchId: batch.id,

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { FARM_ID } from "@/lib/operations";
+import { currentFarmId } from "@/lib/operations";
 import { calendarDateInTimeZone, calculateIntervalFcr, calculateLiveBirdsAtDate, hasCompleteDailyFeedCoverage, parseCalendarDate, reconcileLiveBirdsFromSnapshot, selectDailyRepresentativeWeights } from "@/lib/poultry-metrics.mjs";
 
 type BatchRow = {
@@ -139,7 +139,7 @@ function layerMetrics(batch: BatchRow, end: Date) {
   };
 }
 
-export async function getPoultryPerformance(farmId = FARM_ID, date = new Date()) {
+export async function getPoultryPerformance(farmId = currentFarmId(), date = new Date()) {
   const farmDate = calendarDateInTimeZone(date);
   const end = farmDate ? parseCalendarDate(farmDate) : null;
   if (!end) throw new Error("Could not resolve the farm calendar date for performance reporting.");

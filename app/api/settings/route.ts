@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { ensureFarm, FARM_ID } from "@/lib/operations";
+import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { authError, requireCurrentUser, currentUserOrRoleResponse } from "@/lib/current-user";
 
 const publicSettingFilter = {
@@ -15,8 +15,8 @@ export async function GET(request: Request) {
   try {
     await requireCurrentUser(request);
     await ensureFarm();
-    const farm = await prisma.farm.findUnique({ where: { id: FARM_ID } });
-    const settings = await prisma.setting.findMany({ where: { farmId: FARM_ID, ...publicSettingFilter }, orderBy: { key: "asc" } });
+    const farm = await prisma.farm.findUnique({ where: { id: currentFarmId() } });
+    const settings = await prisma.setting.findMany({ where: { farmId: currentFarmId(), ...publicSettingFilter }, orderBy: { key: "asc" } });
     return NextResponse.json({ farm, settings });
   } catch (error) {
     const response = authError(error);
@@ -36,10 +36,10 @@ export async function PUT(request: Request) {
       if (!item?.key) continue;
       const key = String(item.key);
       if (key.startsWith("AUTH_") || key.startsWith("PENCFG::") || key.startsWith("FARM_INVITE::")) continue;
-      await prisma.setting.upsert({ where: { farmId_key: { farmId: FARM_ID, key } }, update: { value: String(item.value ?? "") }, create: { farmId: FARM_ID, key, value: String(item.value ?? "") } });
+      await prisma.setting.upsert({ where: { farmId_key: { farmId: currentFarmId(), key } }, update: { value: String(item.value ?? "") }, create: { farmId: currentFarmId(), key, value: String(item.value ?? "") } });
     }
-    if (input.farmName) await prisma.farm.update({ where: { id: FARM_ID }, data: { name: String(input.farmName), currency: "BBD" } });
-    return NextResponse.json(await prisma.setting.findMany({ where: { farmId: FARM_ID, ...publicSettingFilter }, orderBy: { key: "asc" } }));
+    if (input.farmName) await prisma.farm.update({ where: { id: currentFarmId() }, data: { name: String(input.farmName), currency: "BBD" } });
+    return NextResponse.json(await prisma.setting.findMany({ where: { farmId: currentFarmId(), ...publicSettingFilter }, orderBy: { key: "asc" } }));
   } catch (error) {
     const response = authError(error);
     if (response) return response;

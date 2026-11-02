@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { FARM_ID } from "./operations";
+import { currentFarmId } from "./operations";
 
 export type WithdrawalBlocker = {
   treatmentId: string;
@@ -19,7 +19,7 @@ export async function getWithdrawalBlockers(batchId: string, effectiveDate = new
 
   const rows = await prisma.treatment.findMany({
     where: {
-      farmId: FARM_ID,
+      farmId: currentFarmId(),
       batchId,
       startedAt: { lt: dayEnd },
       OR: [

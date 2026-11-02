@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { normalizeOptionalBoolean, validateProcessorTripCounts } from "@/lib/poultry-metrics.mjs";
 
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     : 30;
 
   return NextResponse.json(await prisma.transportEvent.findMany({
-    where: { farmId: FARM_ID, ...(batchId ? { batchId } : {}) },
+    where: { farmId: currentFarmId(), ...(batchId ? { batchId } : {}) },
     orderBy: { departureAt: "desc" },
     take,
     include: { batch: true, slaughterEvent: true },
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     }
 
     const batch = input.batchId
-      ? await prisma.batch.findFirst({ where: { id: input.batchId, farmId: FARM_ID } })
+      ? await prisma.batch.findFirst({ where: { id: input.batchId, farmId: currentFarmId() } })
       : null;
     if (input.batchId && !batch) {
       return NextResponse.json({ error: "Batch not found." }, { status: 404 });
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
           where: {
             id: String(input.slaughterEventId),
             ...(batch ? { batchId: batch.id } : {}),
-            batch: { farmId: FARM_ID },
+            batch: { farmId: currentFarmId() },
           },
         })
       : null;
@@ -185,7 +185,7 @@ export async function POST(request: Request) {
     }
 
     const createData = {
-      farmId: FARM_ID,
+      farmId: currentFarmId(),
       batchId: batch?.id || null,
       slaughterEventId: slaughterEvent?.id || null,
       type: input.type,
@@ -218,7 +218,7 @@ export async function POST(request: Request) {
       if (input.type === "LIVE_BIRD_TO_PROCESSOR" && slaughterEvent) {
         const existingLinkedTrip = await tx.transportEvent.findFirst({
           where: {
-            farmId: FARM_ID,
+            farmId: currentFarmId(),
             slaughterEventId: slaughterEvent.id,
             type: "LIVE_BIRD_TO_PROCESSOR",
           },

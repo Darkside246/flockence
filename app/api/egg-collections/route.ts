@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { recordInventoryMovement } from "@/lib/inventory-ledger";
 import { validateEggCollectionInput, isCollectionDateWithinWithdrawal, isCalendarDateNotFuture } from "@/lib/poultry-metrics.mjs";
 import { condemnLayerEggLotsForWithdrawal } from "@/lib/layer-withdrawal";
@@ -38,9 +38,9 @@ export async function GET(request: Request) {
   const batchId = searchParams.get("batchId");
   const rows = await prisma.eggCollection.findMany({
     where: {
-      farmId: FARM_ID,
+      farmId: currentFarmId(),
       ...(batchId ? { batchId } : {}),
-      batch: { farmId: FARM_ID, OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
+      batch: { farmId: currentFarmId(), OR: [{ productionType: "LAYER" }, { productionType: null, species: "LAYER" }] },
     },
     include: {
       batch: true,
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     if (!batchId) return NextResponse.json({ error: "Select a layer flock." }, { status: 400 });
 
     const batch = await prisma.batch.findFirst({
-      where: { id: batchId, farmId: FARM_ID },
+      where: { id: batchId, farmId: currentFarmId() },
       select: { id: true, name: true, traceCode: true, species: true, productionType: true, layerStage: true, startDate: true },
     });
     if (!batch) return NextResponse.json({ error: "Flock not found." }, { status: 404 });
@@ -78,16 +78,16 @@ export async function POST(request: Request) {
     const endOfCollectionDay = new Date(date.getTime() + 86400000);
     const [stageEventOnDate, nextStageEvent, anyStageEvents] = await Promise.all([
       prisma.layerStageEvent.findFirst({
-        where: { farmId: FARM_ID, batchId, date: { lt: endOfCollectionDay } },
+        where: { farmId: currentFarmId(), batchId, date: { lt: endOfCollectionDay } },
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         select: { toStage: true },
       }),
       prisma.layerStageEvent.findFirst({
-        where: { farmId: FARM_ID, batchId, date: { gte: endOfCollectionDay } },
+        where: { farmId: currentFarmId(), batchId, date: { gte: endOfCollectionDay } },
         orderBy: [{ date: "asc" }, { createdAt: "asc" }],
         select: { fromStage: true },
       }),
-      prisma.layerStageEvent.count({ where: { farmId: FARM_ID, batchId } }),
+      prisma.layerStageEvent.count({ where: { farmId: currentFarmId(), batchId } }),
     ]);
     const stageOnCollectionDate = stageEventOnDate?.toStage ??
       nextStageEvent?.fromStage ??
@@ -114,20 +114,20 @@ export async function POST(request: Request) {
 
       const [currentBatch, currentStageEvent, nextStageEvent, currentStageEventCount] = await Promise.all([
         tx.batch.findFirst({
-          where: { id: batchId, farmId: FARM_ID },
+          where: { id: batchId, farmId: currentFarmId() },
           select: { layerStage: true },
         }),
         tx.layerStageEvent.findFirst({
-          where: { farmId: FARM_ID, batchId, date: { lt: endOfCollectionDay } },
+          where: { farmId: currentFarmId(), batchId, date: { lt: endOfCollectionDay } },
           orderBy: [{ date: "desc" }, { createdAt: "desc" }],
           select: { toStage: true },
         }),
         tx.layerStageEvent.findFirst({
-          where: { farmId: FARM_ID, batchId, date: { gte: endOfCollectionDay } },
+          where: { farmId: currentFarmId(), batchId, date: { gte: endOfCollectionDay } },
           orderBy: [{ date: "asc" }, { createdAt: "asc" }],
           select: { fromStage: true },
         }),
-        tx.layerStageEvent.count({ where: { farmId: FARM_ID, batchId } }),
+        tx.layerStageEvent.count({ where: { farmId: currentFarmId(), batchId } }),
       ]);
       if (!currentBatch) throw new Error("Flock not found.");
       const lockedStage = currentStageEvent?.toStage ??
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
 
       const withdrawalTreatments = await tx.treatment.findMany({
         where: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           batchId,
           startedAt: { lt: endOfCollectionDay },
           OR: [
@@ -171,7 +171,7 @@ export async function POST(request: Request) {
             data: { liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
           })
         : await tx.eggCollection.create({
-            data: { farmId: FARM_ID, batchId, date, liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
+            data: { farmId: currentFarmId(), batchId, date, liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
           });
 
       const oldGrades = new Map((existing?.grades ?? []).map((row) => [row.grade as EggGrade, row]));
@@ -197,7 +197,7 @@ export async function POST(request: Request) {
               },
             });
             await recordInventoryMovement(tx, {
-              farmId: FARM_ID,
+              farmId: currentFarmId(),
               inventoryItemId: inventory.id,
               productId: inventory.productId,
               batchId,
@@ -213,9 +213,9 @@ export async function POST(request: Request) {
         } else if (row.quantity > 0) {
           const productName = "Table Eggs - " + GRADE_LABELS[row.grade];
           const product = await tx.product.upsert({
-            where: { farmId_name: { farmId: FARM_ID, name: productName } },
+            where: { farmId_name: { farmId: currentFarmId(), name: productName } },
             update: {},
-            create: { farmId: FARM_ID, name: productName, unit: "egg" },
+            create: { farmId: currentFarmId(), name: productName, unit: "egg" },
           });
           const lotCode = `EGG-${batch.traceCode}-${date.toISOString().slice(0, 10).replaceAll("-", "")}-${row.grade}`;
           const inventory = await tx.inventoryItem.create({
@@ -230,7 +230,7 @@ export async function POST(request: Request) {
           });
           inventoryItemId = inventory.id;
           await recordInventoryMovement(tx, {
-            farmId: FARM_ID,
+            farmId: currentFarmId(),
             inventoryItemId: inventory.id,
             productId: product.id,
             batchId,
@@ -253,7 +253,7 @@ export async function POST(request: Request) {
 
       if (withdrawalBlocked) {
         const summary = await condemnLayerEggLotsForWithdrawal(tx, {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           batchId,
           fromDate: date,
           toDate: endOfCollectionDay,
@@ -264,7 +264,7 @@ export async function POST(request: Request) {
         if (summary.condemnedEggs > 0 || summary.condemnedCartons > 0) {
           await tx.auditLog.create({
             data: {
-              farmId: FARM_ID,
+              farmId: currentFarmId(),
               userId: session.user!.id,
               action: "LAYER_WITHDRAWAL_STOCK_CONDEMNED",
               entity: "Batch",

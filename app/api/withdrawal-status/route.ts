@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse } from "@/lib/current-user";
-import { ensureFarm, FARM_ID } from "@/lib/operations";
+import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { getWithdrawalBlockers } from "@/lib/withdrawal";
 import { isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
   }
   const blockers = await getWithdrawalBlockers(batchId, effectiveDate);
   return NextResponse.json({
-    farmId: FARM_ID,
+    farmId: currentFarmId(),
     batchId,
     blocked: blockers.length > 0,
     blockers,

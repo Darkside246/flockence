@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID } from "@/lib/operations";
+import { currentFarmId } from "@/lib/operations";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
 
 const roles = ["OWNER", "MANAGER", "WORKER", "READ_ONLY"] as const;
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   if (access.response) return access.response;
 
   const users = await prisma.user.findMany({
-    where: { farmId: FARM_ID },
+    where: { farmId: currentFarmId() },
     select: { id: true, name: true, email: true, role: true, createdAt: true },
     orderBy: [{ role: "asc" }, { name: "asc" }],
   });
@@ -44,14 +44,14 @@ export async function POST(request: Request) {
     const invite = await prisma.$transaction(async (tx) => {
       const row = await tx.setting.create({
         data: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           key: invitePrefix + hashInvite(inviteCode),
           value: JSON.stringify({ role: requestedRole, expiresAt: expiresAt.toISOString(), createdBy: access.user!.id }),
         },
       });
       await tx.auditLog.create({
         data: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           userId: access.user!.id,
           action: "FARM_INVITE_CREATED",
           entity: "FarmInvitation",
@@ -91,9 +91,9 @@ export async function PATCH(request: Request) {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${FARM_ID}, 0))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${currentFarmId()}, 0))`;
       const target = await tx.user.findFirst({
-        where: { id: userId, farmId: FARM_ID },
+        where: { id: userId, farmId: currentFarmId() },
         select: { id: true, name: true, email: true, role: true, createdAt: true },
       });
       if (!target) throw new Error("TEAM_MEMBER_NOT_FOUND");
@@ -101,7 +101,7 @@ export async function PATCH(request: Request) {
         throw new Error("MANAGER_CANNOT_EDIT_MANAGEMENT");
       }
       if (target.role === "OWNER" && role !== "OWNER") {
-        const ownerCount = await tx.user.count({ where: { farmId: FARM_ID, role: "OWNER" } });
+        const ownerCount = await tx.user.count({ where: { farmId: currentFarmId(), role: "OWNER" } });
         if (ownerCount <= 1) throw new Error("LAST_OWNER_REQUIRED");
       }
       const updated = await tx.user.update({
@@ -111,7 +111,7 @@ export async function PATCH(request: Request) {
       });
       await tx.auditLog.create({
         data: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           userId: access.user!.id,
           action: "FARM_MEMBER_ROLE_CHANGED",
           entity: "User",

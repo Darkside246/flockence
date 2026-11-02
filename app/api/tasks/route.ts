@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 
 const priorities = new Set(["LOW","MODERATE","HIGH","URGENT"]);
 
@@ -10,7 +10,7 @@ export async function GET(request: Request) {
   if (session.response) return session.response;
   await ensureFarm();
   return NextResponse.json(await prisma.farmTask.findMany({
-    where: { farmId: FARM_ID },
+    where: { farmId: currentFarmId() },
     include: { batch: true, assignedTo: true },
     orderBy: [{ completedAt: "asc" }, { dueAt: "asc" }, { createdAt: "desc" }],
     take: 200,
@@ -28,12 +28,12 @@ export async function POST(request: Request) {
     const priority = String(input.priority || "MODERATE").toUpperCase();
     if (!priorities.has(priority)) return NextResponse.json({ error: "Invalid task priority." }, { status: 400 });
     if (input.batchId) {
-      const batch = await prisma.batch.findFirst({ where: { id: String(input.batchId), farmId: FARM_ID }, select: { id: true } });
+      const batch = await prisma.batch.findFirst({ where: { id: String(input.batchId), farmId: currentFarmId() }, select: { id: true } });
       if (!batch) return NextResponse.json({ error: "Batch not found." }, { status: 404 });
     }
     const row = await prisma.farmTask.create({
       data: {
-        farmId: FARM_ID,
+        farmId: currentFarmId(),
         batchId: input.batchId || null,
         title,
         description: input.description ? String(input.description) : null,
@@ -57,11 +57,11 @@ export async function PATCH(request: Request) {
     if (!id) return NextResponse.json({ error: "Task id is required." }, { status: 400 });
     const completed = Boolean(input.completed);
     const result = await prisma.farmTask.updateMany({
-      where: { id, farmId: FARM_ID },
+      where: { id, farmId: currentFarmId() },
       data: { completedAt: completed ? new Date() : null },
     });
     if (result.count !== 1) return NextResponse.json({ error: "Task not found." }, { status: 404 });
-    return NextResponse.json(await prisma.farmTask.findFirst({ where: { id, farmId: FARM_ID } }));
+    return NextResponse.json(await prisma.farmTask.findFirst({ where: { id, farmId: currentFarmId() } }));
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update task." }, { status: 400 });
   }

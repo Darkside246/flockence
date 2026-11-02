@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
-import { ensureFarm, FARM_ID } from "@/lib/operations";
+import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { prisma } from "@/lib/prisma";
 import { assertHarvestAllowed } from "@/lib/withdrawal";
 import { lockFlockOperations } from "@/lib/poultry-lock";
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     }
 
     const batch = await prisma.batch.findFirst({
-      where: { id: batchId, farmId: FARM_ID },
+      where: { id: batchId, farmId: currentFarmId() },
       select: {
         id: true,
         name: true,
@@ -105,14 +105,14 @@ export async function POST(request: Request) {
       await lockFlockOperations(tx, [batch.id]);
 
       const currentBatch = await tx.batch.findFirst({
-        where: { id: batch.id, farmId: FARM_ID },
+        where: { id: batch.id, farmId: currentFarmId() },
         select: { id: true, initialChicks: true },
       });
       if (!currentBatch) throw new Error("Batch not found.");
 
       const withdrawalBlockers = await tx.treatment.findMany({
         where: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           batchId: batch.id,
           startedAt: { lt: harvestDayEnd },
           OR: [
@@ -248,7 +248,7 @@ export async function GET(request: Request) {
   if (session.response) return session.response;
   await ensureFarm();
   return NextResponse.json(await prisma.slaughterEvent.findMany({
-    where: { batch: { farmId: FARM_ID } },
+    where: { batch: { farmId: currentFarmId() } },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     include: { batch: true },
   }));

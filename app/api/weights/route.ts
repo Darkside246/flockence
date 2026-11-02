@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { ensureFarm, FARM_ID } from "@/lib/operations";
+import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { calculateLiveBirdsAtDate, isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   if (session.response) return session.response;
   await ensureFarm();
   return NextResponse.json(await prisma.weightRecord.findMany({
-    where: { batch: { farmId: FARM_ID } },
+    where: { batch: { farmId: currentFarmId() } },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     include: { batch: true },
   }));
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     }
 
     const batch = await prisma.batch.findFirst({
-      where: { id: batchId, farmId: FARM_ID },
+      where: { id: batchId, farmId: currentFarmId() },
       select: { id: true, startDate: true, initialChicks: true, productionType: true, species: true },
     });
     if (!batch) return NextResponse.json({ error: "Batch not found." }, { status: 404 });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { calendarDateInTimeZone, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 
 const num = (value: unknown) => {
@@ -24,12 +24,12 @@ export async function GET(request: Request) {
 
   const [batches, checks, mortality, slaughter, treatments] = await Promise.all([
     prisma.batch.findMany({
-      where: { farmId: FARM_ID, status: "ACTIVE" },
+      where: { farmId: currentFarmId(), status: "ACTIVE" },
       select: { id: true, name: true, productionType: true, species: true, initialChicks: true },
       orderBy: { name: "asc" },
     }),
     prisma.dailyFlockCheck.findMany({
-      where: { farmId: FARM_ID, date },
+      where: { farmId: currentFarmId(), date },
       select: {
         batchId: true,
         liveCount: true,
@@ -46,18 +46,18 @@ export async function GET(request: Request) {
       },
     }),
     prisma.mortalityEvent.aggregate({
-      where: { batch: { farmId: FARM_ID }, date },
+      where: { batch: { farmId: currentFarmId() }, date },
       _sum: { quantity: true },
       _count: { id: true },
     }),
     prisma.slaughterEvent.aggregate({
-      where: { batch: { farmId: FARM_ID }, date },
+      where: { batch: { farmId: currentFarmId() }, date },
       _sum: { sentQuantity: true, slaughtered: true, condemned: true },
       _count: { id: true },
     }),
     prisma.treatment.findMany({
       where: {
-        farmId: FARM_ID,
+        farmId: currentFarmId(),
         startedAt: { lt: nextDate },
         OR: [
           { status: "ACTIVE", withdrawalClearsAt: null },

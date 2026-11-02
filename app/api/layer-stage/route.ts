@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { LayerStage } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { allowedNextLayerStages, calendarDateInTimeZone, isCalendarDateNotFuture, isValidLayerStageTransition, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 
@@ -17,13 +17,13 @@ export async function GET(request: Request) {
   const batchId = String(searchParams.get("batchId") || "");
   if (!batchId) return NextResponse.json({ error: "A layer flock is required." }, { status: 400 });
   const batch = await prisma.batch.findFirst({
-    where: { id: batchId, farmId: FARM_ID },
+    where: { id: batchId, farmId: currentFarmId() },
     select: { id: true, productionType: true, species: true, layerStage: true, status: true },
   });
   if (!batch) return NextResponse.json({ error: "Flock not found." }, { status: 404 });
   if (!isLayer(batch)) return NextResponse.json({ error: "This workflow is only available for layer flocks." }, { status: 409 });
   const history = await prisma.layerStageEvent.findMany({
-    where: { farmId: FARM_ID, batchId },
+    where: { farmId: currentFarmId(), batchId },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
   });
   return NextResponse.json({ currentStage: batch.layerStage, history, allowedNextStages: allowedNextLayerStages(batch.layerStage) });
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     if (!batchId || !(allowedNextLayerStages(null) as string[]).includes(toStage)) return NextResponse.json({ error: "Select a layer flock and a valid next production stage." }, { status: 400 });
 
     const batch = await prisma.batch.findFirst({
-      where: { id: batchId, farmId: FARM_ID },
+      where: { id: batchId, farmId: currentFarmId() },
       select: { id: true, productionType: true, species: true, layerStage: true, status: true },
     });
     if (!batch) return NextResponse.json({ error: "Flock not found." }, { status: 404 });
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     const saved = await prisma.$transaction(async (tx) => {
       await lockFlockOperations(tx, [batch.id]);
       const latestEvent = await tx.layerStageEvent.findFirst({
-        where: { farmId: FARM_ID, batchId: batch.id },
+        where: { farmId: currentFarmId(), batchId: batch.id },
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         select: { date: true },
       });
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
 
       if (batch.layerStage === "LAYING" && toStage !== "LAYING") {
         const affectedCollection = await tx.eggCollection.findFirst({
-          where: { farmId: FARM_ID, batchId: batch.id, date: { gte: date } },
+          where: { farmId: currentFarmId(), batchId: batch.id, date: { gte: date } },
           orderBy: [{ date: "asc" }, { createdAt: "asc" }],
           select: { date: true },
         });
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       }
 
       const changed = await tx.batch.updateMany({
-        where: { id: batch.id, farmId: FARM_ID, layerStage: batch.layerStage, status: batch.status },
+        where: { id: batch.id, farmId: currentFarmId(), layerStage: batch.layerStage, status: batch.status },
         data: {
           layerStage: toStage as LayerStage,
           ...(toStage === "CLOSED" ? { status: "CLOSED" as const } : {}),
@@ -97,10 +97,10 @@ export async function POST(request: Request) {
       if (changed.count !== 1) {
         throw new Error("LAYER_STAGE_CONFLICT: The flock stage changed in another session. Refresh the flock and try again.");
       }
-      const updated = await tx.batch.findFirstOrThrow({ where: { id: batch.id, farmId: FARM_ID } });
+      const updated = await tx.batch.findFirstOrThrow({ where: { id: batch.id, farmId: currentFarmId() } });
       const event = await tx.layerStageEvent.create({
         data: {
-          farmId: FARM_ID, batchId: batch.id,
+          farmId: currentFarmId(), batchId: batch.id,
           fromStage: batch.layerStage as LayerStage | null,
           toStage: toStage as LayerStage,
           date, reason, notes,

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { FARM_ID } from "@/lib/operations";
+import { currentFarmId } from "@/lib/operations";
 import type { FarmAccessRole } from "@/lib/current-user";
+import { DEFAULT_FARM_ID, currentFarmIdOrNull } from "@/lib/farm-scope";
 
 /**
  * Who may see the cameras, how often, and the headers that keep the video on this site (security review 2026-11-01).
@@ -11,6 +12,14 @@ import type { FarmAccessRole } from "@/lib/current-user";
  *  - Headers: the video may not be embedded, fetched or cached by any other site, and no address leaks in Referer.
  */
 const ALL_ROLES: FarmAccessRole[] = ["OWNER", "MANAGER", "WORKER", "READ_ONLY"];
+
+/**
+ * The Blink camera service is one per install, connected to this install's own farm (FARM_ID). Until each farm has its
+ * own camera service, other farms on the same server never reach it (many farms, 2026-11-02).
+ */
+export function camerasBelongToThisFarm(): boolean {
+  return currentFarmIdOrNull() === DEFAULT_FARM_ID;
+}
 
 export function cameraViewRoles(env: Record<string, string | undefined> = process.env): FarmAccessRole[] {
   const listed = String(env.CAMERA_VIEW_ROLES ?? "OWNER,MANAGER,WORKER").split(",").map((r) => r.trim().toUpperCase());
@@ -43,7 +52,7 @@ export function hardenCameraHeaders(headers: Headers) {
 /** Who started or stopped live video, kept in the audit log (no picture, no camera address). */
 export async function auditCameraAction(userId: string, action: string, camera: string) {
   try {
-    await prisma.auditLog.create({ data: { farmId: FARM_ID, userId, action, entity: "Camera", entityId: camera.slice(0, 80) } });
+    await prisma.auditLog.create({ data: { farmId: currentFarmId(), userId, action, entity: "Camera", entityId: camera.slice(0, 80) } });
   } catch {
     // Auditing must not take the camera down; a failure here is visible in the server log only.
     console.error("[camera-guard] audit write failed");

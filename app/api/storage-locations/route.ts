@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { assessStorageCapacity, assessStorageTemperature } from "@/lib/poultry-metrics.mjs";
 
 type LocationWrite = {
@@ -76,14 +76,14 @@ export async function GET(request: Request) {
 
   const [locations, inventory] = await Promise.all([
     prisma.storageLocation.findMany({
-      where: { farmId: FARM_ID },
+      where: { farmId: currentFarmId() },
       include: { temperatureLogs: { orderBy: { date: "desc" }, take: 1 } },
       orderBy: [{ active: "desc" }, { name: "asc" }],
     }),
     prisma.inventoryItem.findMany({
       where: {
         storageLocationId: { not: null },
-        product: { farmId: FARM_ID },
+        product: { farmId: currentFarmId() },
         status: { in: ["AVAILABLE", "RESERVED"] },
       },
       select: { storageLocationId: true, weightKg: true, quantity: true, product: { select: { unit: true } } },
@@ -152,7 +152,7 @@ export async function POST(request: Request) {
     if (!parsed.valid) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
     const row = await prisma.storageLocation.create({
-      data: { farmId: FARM_ID, ...parsed.value },
+      data: { farmId: currentFarmId(), ...parsed.value },
     });
     return NextResponse.json(row, { status: 201 });
   } catch (error) {
@@ -179,12 +179,12 @@ export async function PUT(request: Request) {
     if (!parsed.valid) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
     const result = await prisma.storageLocation.updateMany({
-      where: { id, farmId: FARM_ID },
+      where: { id, farmId: currentFarmId() },
       data: parsed.value,
     });
     if (result.count === 0) return NextResponse.json({ error: "Storage location not found." }, { status: 404 });
 
-    const row = await prisma.storageLocation.findFirst({ where: { id, farmId: FARM_ID } });
+    const row = await prisma.storageLocation.findFirst({ where: { id, farmId: currentFarmId() } });
     return row
       ? NextResponse.json(row)
       : NextResponse.json({ error: "Storage location not found." }, { status: 404 });

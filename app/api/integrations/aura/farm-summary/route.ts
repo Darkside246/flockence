@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { calculateLifecycle } from "@/lib/lifecycle";
 import { getFarmWeather } from "@/lib/weather";
 import { authorizeAuraIntegration } from "@/lib/aura-integration";
@@ -10,9 +10,9 @@ export async function GET(request: Request) {
   await ensureFarm();
 
   const [farm, batches, healthCases, tasks, orders, weatherResult] = await Promise.all([
-    prisma.farm.findUnique({ where: { id: FARM_ID }, select: { id: true, name: true, currency: true } }),
+    prisma.farm.findUnique({ where: { id: currentFarmId() }, select: { id: true, name: true, currency: true } }),
     prisma.batch.findMany({
-      where: { farmId: FARM_ID, status: "ACTIVE" },
+      where: { farmId: currentFarmId(), status: "ACTIVE" },
       include: {
         weights: { where: { liveOrDressed: "LIVE" }, orderBy: { date: "desc" }, take: 2 },
         birdCounts: { orderBy: { date: "desc" }, take: 1 },
@@ -21,19 +21,19 @@ export async function GET(request: Request) {
       orderBy: { startDate: "asc" },
     }),
     prisma.healthCase.findMany({
-      where: { farmId: FARM_ID, status: { in: ["OPEN", "MONITORING"] } },
+      where: { farmId: currentFarmId(), status: { in: ["OPEN", "MONITORING"] } },
       select: { id: true, caseNumber: true, title: true, severity: true, affectedCount: true, movementRestricted: true, isolationRecommended: true },
       orderBy: [{ severity: "desc" }, { openedAt: "asc" }],
       take: 20,
     }),
     prisma.farmTask.findMany({
-      where: { farmId: FARM_ID, completedAt: null },
+      where: { farmId: currentFarmId(), completedAt: null },
       select: { id: true, title: true, dueAt: true, priority: true, batchId: true },
       orderBy: [{ dueAt: "asc" }],
       take: 20,
     }),
     prisma.sale.findMany({
-      where: { farmId: FARM_ID, orderStatus: { in: ["NEW", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] } },
+      where: { farmId: currentFarmId(), orderStatus: { in: ["NEW", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] } },
       select: { id: true, customerName: true, totalMinor: true, orderStatus: true, fulfillmentMethod: true, deliveryAddress: true, items: { select: { description: true, quantity: true } } },
       orderBy: { date: "asc" },
       take: 20,
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
-    farm: farm ?? { id: FARM_ID, name: "Farm", currency: "BBD" },
+    farm: farm ?? { id: currentFarmId(), name: "Farm", currency: "BBD" },
     flock,
     healthExceptions: healthCases,
     openTasks: tasks,

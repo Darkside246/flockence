@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { readIntakeBody } from "@/lib/switchbot.mjs";
 import { storeReadings } from "@/lib/thermometers";
+import { DEFAULT_FARM_ID, enterFarm } from "@/lib/farm-scope";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,8 @@ function authorized(request: Request) {
 
 export async function POST(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  // The thermometer token belongs to this install's own farm.
+  enterFarm(DEFAULT_FARM_ID);
   const limit = await checkRateLimit("thermometers:intake", 30, 60_000);
   if (!limit.allowed) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   const raw = await request.text();

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { reconcileLiveBirdsFromSnapshot } from "@/lib/poultry-metrics.mjs";
 
 export async function GET(request: Request) {
@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   if (session.response) return session.response;
   await ensureFarm();
   const batches = await prisma.batch.findMany({
-    where: { farmId: FARM_ID },
+    where: { farmId: currentFarmId() },
     orderBy: { startDate: "desc" },
     include: {
       birdCounts: { where: { date: { lte: new Date() } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 1 },
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     const newDealerName = typeof input.newDealerName === "string" ? input.newDealerName.trim().slice(0, 80) : "";
     let supplierId: string | null = null;
     if (!newDealerName && input.supplierId) {
-      const supplier = await prisma.supplier.findFirst({ where: { id: String(input.supplierId), farmId: FARM_ID }, select: { id: true } });
+      const supplier = await prisma.supplier.findFirst({ where: { id: String(input.supplierId), farmId: currentFarmId() }, select: { id: true } });
       if (!supplier) return NextResponse.json({ error: "That chick dealer was not found." }, { status: 400 });
       supplierId = supplier.id;
     }
@@ -78,11 +78,11 @@ export async function POST(request: Request) {
     if (!Number.isSafeInteger(chickCostMinor) || chickCostMinor < 0 || chickCostMinor > 1_000_000) return NextResponse.json({ error: "Enter a price per chick of 0 or more." }, { status: 400 });
     const batch = await prisma.$transaction(async (tx) => {
       if (newDealerName) {
-        const existing = await tx.supplier.findFirst({ where: { farmId: FARM_ID, name: { equals: newDealerName, mode: "insensitive" } }, select: { id: true } });
-        supplierId = existing?.id ?? (await tx.supplier.create({ data: { farmId: FARM_ID, name: newDealerName, notes: "Chick dealer" }, select: { id: true } })).id;
+        const existing = await tx.supplier.findFirst({ where: { farmId: currentFarmId(), name: { equals: newDealerName, mode: "insensitive" } }, select: { id: true } });
+        supplierId = existing?.id ?? (await tx.supplier.create({ data: { farmId: currentFarmId(), name: newDealerName, notes: "Chick dealer" }, select: { id: true } })).id;
       }
       const created = await tx.batch.create({ data: {
-        farmId: FARM_ID, name: input.name, startDate, hatchDate, purchaseDate,
+        farmId: currentFarmId(), name: input.name, startDate, hatchDate, purchaseDate,
         species,
         productionType: productionType as "BROILER" | "LAYER",
         layerStage: layerStage as any,
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
       await tx.birdCount.create({ data: { batchId: created.id, date: startDate, liveCount: input.initialChicks, note: "Initial count" } });
       if (layerStage) {
         await tx.layerStageEvent.create({
-          data: { farmId: FARM_ID, batchId: created.id, fromStage: null, toStage: layerStage as any, date: startDate, reason: "INITIAL_SETUP" },
+          data: { farmId: currentFarmId(), batchId: created.id, fromStage: null, toStage: layerStage as any, date: startDate, reason: "INITIAL_SETUP" },
         });
       }
       return created;

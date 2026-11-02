@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { calculateLiveBirdsAtDate, isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const batchId = searchParams.get("batchId");
   const rows = await prisma.dailyFlockCheck.findMany({
-    where: { farmId: FARM_ID, ...(batchId ? { batchId } : {}) },
+    where: { farmId: currentFarmId(), ...(batchId ? { batchId } : {}) },
     include: { batch: true },
     orderBy: { date: "desc" },
     take: 100,
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Batch and date are required, and a counted live bird number must be a whole number of 0 or more." }, { status: 400 });
     }
 
-    const batch = await prisma.batch.findFirst({ where: { id: batchId, farmId: FARM_ID }, select: { id: true, startDate: true, initialChicks: true } });
+    const batch = await prisma.batch.findFirst({ where: { id: batchId, farmId: currentFarmId() }, select: { id: true, startDate: true, initialChicks: true } });
     if (!batch) return NextResponse.json({ error: "Batch not found." }, { status: 404 });
 
     const date = parseCalendarDate(dateText);
@@ -87,11 +87,11 @@ export async function POST(request: Request) {
     if (humidityPercent != null && humidityPercent > 100) return NextResponse.json({ error: "Humidity cannot exceed 100%." }, { status: 400 });
 
     const latestBatchFeedPurchase = await prisma.feedPurchase.findFirst({
-      where: { farmId: FARM_ID, batchId, date: { lte: date } },
+      where: { farmId: currentFarmId(), batchId, date: { lte: date } },
       orderBy: { date: "desc" },
     });
     const latestFeedPurchase = latestBatchFeedPurchase || await prisma.feedPurchase.findFirst({
-      where: { farmId: FARM_ID, batchId: null, date: { lte: date } },
+      where: { farmId: currentFarmId(), batchId: null, date: { lte: date } },
       orderBy: { date: "desc" },
     });
     const row = await prisma.$transaction(async tx => {
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
       const check = await tx.dailyFlockCheck.upsert({
         where: { batchId_date: { batchId, date } },
         create: {
-          farmId: FARM_ID, batchId, date, liveCount, feedKg, waterLiters, avgWeightKg,
+          farmId: currentFarmId(), batchId, date, liveCount, feedKg, waterLiters, avgWeightKg,
           weightSampleQuantity, temperatureC, humidityPercent, ammoniaPpm,
           litterCondition: input.litterCondition ? String(input.litterCondition) : null,
           pantingObserved: Boolean(input.pantingObserved),
@@ -191,7 +191,7 @@ export async function POST(request: Request) {
         const symptom = (input.pantingObserved || input.wingSpreadingObserved) ? "Heat / welfare signs observed" : "Daily environment check";
         const existingObservation = await tx.healthObservation.findFirst({ where: { batchId, observedAt: date, symptom } });
         const observationData = {
-          farmId: FARM_ID, batchId, observedAt: date, symptom, category: "ENVIRONMENT",
+          farmId: currentFarmId(), batchId, observedAt: date, symptom, category: "ENVIRONMENT",
           affectedCount: liveCount, severity: (input.pantingObserved || input.wingSpreadingObserved) ? "HIGH" : "LOW" as any,
           notes: input.notes ? String(input.notes) : null,
           temperatureC, humidityPercent,

@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { recordInventoryMovement } from "@/lib/inventory-ledger";
 
 export async function GET(request: Request) {
   const session = await currentUserOrResponse(request);
   if (session.response) return session.response;
   await ensureFarm();
-  return NextResponse.json(await prisma.inventoryItem.findMany({ where: { product: { farmId: FARM_ID } }, include: { product: true, batch: true, storageLocation: true }, orderBy: { createdAt: "desc" } }));
+  return NextResponse.json(await prisma.inventoryItem.findMany({ where: { product: { farmId: currentFarmId() } }, include: { product: true, batch: true, storageLocation: true }, orderBy: { createdAt: "desc" } }));
 }
 
 export async function POST(request: Request) {
@@ -27,9 +27,9 @@ export async function POST(request: Request) {
     if (!Number.isSafeInteger(costBasisMinor) || costBasisMinor < 0) return NextResponse.json({ error: "Cost basis must be a valid non-negative amount." }, { status: 400 });
 
     const p = await prisma.product.upsert({
-      where: { farmId_name: { farmId: FARM_ID, name: String(x.product).trim() } },
+      where: { farmId_name: { farmId: currentFarmId(), name: String(x.product).trim() } },
       update: {},
-      create: { farmId: FARM_ID, name: String(x.product).trim(), unit: String(x.unit || "each"), defaultPriceMinor: priceMinor }
+      create: { farmId: currentFarmId(), name: String(x.product).trim(), unit: String(x.unit || "each"), defaultPriceMinor: priceMinor }
     });
     const row = await prisma.$transaction(async tx => {
       const inventory = await tx.inventoryItem.create({
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
         }
       });
       await recordInventoryMovement(tx, {
-        farmId: FARM_ID,
+        farmId: currentFarmId(),
         inventoryItemId: inventory.id,
         productId: p.id,
         batchId: x.batchId || null,

@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, daysBetween } from "@/lib/operations";
+import { currentFarmId, daysBetween } from "@/lib/operations";
 
 export const HEALTH_SYMPTOMS = [
   "Not eating", "Not drinking", "Weak / sitting down", "Sudden deaths",
@@ -27,11 +27,11 @@ export const HEALTH_KNOWLEDGE: Record<string, string[]> = {
 export async function healthDashboard() {
   const now = new Date();
   const [cases, treatments, tests, observations, batches] = await Promise.all([
-    prisma.healthCase.findMany({ where: { farmId: FARM_ID }, orderBy: { openedAt: "desc" }, take: 100, include: { batch: true, observations: { orderBy: { observedAt: "desc" }, take: 3 }, treatments: { orderBy: { startedAt: "desc" }, take: 3 }, diagnosticTests: { orderBy: { testDate: "desc" }, take: 3 } } }),
-    prisma.treatment.findMany({ where: { farmId: FARM_ID, status: { in: ["ACTIVE", "WITHDRAWAL_CLEARED"] } }, orderBy: { withdrawalClearsAt: "asc" }, take: 100, include: { batch: true, healthCase: true } }),
-    prisma.diagnosticTest.findMany({ where: { farmId: FARM_ID }, orderBy: { testDate: "desc" }, take: 100 }),
-    prisma.healthObservation.findMany({ where: { farmId: FARM_ID }, orderBy: { observedAt: "desc" }, take: 100, include: { batch: true, healthCase: true } }),
-    prisma.batch.findMany({ where: { farmId: FARM_ID, status: "ACTIVE" }, select: { id: true, name: true, initialChicks: true, startDate: true, mortalityEvents: true } })
+    prisma.healthCase.findMany({ where: { farmId: currentFarmId() }, orderBy: { openedAt: "desc" }, take: 100, include: { batch: true, observations: { orderBy: { observedAt: "desc" }, take: 3 }, treatments: { orderBy: { startedAt: "desc" }, take: 3 }, diagnosticTests: { orderBy: { testDate: "desc" }, take: 3 } } }),
+    prisma.treatment.findMany({ where: { farmId: currentFarmId(), status: { in: ["ACTIVE", "WITHDRAWAL_CLEARED"] } }, orderBy: { withdrawalClearsAt: "asc" }, take: 100, include: { batch: true, healthCase: true } }),
+    prisma.diagnosticTest.findMany({ where: { farmId: currentFarmId() }, orderBy: { testDate: "desc" }, take: 100 }),
+    prisma.healthObservation.findMany({ where: { farmId: currentFarmId() }, orderBy: { observedAt: "desc" }, take: 100, include: { batch: true, healthCase: true } }),
+    prisma.batch.findMany({ where: { farmId: currentFarmId(), status: "ACTIVE" }, select: { id: true, name: true, initialChicks: true, startDate: true, mortalityEvents: true } })
   ]);
 
   const openCases = cases.filter(c => c.status === "OPEN" || c.status === "MONITORING");

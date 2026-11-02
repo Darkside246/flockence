@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { calculateLifecycle } from "@/lib/lifecycle";
 
 export async function GET(request: Request) {
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const batchId = searchParams.get("batchId");
   const batches = await prisma.batch.findMany({
     where: {
-      farmId: FARM_ID,
+      farmId: currentFarmId(),
       ...(batchId ? { id: batchId } : {}),
       OR: [{ productionType: "BROILER" }, { productionType: null, species: { not: "LAYER" } }],
     },

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { ensureFarm, FARM_ID } from "@/lib/operations";
+import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { calculateLifecycle } from "@/lib/lifecycle";
 import { getFarmWeather } from "@/lib/weather";
 import { getWithdrawalBlockers } from "@/lib/withdrawal";
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
 
   const [batches, tasks, orders, weatherResult, storageLocations] = await Promise.all([
     prisma.batch.findMany({
-      where: { farmId: FARM_ID, status: "ACTIVE" },
+      where: { farmId: currentFarmId(), status: "ACTIVE" },
       include: {
         weights: { where: { liveOrDressed: "LIVE" }, orderBy: { date: "desc" }, take: 2 },
         birdCounts: { orderBy: { date: "desc" }, take: 1 },
@@ -38,10 +38,10 @@ export async function GET(request: Request) {
       },
       orderBy: { startDate: "asc" },
     }),
-    prisma.farmTask.findMany({ where: { farmId: FARM_ID, completedAt: null }, orderBy: [{ priority: "desc" }, { dueAt: "asc" }], take: 30 }),
-    prisma.sale.findMany({ where: { farmId: FARM_ID, orderStatus: { in: ["NEW", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] } }, include: { items: true }, orderBy: { date: "asc" }, take: 30 }),
+    prisma.farmTask.findMany({ where: { farmId: currentFarmId(), completedAt: null }, orderBy: [{ priority: "desc" }, { dueAt: "asc" }], take: 30 }),
+    prisma.sale.findMany({ where: { farmId: currentFarmId(), orderStatus: { in: ["NEW", "CONFIRMED", "PREPARING", "READY", "OUT_FOR_DELIVERY"] } }, include: { items: true }, orderBy: { date: "asc" }, take: 30 }),
     getFarmWeather().catch((error) => ({ configured: false as const, reason: error instanceof Error ? error.message : "Weather unavailable." })),
-    prisma.storageLocation.findMany({ where: { farmId: FARM_ID, active: true }, include: { temperatureLogs: { orderBy: { date: "desc" }, take: 1 } } }),
+    prisma.storageLocation.findMany({ where: { farmId: currentFarmId(), active: true }, include: { temperatureLogs: { orderBy: { date: "desc" }, take: 1 } } }),
   ]);
 
   const actions: Action[] = [];

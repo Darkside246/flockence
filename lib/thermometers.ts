@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { POLL_EVERY_MINUTES, SWITCHBOT_API, readingFromStatus, switchbotConfig, switchbotHeaders } from "@/lib/switchbot.mjs";
 
 /**
@@ -15,7 +15,7 @@ export async function storeReadings(readings: Array<{ sensor: string; readAt: Da
   if (!readings.length) return 0;
   await ensureFarm();
   const result = await prisma.thermometerReading.createMany({
-    data: readings.map((r) => ({ farmId: FARM_ID, sensor: r.sensor, readAt: r.readAt, temperatureC: r.temperatureC, humidityPercent: r.humidityPct, source })),
+    data: readings.map((r) => ({ farmId: currentFarmId(), sensor: r.sensor, readAt: r.readAt, temperatureC: r.temperatureC, humidityPercent: r.humidityPct, source })),
     skipDuplicates: true,
   });
   return result.count;
@@ -26,10 +26,10 @@ export async function pollSwitchbot(now = new Date()): Promise<{ polled: boolean
   const config = switchbotConfig(process.env);
   if (!config || config.thermometers.size === 0) return { polled: false, stored: 0, failed: 0 };
   await ensureFarm();
-  const last = await prisma.setting.findUnique({ where: { farmId_key: { farmId: FARM_ID, key: LAST_POLL } }, select: { value: true } });
+  const last = await prisma.setting.findUnique({ where: { farmId_key: { farmId: currentFarmId(), key: LAST_POLL } }, select: { value: true } });
   const lastAt = last ? Date.parse(last.value) : Number.NaN;
   if (Number.isFinite(lastAt) && now.getTime() - lastAt < POLL_EVERY_MINUTES * 60_000) return { polled: false, stored: 0, failed: 0 };
-  await prisma.setting.upsert({ where: { farmId_key: { farmId: FARM_ID, key: LAST_POLL } }, create: { farmId: FARM_ID, key: LAST_POLL, value: now.toISOString() }, update: { value: now.toISOString() } });
+  await prisma.setting.upsert({ where: { farmId_key: { farmId: currentFarmId(), key: LAST_POLL } }, create: { farmId: currentFarmId(), key: LAST_POLL, value: now.toISOString() }, update: { value: now.toISOString() } });
 
   const readings: Array<{ sensor: string; readAt: Date; temperatureC: number; humidityPct: number | null }> = [];
   let failed = 0;

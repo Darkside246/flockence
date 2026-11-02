@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { blinkConfigured, blinkFetch } from "@/lib/blink-sidecar";
 import {
   MAX_AGE_SECONDS, allowedCameras, buildFlockCheck, deathCause, frameFromBytes, oriyaLinkConfig, signOriyaBody,
@@ -11,6 +11,8 @@ import {
 } from "@/lib/climate.mjs";
 import { loadReferenceFrame, saveReferenceFrame } from "@/lib/frame-store";
 import { pollSwitchbot } from "@/lib/thermometers";
+import { farmLinkConfig } from "@/lib/oriya-farm-link";
+import { camerasBelongToThisFarm } from "@/lib/camera-guard";
 import { reconcileLiveBirdsFromSnapshot } from "@/lib/poultry-metrics.mjs";
 
 /**
@@ -26,9 +28,9 @@ const SEEN_PREFIX = "ORIYA_SEEN::";
 export async function claimOriyaRequestId(requestId: string): Promise<boolean> {
   await ensureFarm();
   const cutoff = new Date(Date.now() - 2 * MAX_AGE_SECONDS * 1000);
-  await prisma.setting.deleteMany({ where: { farmId: FARM_ID, key: { startsWith: SEEN_PREFIX }, updatedAt: { lt: cutoff } } });
+  await prisma.setting.deleteMany({ where: { farmId: currentFarmId(), key: { startsWith: SEEN_PREFIX }, updatedAt: { lt: cutoff } } });
   try {
-    await prisma.setting.create({ data: { farmId: FARM_ID, key: `${SEEN_PREFIX}${requestId}`, value: "1" } });
+    await prisma.setting.create({ data: { farmId: currentFarmId(), key: `${SEEN_PREFIX}${requestId}`, value: "1" } });
     return true;
   } catch {
     return false;
@@ -46,6 +48,8 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * apart (wakes it and uses battery); otherwise Blink's latest thumbnail. Each picture is checked by its real bytes.
  */
 export async function framesFromCamera(code: string, count: number, secondsApart: number, fresh: boolean): Promise<FramesResult> {
+  // The camera service belongs to this install's own farm only (many farms, 2026-11-02).
+  if (!camerasBelongToThisFarm()) return { ok: false, reason: "CAMERAS_NOT_SET_UP" };
   const name = allowedCameras(process.env).get(code);
   if (!name) return { ok: false, reason: "CAMERA_NOT_ALLOWED" };
   if (!blinkConfigured()) return { ok: false, reason: "CAMERAS_NOT_SET_UP" };
@@ -86,7 +90,7 @@ export async function postToOriya(config: OriyaLinkConfig, path: string, body: u
 export async function currentClimate(now = new Date()): Promise<OriyaClimateEntry[]> {
   await ensureFarm();
   const rows = await prisma.thermometerReading.findMany({
-    where: { farmId: FARM_ID, readAt: { gte: new Date(now.getTime() - (SEND_WITHIN_MINUTES + 100) * 60_000), lte: new Date(now.getTime() + 5 * 60_000) } },
+    where: { farmId: currentFarmId(), readAt: { gte: new Date(now.getTime() - (SEND_WITHIN_MINUTES + 100) * 60_000), lte: new Date(now.getTime() + 5 * 60_000) } },
     orderBy: { readAt: "desc" }, take: 5000, select: { sensor: true, readAt: true, temperatureC: true, humidityPercent: true },
   });
   const bySensor = new Map<string, ThermometerReadingInput[]>();
@@ -116,7 +120,7 @@ export async function currentFlockCheck(house: string) {
   const now = new Date();
   const since = new Date(now.getTime() - 24 * 3_600_000);
   const batches = await prisma.batch.findMany({
-    where: { farmId: FARM_ID, status: "ACTIVE" },
+    where: { farmId: currentFarmId(), status: "ACTIVE" },
     select: {
       id: true, initialChicks: true, startDate: true,
       birdCounts: { where: { date: { lte: now } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 1, select: { liveCount: true, date: true, createdAt: true } },
@@ -126,10 +130,10 @@ export async function currentFlockCheck(house: string) {
   });
   const batchIds = batches.map((b) => b.id);
   const [purchases, used, used24, healthCases] = await Promise.all([
-    prisma.feedPurchase.findMany({ where: { OR: [{ farmId: FARM_ID }, { batchId: { in: batchIds } }] }, select: { bagSizeKg: true, quantityBags: true } }),
+    prisma.feedPurchase.findMany({ where: { OR: [{ farmId: currentFarmId() }, { batchId: { in: batchIds } }] }, select: { bagSizeKg: true, quantityBags: true } }),
     prisma.feedUsage.aggregate({ where: { batchId: { in: batchIds } }, _sum: { quantityKg: true } }),
     prisma.feedUsage.aggregate({ where: { batchId: { in: batchIds }, date: { gte: since } }, _sum: { quantityKg: true } }),
-    prisma.healthCase.count({ where: { farmId: FARM_ID, status: { in: ["OPEN", "MONITORING"] } } }),
+    prisma.healthCase.count({ where: { farmId: currentFarmId(), status: { in: ["OPEN", "MONITORING"] } } }),
   ]);
   const causes: Partial<Record<DeathCause, number>> = {};
   let deaths = 0;
@@ -174,10 +178,10 @@ const NEXT_CHECK = "ORIYA_NEXT_CHECK_AT";
 const liveViewsKey = (now: Date) => `ORIYA_LIVE_VIEWS::${isoWithOffset(now, farmOffset(process.env)).slice(0, 10)}`;
 
 async function getSetting(key: string): Promise<string | null> {
-  return (await prisma.setting.findUnique({ where: { farmId_key: { farmId: FARM_ID, key } }, select: { value: true } }))?.value ?? null;
+  return (await prisma.setting.findUnique({ where: { farmId_key: { farmId: currentFarmId(), key } }, select: { value: true } }))?.value ?? null;
 }
 async function setSetting(key: string, value: string) {
-  await prisma.setting.upsert({ where: { farmId_key: { farmId: FARM_ID, key } }, create: { farmId: FARM_ID, key, value }, update: { value } });
+  await prisma.setting.upsert({ where: { farmId_key: { farmId: currentFarmId(), key } }, create: { farmId: currentFarmId(), key, value }, update: { value } });
 }
 const minutesSince = (value: string | null, now: Date) => {
   const at = value ? Date.parse(value) : Number.NaN;
@@ -200,7 +204,7 @@ async function keepAlerts(answer: OriyaAnswer, source: string) {
     if (typeof alert?.kind !== "string" || !/^[A-Z_]{3,40}$/.test(alert.kind) || typeof alert.text !== "string") continue;
     await prisma.healthObservation.create({
       data: {
-        farmId: FARM_ID, observedAt: new Date(), category: `ORIYA:${alert.kind}`, symptom: alert.text.slice(0, 300),
+        farmId: currentFarmId(), observedAt: new Date(), category: `ORIYA:${alert.kind}`, symptom: alert.text.slice(0, 300),
         severity: alert.urgent ? "URGENT" : "MODERATE", affectedCount: 1, notes: `From Oriya (${source}).`,
       },
     });
@@ -230,7 +234,7 @@ let running = false;
  * wake the cameras and use battery; run them every 30-60 minutes, thumbnails in between.
  */
 export async function pushToOriya(options: { house: string; pictures: "none" | "thumbnail" | "fresh" | "auto" }): Promise<PushOutcome | { error: "LINK_NOT_SET_UP" }> {
-  const config = oriyaLinkConfig(process.env);
+  const config = await farmLinkConfig();
   if (!config) return { error: "LINK_NOT_SET_UP" };
   if (running) return { check: null, snapshots: [], skipped: "ALREADY_RUNNING" };
   running = true;
@@ -283,7 +287,7 @@ export async function pushToOriya(options: { house: string; pictures: "none" | "
         await setSetting(todayKey, String(liveViewsToday));
         await setSetting(LAST_LIVE_VIEW, now.toISOString());
         // A Live View answers any "look again" that was due.
-        await prisma.setting.deleteMany({ where: { farmId: FARM_ID, key: NEXT_CHECK, value: { lte: now.toISOString() } } });
+        await prisma.setting.deleteMany({ where: { farmId: currentFarmId(), key: NEXT_CHECK, value: { lte: now.toISOString() } } });
       }
     }
     await rememberNextCheck(answers, now);

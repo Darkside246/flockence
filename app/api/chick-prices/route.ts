@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { ensureFarm, FARM_ID } from "@/lib/operations";
+import { ensureFarm, currentFarmId } from "@/lib/operations";
 
 /**
  * Chick prices for starting a flock (owner, 2026-11-02: "the default chick price is good but sometimes I have to go
@@ -16,10 +16,10 @@ export async function GET(request: Request) {
   if (session.response) return session.response;
   await ensureFarm();
   const [setting, suppliers, batches] = await Promise.all([
-    prisma.setting.findUnique({ where: { farmId_key: { farmId: FARM_ID, key: DEFAULT_KEY } }, select: { value: true } }),
-    prisma.supplier.findMany({ where: { farmId: FARM_ID }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.setting.findUnique({ where: { farmId_key: { farmId: currentFarmId(), key: DEFAULT_KEY } }, select: { value: true } }),
+    prisma.supplier.findMany({ where: { farmId: currentFarmId() }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.batch.findMany({
-      where: { farmId: FARM_ID, supplierId: { not: null } }, orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+      where: { farmId: currentFarmId(), supplierId: { not: null } }, orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
       select: { supplierId: true, chickCostMinor: true, startDate: true }, take: 500,
     }),
   ]);
@@ -40,6 +40,6 @@ export async function PUT(request: Request) {
   const input = await request.json().catch(() => null) as { defaultPriceMinor?: unknown } | null;
   const value = Number(input?.defaultPriceMinor);
   if (!Number.isSafeInteger(value) || value < 0 || value > 1_000_000) return NextResponse.json({ error: "Enter a price of 0 or more." }, { status: 400 });
-  await prisma.setting.upsert({ where: { farmId_key: { farmId: FARM_ID, key: DEFAULT_KEY } }, create: { farmId: FARM_ID, key: DEFAULT_KEY, value: String(value) }, update: { value: String(value) } });
+  await prisma.setting.upsert({ where: { farmId_key: { farmId: currentFarmId(), key: DEFAULT_KEY } }, create: { farmId: currentFarmId(), key: DEFAULT_KEY, value: String(value) }, update: { value: String(value) } });
   return NextResponse.json({ defaultPriceMinor: value });
 }

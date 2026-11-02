@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import {
   assessStorageTemperature,
   calendarDateInTimeZone,
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
     ? Math.min(requestedLimit, 200)
     : 50;
   const rows = await prisma.storageTemperatureLog.findMany({
-    where: { farmId: FARM_ID, ...(storageLocationId ? { storageLocationId } : {}) },
+    where: { farmId: currentFarmId(), ...(storageLocationId ? { storageLocationId } : {}) },
     include: { storageLocation: true },
     orderBy: { date: "desc" },
     take,
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
     const measuredBy = typeof input.measuredBy === "string" ? input.measuredBy.trim().slice(0, 120) || null : null;
 
     const location = await prisma.storageLocation.findFirst({
-      where: { id: storageLocationId, farmId: FARM_ID, active: true },
+      where: { id: storageLocationId, farmId: currentFarmId(), active: true },
     });
     if (!location) return NextResponse.json({ error: "Storage location not found." }, { status: 404 });
 
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     );
     const row = await prisma.storageTemperatureLog.create({
       data: {
-        farmId: FARM_ID,
+        farmId: currentFarmId(),
         storageLocationId,
         date,
         temperatureC,

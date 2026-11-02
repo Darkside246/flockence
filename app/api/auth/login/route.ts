@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPasswordHash, createSession, setSessionCookie, normalizeEmail, verifyPassword } from "@/lib/auth";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { ensureFarm } from "@/lib/operations";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { runAsFarm, runUnscoped } from "@/lib/farm-scope";
 
 export async function POST(request: Request) {
   try {
@@ -32,20 +33,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Login should not mutate farm configuration. It only needs the configured farm id.
-    const user = await prisma.user.findUnique({
+    // Which farm the email belongs to (many farms on one server); everything after runs inside that farm only.
+    const user = await runUnscoped(() => prisma.user.findUnique({
       where: { email },
       select: { id: true, farmId: true, name: true, email: true }
-    });
-    const stored = user && user.farmId === FARM_ID ? await getPasswordHash(user.id) : null;
+    }));
+    const stored = user ? await runAsFarm(user.farmId, () => getPasswordHash(user.id)) : null;
 
     if (!user || !stored || !(await verifyPassword(password, stored))) {
-      return NextResponse.json({ error: "Email or password is incorrect." }, { status: 401 });
+      // People who joined from Oriya have no password here: they open Flockence from Oriya.
+      return NextResponse.json({ error: "Email or password is incorrect. If you joined from Oriya, open Flockence from Oriya instead." }, { status: 401 });
     }
 
-    // Make sure the configured farm exists before creating the authenticated session.
-    await ensureFarm();
-    const session = await createSession(user.id);
+    const session = await runAsFarm(user.farmId, async () => { await ensureFarm(); return createSession(user.id); });
     const response = NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } });
     response.headers.set("Set-Cookie", setSessionCookie(session.token));
     return response;

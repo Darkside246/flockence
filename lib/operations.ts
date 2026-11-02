@@ -1,19 +1,24 @@
 import { prisma } from "./prisma";
+import { DEFAULT_FARM_ID, currentFarmId, currentFarmIdOrNull } from "./farm-scope";
 import { alerts, farmScore } from "./insights";
 import { calculateIntervalFcr, calculateLiveBirdsAtDate, hasCompleteDailyFeedCoverage, reconcileLiveBirdsFromSnapshot, selectDailyRepresentativeWeights } from "./poultry-metrics.mjs";
 
-export const FARM_ID = process.env.FARM_ID ?? "default-farm";
 export function money(minor: number) { return new Intl.NumberFormat("en-BB", { style: "currency", currency: "BBD" }).format(minor / 100); }
 export function daysBetween(start: Date, end = new Date()) {
   const startDay = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
   const endDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
   return Math.max(0, Math.round((endDay - startDay) / 86400000));
 }
-// The farm row is made once per server process (security review 2026-11-01): this used to run a database write on every
-// request, including every unsigned and forged one, so a flood of bad requests loaded the database for free.
+export { currentFarmId } from "./farm-scope";
+
+// The single-farm install's farm row is made once per server process (security review 2026-11-01: this used to run a
+// database write on every request, including every unsigned and forged one). Farms set up by Oriya already exist; for
+// them this does nothing. Outside a farm (sign-in lookups) it does nothing either.
 let farmReady: Promise<unknown> | null = null;
 export async function ensureFarm() {
-  farmReady ??= prisma.farm.upsert({ where: { id: FARM_ID }, update: {}, create: { id: FARM_ID, name: "Alchemy Farms", currency: "BBD" } })
+  const farmId = currentFarmIdOrNull();
+  if (farmId !== DEFAULT_FARM_ID) return;
+  farmReady ??= prisma.farm.upsert({ where: { id: DEFAULT_FARM_ID }, update: {}, create: { id: DEFAULT_FARM_ID, name: "Alchemy Farms", currency: "BBD" } })
     .catch((error) => { farmReady = null; throw error; });
   return farmReady;
 }
@@ -21,12 +26,12 @@ export async function ensureFarm() {
 export async function dashboardData() {
   await ensureFarm();
   const [batches, sales, expenses, transport, inventory, household] = await Promise.all([
-    prisma.batch.findMany({ where: { farmId: FARM_ID }, include: { birdCounts: { where: { date: { lte: new Date() } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 1 }, mortalityEvents: true, feedPurchases: true, feedUsage: true, beddingPurchases: true, expenses: true, slaughterEvents: true } }),
-    prisma.sale.findMany({ where: { farmId: FARM_ID, recordStatus: "ACTUAL" }, select: { totalMinor: true, amountPaidMinor: true } }),
-    prisma.expense.findMany({ where: { farmId: FARM_ID, recordStatus: "ACTUAL" } }),
-    prisma.transportationExpense.findMany({ where: { farmId: FARM_ID } }),
-    prisma.inventoryItem.findMany({ where: { product: { farmId: FARM_ID }, status: { in: ["AVAILABLE", "RESERVED"] } }, include: { product: true } }),
-    prisma.householdConsumption.aggregate({ where: { batch: { farmId: FARM_ID } }, _sum: { estimatedValueMinor: true } })
+    prisma.batch.findMany({ where: { farmId: currentFarmId() }, include: { birdCounts: { where: { date: { lte: new Date() } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 1 }, mortalityEvents: true, feedPurchases: true, feedUsage: true, beddingPurchases: true, expenses: true, slaughterEvents: true } }),
+    prisma.sale.findMany({ where: { farmId: currentFarmId(), recordStatus: "ACTUAL" }, select: { totalMinor: true, amountPaidMinor: true } }),
+    prisma.expense.findMany({ where: { farmId: currentFarmId(), recordStatus: "ACTUAL" } }),
+    prisma.transportationExpense.findMany({ where: { farmId: currentFarmId() } }),
+    prisma.inventoryItem.findMany({ where: { product: { farmId: currentFarmId() }, status: { in: ["AVAILABLE", "RESERVED"] } }, include: { product: true } }),
+    prisma.householdConsumption.aggregate({ where: { batch: { farmId: currentFarmId() } }, _sum: { estimatedValueMinor: true } })
   ]);
   const liveCount = (batch: typeof batches[number]) => reconcileLiveBirdsFromSnapshot(
     batch.initialChicks,

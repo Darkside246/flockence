@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { pushToOriya } from "@/lib/oriya";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { DEFAULT_FARM_ID, enterFarm } from "@/lib/farm-scope";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,8 @@ function authorized(request: Request) {
 
 export async function POST(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+  // The push token belongs to this install's own farm.
+  enterFarm(DEFAULT_FARM_ID);
   const limit = await checkRateLimit("oriya:push", 30, 60_000);
   if (!limit.allowed) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   const url = new URL(request.url);

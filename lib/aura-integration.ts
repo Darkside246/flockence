@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { DEFAULT_FARM_ID, enterFarm } from "@/lib/farm-scope";
 
 function configuredToken() {
   return process.env.AURA_INTEGRATION_TOKEN?.trim() ?? "";
@@ -14,7 +15,10 @@ export function authorizeAuraIntegration(request: Request) {
   const supplied = header.slice(7).trim();
   if (!supplied) return false;
   const expected = Buffer.from(configured, "utf8"), actual = Buffer.from(supplied, "utf8");
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
+  const ok = expected.length === actual.length && timingSafeEqual(expected, actual);
+  // The integration token belongs to this install's own farm; the route then works only inside it.
+  if (ok) enterFarm(DEFAULT_FARM_ID);
+  return ok;
 }
 export function signAuraQuote(payload: Record<string, unknown>) {
   const secret = quoteSecret();

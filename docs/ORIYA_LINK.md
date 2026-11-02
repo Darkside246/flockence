@@ -75,6 +75,25 @@ Suggested cron on the Flockence droplet:
   numbers and thermometers every 10 minutes; Live View at dawn (05:00-07:00) every 15 minutes, 11:00-17:00 every
   30, otherwise hourly; sooner when Oriya's answer asks; never more than `ORIYA_DAILY_LIVE_VIEWS` (default 40) a day.
 
+## One account and many farms (2026-11-02)
+
+- **Many farms, walled off.** Every database call goes through `lib/prisma.ts`, which limits it to the farm of the
+  request (`lib/farm-scope.ts`): reads, updates and deletes get the farm added; new rows get it set and another farm is
+  refused; every id a write points at (a flock, customer, sale...) must be in the same farm; a call with no farm is
+  refused. Records under a flock follow the flock's farm. The farm comes only from a valid session (or, for the
+  integration tokens, this install's own farm `FARM_ID`). Proven by `tests/farm-isolation.db.mjs` on a throwaway
+  database and by two signed-in farms over HTTP.
+- **Set up by Oriya.** `POST /api/integrations/oriya/provision`, signed with `ORIYA_PLATFORM_SECRET` (Oriya's
+  `FLOCKENCE_PLATFORM_SECRET`), creates the farm `oriya-<business id>` and keeps its own link key, encrypted with the
+  farm bound in. Nobody copies keys by hand.
+- **Sign in with Oriya.** `/api/auth/oriya/start` (state and PKCE in a 10-minute signed cookie) sends the person to
+  Oriya; `/api/auth/oriya/callback` checks the state against that cookie and redeems the one-use code once with the
+  verifier (signed). The person is added to or updated in their own farm with Oriya's role; no password or email is
+  kept (a placeholder address ending `@oriya.invalid`). Local email and password sign-in still works for this install's
+  own farm.
+- **Database test:** `DATABASE_URL=<throwaway db with "test" in its name> npx prisma db push` then
+  `node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/farm-isolation.db.mjs`.
+
 ## Oriya -> Flockence ("check camera 1 now")
 
 `POST https://flockence.oriya.si/api/integrations/oriya/camera-frames`, signed by Oriya:

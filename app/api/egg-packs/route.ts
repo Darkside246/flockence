@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { recordInventoryMovement } from "@/lib/inventory-ledger";
 import { buildEggPackingPlan, isCalendarDateNotFuture, isCollectionDateWithinWithdrawal } from "@/lib/poultry-metrics.mjs";
@@ -42,8 +42,8 @@ export async function GET(request: Request) {
     prisma.eggCollectionGrade.findMany({
       where: {
         ...(whereGrade ? { grade: whereGrade } : {}),
-        eggCollection: { farmId: FARM_ID, batch: { farmId: FARM_ID }, ...(batchId ? { batchId } : {}) },
-        inventoryItem: { is: { status: "AVAILABLE", quantity: { gt: 0 }, product: { farmId: FARM_ID } } },
+        eggCollection: { farmId: currentFarmId(), batch: { farmId: currentFarmId() }, ...(batchId ? { batchId } : {}) },
+        inventoryItem: { is: { status: "AVAILABLE", quantity: { gt: 0 }, product: { farmId: currentFarmId() } } },
       },
       include: {
         eggCollection: { include: { batch: true } },
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
       take: 1000,
     }),
     prisma.eggPackRun.findMany({
-      where: { farmId: FARM_ID, ...(batchId ? { batchId } : {}) },
+      where: { farmId: currentFarmId(), ...(batchId ? { batchId } : {}) },
       include: {
         batch: true,
         outputInventoryItem: { include: { product: true, storageLocation: true } },
@@ -110,13 +110,13 @@ export async function POST(request: Request) {
 
     if (batchId) {
       const batch = await prisma.batch.findFirst({
-        where: { id: batchId, farmId: FARM_ID },
+        where: { id: batchId, farmId: currentFarmId() },
         select: { id: true, productionType: true, species: true },
       });
       if (!batch || !isLayer(batch)) return NextResponse.json({ error: "Select a layer flock for this pack run." }, { status: 404 });
     }
     if (storageLocationId) {
-      const location = await prisma.storageLocation.findFirst({ where: { id: storageLocationId, farmId: FARM_ID, active: true } });
+      const location = await prisma.storageLocation.findFirst({ where: { id: storageLocationId, farmId: currentFarmId(), active: true } });
       if (!location) return NextResponse.json({ error: "Storage location not found or inactive." }, { status: 404 });
     }
 
@@ -129,12 +129,12 @@ export async function POST(request: Request) {
         where: {
           grade,
           eggCollection: {
-            farmId: FARM_ID,
+            farmId: currentFarmId(),
             date: { lte: date },
-            batch: { farmId: FARM_ID },
+            batch: { farmId: currentFarmId() },
             ...(batchId ? { batchId } : {}),
           },
-          inventoryItem: { is: { status: "AVAILABLE", quantity: { gt: 0 }, product: { farmId: FARM_ID } } },
+          inventoryItem: { is: { status: "AVAILABLE", quantity: { gt: 0 }, product: { farmId: currentFarmId() } } },
         },
         include: { eggCollection: { include: { batch: true } }, inventoryItem: true },
         orderBy: [{ eggCollection: { date: "asc" } }, { eggCollection: { createdAt: "asc" } }],
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
       await lockFlockOperations(tx, sourceBatchIds);
       const treatmentWindows = await tx.treatment.findMany({
         where: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           batchId: { in: sourceBatchIds },
           startedAt: { lt: packedAt },
           OR: [
@@ -188,7 +188,7 @@ export async function POST(request: Request) {
       const outputBatchId = batchId || (sourceBatchIds.length === 1 ? sourceBatchIds[0] : null);
       const packRun = await tx.eggPackRun.create({
         data: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           batchId: outputBatchId,
           date,
           grade,
@@ -221,7 +221,7 @@ export async function POST(request: Request) {
           data: { packRunId: packRun.id, inventoryItemId: inventory.id, quantityEggs: taken },
         });
         await recordInventoryMovement(tx, {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           inventoryItemId: inventory.id,
           productId: inventory.productId,
           batchId: inventory.batchId,
@@ -236,10 +236,10 @@ export async function POST(request: Request) {
       }
 
       const product = await tx.product.upsert({
-        where: { farmId_name: { farmId: FARM_ID, name: productName } },
+        where: { farmId_name: { farmId: currentFarmId(), name: productName } },
         update: priceMinor === null ? {} : { defaultPriceMinor: priceMinor },
         create: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           name: productName,
           unit: `carton of ${packSize}`,
           defaultPriceMinor: priceMinor,
@@ -264,7 +264,7 @@ export async function POST(request: Request) {
         data: { outputInventoryItemId: output.id },
       });
       await recordInventoryMovement(tx, {
-        farmId: FARM_ID,
+        farmId: currentFarmId(),
         inventoryItemId: output.id,
         productId: product.id,
         batchId: outputBatchId,

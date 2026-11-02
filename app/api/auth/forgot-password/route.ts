@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { ensureFarm } from "@/lib/operations";
 import { createPasswordReset, normalizeEmail } from "@/lib/auth";
 import { sendPasswordResetEmail } from "@/lib/mail";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { runAsFarm, runUnscoped } from "@/lib/farm-scope";
 
 export async function POST(request: Request) {
   try {
-    await ensureFarm();
     const body = await request.json();
     const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
     const clientIp = request.headers.get("cf-connecting-ip")?.trim() || request.headers.get("x-real-ip")?.trim() || "";
@@ -25,9 +25,9 @@ export async function POST(request: Request) {
     if (!email || email.length > 254) {
       return NextResponse.json({ message: "If an account exists for that email, a password reset link will be sent shortly." });
     }
-    const user = await prisma.user.findUnique({ where: { email }, select: { id: true, farmId: true, email: true } });
-    if (user && user.farmId === FARM_ID) {
-      const reset = await createPasswordReset(user.id);
+    const user = await runUnscoped(() => prisma.user.findUnique({ where: { email }, select: { id: true, farmId: true, email: true } }));
+    if (user) {
+      const reset = await runAsFarm(user.farmId, async () => { await ensureFarm(); return createPasswordReset(user.id); });
       const base = process.env.APP_URL || request.headers.get("origin") || "http://localhost:3000";
       const resetUrl = `${base.replace(/\/$/, "")}/reset-password?token=${encodeURIComponent(reset.token)}`;
       await sendPasswordResetEmail(user.email, resetUrl).catch(() => undefined);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
 import { blinkConfigured, blinkFetch } from "@/lib/blink-sidecar";
-import { auditCameraAction, cameraRequestAllowed, cameraViewRoles, hardenCameraHeaders } from "@/lib/camera-guard";
+import { auditCameraAction, cameraRequestAllowed, camerasBelongToThisFarm, cameraViewRoles, hardenCameraHeaders } from "@/lib/camera-guard";
 
 // Allow-listed pass-through to the camera sidecar. Anything not matched here is a 404,
 // so the sidecar's surface is never exposed wholesale.
@@ -37,6 +37,7 @@ const tooMany = () => NextResponse.json({ error: "Too many camera requests. Wait
 export async function GET(request: Request, ctx: Ctx) {
   const session = await currentUserOrRoleResponse(request, cameraViewRoles());
   if (session.response) return session.response;
+  if (!camerasBelongToThisFarm()) return Response.json({ error: "Cameras are not set up for this farm yet." }, { status: 403, headers: { "Cache-Control": "no-store, private" } });
   if (!cameraRequestAllowed(session.user.id)) return tooMany();
   const segments = (await ctx.params).path;
   const path = segments.join("/");
@@ -57,6 +58,7 @@ async function mutate(request: Request, ctx: Ctx, method: "POST" | "DELETE", own
   if (!owner && !matches(manageList, path)) return NextResponse.json({ error: "Not found." }, { status: 404 });
   const session = await currentUserOrRoleResponse(request, owner ? ["OWNER"] : ["OWNER", "MANAGER"]);
   if (session.response) return session.response;
+  if (!camerasBelongToThisFarm()) return Response.json({ error: "Cameras are not set up for this farm yet." }, { status: 403, headers: { "Cache-Control": "no-store, private" } });
   if (!cameraRequestAllowed(session.user.id)) return tooMany();
   if (!blinkConfigured()) return notConfigured();
   const live = /^cameras\/([^/]+)\/live\/(start|stop)$/.exec(path);

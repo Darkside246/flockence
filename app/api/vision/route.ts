@@ -5,7 +5,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { safeJson, visionPrompt, VISION_MODEL, visionCategories, type VisionCategory } from "@/lib/vision";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   if (session.response) return session.response;
   await ensureFarm();
   const rows = await prisma.healthObservation.findMany({
-    where: { farmId: FARM_ID, category: { startsWith: "VISION:" } },
+    where: { farmId: currentFarmId(), category: { startsWith: "VISION:" } },
     orderBy: { observedAt: "desc" },
     take: 100,
   });
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     let batchContext = "";
     let batchId: string | null = batchIdRaw || null;
     if (batchId) {
-      const batch = await prisma.batch.findFirst({ where: { id: batchId, farmId: FARM_ID }, include: { mortalityEvents: true, birdCounts: { orderBy: { date: "desc" }, take: 1 } } });
+      const batch = await prisma.batch.findFirst({ where: { id: batchId, farmId: currentFarmId() }, include: { mortalityEvents: true, birdCounts: { orderBy: { date: "desc" }, take: 1 } } });
       if (!batch) return NextResponse.json({ error: "Batch not found." }, { status: 404 });
       const mortality = batch.mortalityEvents.reduce((sum, item) => sum + item.quantity, 0);
       const live = batch.birdCounts[0]?.liveCount ?? Math.max(0, batch.initialChicks - mortality);
@@ -130,7 +130,7 @@ export async function POST(request: Request) {
     const saved = await prisma.$transaction(async (tx) => {
       const media = await tx.visionMedia.create({
         data: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           storageKey: fileName,
           mimeType: file.type.toLowerCase(),
           byteSize: bytes.byteLength,
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
       const imageUrl = `/api/vision/media/${media.id}`;
       const observation = await tx.healthObservation.create({
         data: {
-          farmId: FARM_ID,
+          farmId: currentFarmId(),
           batchId,
           observedAt: new Date(),
           symptom: "Farm Vision inspection",

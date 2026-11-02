@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
-import { FARM_ID, ensureFarm } from "@/lib/operations";
+import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { calculateLifecycle } from "@/lib/lifecycle";
 
 export async function GET(request: Request) {
@@ -13,16 +13,16 @@ export async function GET(request: Request) {
   since.setUTCDate(since.getUTCDate() - 7);
 
   const leadTimeSetting = await prisma.setting.findUnique({
-    where: { farmId_key: { farmId: FARM_ID, key: "feed_reorder_lead_days" } },
+    where: { farmId_key: { farmId: currentFarmId(), key: "feed_reorder_lead_days" } },
   });
   const configuredLeadDays = Number(leadTimeSetting?.value ?? 7);
   const layerLeadDays = Number.isInteger(configuredLeadDays) ? Math.max(1, Math.min(60, configuredLeadDays)) : 7;
 
   const [purchases, usage, batches] = await Promise.all([
-    prisma.feedPurchase.findMany({ where: { farmId: FARM_ID }, orderBy: { date: "asc" } }),
-    prisma.feedUsage.findMany({ where: { batch: { farmId: FARM_ID }, date: { gte: since } }, orderBy: { date: "asc" } }),
+    prisma.feedPurchase.findMany({ where: { farmId: currentFarmId() }, orderBy: { date: "asc" } }),
+    prisma.feedUsage.findMany({ where: { batch: { farmId: currentFarmId() }, date: { gte: since } }, orderBy: { date: "asc" } }),
     prisma.batch.findMany({
-      where: { farmId: FARM_ID, status: "ACTIVE" },
+      where: { farmId: currentFarmId(), status: "ACTIVE" },
       include: {
         weights: { where: { liveOrDressed: "LIVE" }, orderBy: { date: "desc" }, take: 2 },
         birdCounts: { orderBy: { date: "desc" }, take: 1 },
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
   const purchasedKg = purchases.reduce((sum, row) => sum + Number(row.bagSizeKg) * Number(row.quantityBags), 0);
   const usedKgLast7 = usage.reduce((sum, row) => sum + Number(row.quantityKg), 0);
   const totalUsageAgg = await prisma.feedUsage.aggregate({
-    where: { batch: { farmId: FARM_ID } },
+    where: { batch: { farmId: currentFarmId() } },
     _sum: { quantityKg: true },
   });
   const usedKgTotal = Number(totalUsageAgg._sum.quantityKg ?? 0);

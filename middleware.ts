@@ -8,7 +8,7 @@ export async function middleware(_request: NextRequest) {
   if (path.startsWith("/api/cameras/") && !_request.cookies.has("chicken_op_session")) {
     return new NextResponse(JSON.stringify({ error: "Sign-in is required." }), { status: 401, headers: { "Content-Type": "application/json", "Cache-Control": "no-store, private" } });
   }
-  if (path === "/api/integrations/oriya/camera-frames" && !_request.headers.get("x-oriya-signature")?.startsWith("v1=")) {
+  if ((path === "/api/integrations/oriya/camera-frames" || path === "/api/integrations/oriya/provision") && !_request.headers.get("x-oriya-signature")?.startsWith("v1=")) {
     return new NextResponse(JSON.stringify({ error: "BAD_SIGNATURE" }), { status: 401, headers: { "Content-Type": "application/json", "Cache-Control": "no-store, private" } });
   }
   const response = NextResponse.next();
