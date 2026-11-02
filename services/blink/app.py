@@ -563,8 +563,10 @@ async def live_start(name: str):
                 proc = await asyncio.create_subprocess_exec(
                     FFMPEG, "-loglevel", "warning", "-fflags", "nobuffer", "-i", stream.url,
                     "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-c:a", "aac",
-                    "-f", "hls", "-hls_time", "2", "-hls_list_size", "5",
-                    "-hls_flags", "delete_segments+omit_endlist", str(out / "index.m3u8"),
+                    # A keyframe exactly every 2 s, so every HLS piece is the same length and starts cleanly (smooth playback).
+                    "-force_key_frames", "expr:gte(t,n_forced*2)", "-sc_threshold", "0",
+                    "-f", "hls", "-hls_time", "2", "-hls_list_size", "6",
+                    "-hls_flags", "delete_segments+omit_endlist+independent_segments", str(out / "index.m3u8"),
                     stdout=asyncio.subprocess.DEVNULL, stderr=ffmpeg_log,
                 )
     except Exception:

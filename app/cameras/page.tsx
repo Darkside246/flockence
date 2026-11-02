@@ -156,7 +156,16 @@ function LiveView({ camera, source, ffmpeg }: { camera: string; source: "blink" 
       const el = video.current;
       if (!el) throw new Error("The video player is no longer available.");
       if (Hls.isSupported()) {
-        const h = new Hls({ liveSyncDurationCount: 2 });
+        // Play about 6 s behind live (3 pieces of 2 s) so a slow moment from Blink's relay does not freeze the
+        // picture; catch up gently instead of jumping. Recover from network and decoding hiccups instead of stopping.
+        const h = new Hls({ liveSyncDurationCount: 3, liveMaxLatencyDurationCount: 8, maxLiveSyncPlaybackRate: 1.15, backBufferLength: 10, maxBufferHole: 1 });
+        let recoveries = 0;
+        h.on(Hls.Events.ERROR, (_event, data) => {
+          if (!data.fatal || recoveries >= 5) return;
+          recoveries += 1;
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) h.startLoad();
+          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) h.recoverMediaError();
+        });
         hlsRef.current = h;
         h.loadSource(url);
         h.attachMedia(el);
