@@ -48,6 +48,29 @@ Suggested cron on the Flockence droplet:
 7 * * * *     cd /opt/flockence && node scripts/oriya-push.mjs fresh
 ```
 
+## Thermometers, the earlier picture and the automatic schedule (2026-11-02)
+
+- **Thermometers.** Readings are kept in `ThermometerReading` (the farm's own name per thermometer, time, °C,
+  humidity). Import a thermometer app's CSV export (SwitchBot-style; °C or °F; times read as `FARM_UTC_OFFSET`):
+
+  ```
+  node --env-file=.env scripts/thermometer-import.mjs "D:\path\Smart Thermometer 1_export_202611010054.csv" "Thermo 1"
+  ```
+
+  Running it twice adds nothing twice. Each check sends every thermometer's latest reading from the last 3 hours
+  (and the one about an hour before it) as `climate`; older history is never sent. Oriya works out the heat index,
+  dew point gap, heating rate and quiet thermometers and answers with alerts and `nextCheckMinutes`. A live feed from
+  the thermometers (instead of exports) is the next step.
+- **Earlier picture.** After each Live View, the camera's last picture is kept in `storage/oriya-frames/`, encrypted
+  (AES-256-GCM, key derived from `AUTH_SECRET`, file named by a hash of the camera code, 0600). The next Live View
+  5 to 120 minutes later sends it as `reference`, so Oriya can see which lying birds have not moved. Thumbnails are
+  never used for this (they can be hours old).
+- **Farm clock.** Times sent to Oriya carry the farm's offset (`FARM_UTC_OFFSET`, default `-04:00`), so Oriya knows
+  when it is dawn or the midday heat.
+- **Automatic schedule.** `node scripts/oriya-watch.mjs` (or cron `* * * * * node scripts/oriya-push.mjs auto`):
+  numbers and thermometers every 10 minutes; Live View at dawn (05:00-07:00) every 15 minutes, 11:00-17:00 every
+  30, otherwise hourly; sooner when Oriya's answer asks; never more than `ORIYA_DAILY_LIVE_VIEWS` (default 40) a day.
+
 ## Oriya -> Flockence ("check camera 1 now")
 
 `POST https://flockence.oriya.si/api/integrations/oriya/camera-frames`, signed by Oriya:

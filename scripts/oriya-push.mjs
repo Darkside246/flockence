@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Scheduled flock check for Oriya (docs/ORIYA_LINK.md). Run by cron on the Flockence server, e.g.:
+// Flock check for Oriya (docs/ORIYA_LINK.md): none | thumbnail | fresh | auto. Run by cron on the Flockence server, e.g.:
+//   * * * * *     cd /opt/flockence && node scripts/oriya-push.mjs auto      (the schedule; or scripts/oriya-watch.mjs)
 //   */10 * * * *  cd /opt/flockence && node scripts/oriya-push.mjs thumbnail
 //   7 * * * *     cd /opt/flockence && node scripts/oriya-push.mjs fresh
 // It calls this app's own /api/integrations/oriya/push on this machine with ORIYA_PUSH_TOKEN; it prints counts only.

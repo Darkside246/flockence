@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { claimOriyaRequestId, framesFromCamera } from "@/lib/oriya";
+import { claimOriyaRequestId, currentClimate, framesFromCamera, referenceFor } from "@/lib/oriya";
 import { oriyaLinkConfig, readFrameRequest, verifyOriyaSignature } from "@/lib/oriya-link.mjs";
 
 export const runtime = "nodejs";
@@ -26,5 +26,9 @@ export async function POST(request: Request) {
   if (!(await claimOriyaRequestId(ask.requestId))) return NextResponse.json({ error: "ALREADY_RECEIVED" }, { status: 409 });
   const frames = await framesFromCamera(ask.camera, ask.frames, ask.secondsApart, true);
   if (!frames.ok) return NextResponse.json({ error: frames.reason }, { status: frames.reason === "CAMERA_NOT_ALLOWED" ? 404 : 502 });
-  return NextResponse.json({ occurredAt: frames.occurredAt, kind: "LIVE_VIEW", frames: frames.frames }, { headers: { "Cache-Control": "no-store" } });
+  // With the earlier picture from this camera and the thermometers, so Oriya can compare and knows the conditions.
+  const [reference, climate] = await Promise.all([referenceFor(ask.camera, frames.frames), currentClimate()]);
+  return NextResponse.json({
+    occurredAt: frames.occurredAt, kind: "LIVE_VIEW", frames: frames.frames, ...(reference ? { reference } : {}), ...(climate.length ? { climate } : {}),
+  }, { headers: { "Cache-Control": "no-store" } });
 }

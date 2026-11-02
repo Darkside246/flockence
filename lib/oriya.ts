@@ -5,6 +5,11 @@ import {
   MAX_AGE_SECONDS, allowedCameras, buildFlockCheck, deathCause, frameFromBytes, oriyaLinkConfig, signOriyaBody,
   type OriyaFrame, type OriyaLinkConfig, type DeathCause,
 } from "@/lib/oriya-link.mjs";
+import {
+  DEFAULT_DAILY_LIVE_VIEWS, SEND_WITHIN_MINUTES, autoDecision, climateForOriya, farmHour, farmOffset, isoWithOffset, referenceMinutes,
+  type OriyaClimateEntry, type ThermometerReadingInput,
+} from "@/lib/climate.mjs";
+import { loadReferenceFrame, saveReferenceFrame } from "@/lib/frame-store";
 
 /**
  * Flockence's side of "Oriya is the brain" (docs/ORIYA_LINK.md). Flockence collects the farm numbers and Blink
@@ -42,7 +47,7 @@ export async function framesFromCamera(code: string, count: number, secondsApart
   const name = allowedCameras(process.env).get(code);
   if (!name) return { ok: false, reason: "CAMERA_NOT_ALLOWED" };
   if (!blinkConfigured()) return { ok: false, reason: "CAMERAS_NOT_SET_UP" };
-  const occurredAt = new Date().toISOString();
+  const occurredAt = isoWithOffset(new Date(), farmOffset(process.env));
   const frames: OriyaFrame[] = [];
   const total = fresh ? Math.min(Math.max(count, 1), 3) : 1;
   for (let i = 0; i < total; i += 1) {
@@ -70,6 +75,37 @@ export async function postToOriya(config: OriyaLinkConfig, path: string, body: u
   });
   const text = (await response.text()).slice(0, 200_000);
   try { return { status: response.status, json: JSON.parse(text) }; } catch { return { status: response.status, json: null }; }
+}
+
+/**
+ * Each thermometer's latest reading (within the last 3 hours) and the one about an hour before it, for Oriya's
+ * `climate`. Imported history older than that is not sent.
+ */
+export async function currentClimate(now = new Date()): Promise<OriyaClimateEntry[]> {
+  await ensureFarm();
+  const rows = await prisma.thermometerReading.findMany({
+    where: { farmId: FARM_ID, readAt: { gte: new Date(now.getTime() - (SEND_WITHIN_MINUTES + 100) * 60_000), lte: new Date(now.getTime() + 5 * 60_000) } },
+    orderBy: { readAt: "desc" }, take: 5000, select: { sensor: true, readAt: true, temperatureC: true, humidityPercent: true },
+  });
+  const bySensor = new Map<string, ThermometerReadingInput[]>();
+  for (const row of rows) {
+    const list = bySensor.get(row.sensor) ?? [];
+    list.push({ readAt: row.readAt, temperatureC: Number(row.temperatureC), humidityPct: row.humidityPercent === null ? null : Number(row.humidityPercent) });
+    bySensor.set(row.sensor, list);
+  }
+  return climateForOriya(bySensor, now, farmOffset(process.env));
+}
+
+/**
+ * For a Live View: the camera's previous Live View picture (5 to 120 minutes old) as Oriya's earlier picture, then
+ * this check's last picture is kept for next time. Thumbnails are never used or kept (they can be hours old).
+ */
+export async function referenceFor(camera: string, frames: OriyaFrame[], now = new Date()) {
+  const saved = await loadReferenceFrame(camera);
+  const minutes = saved ? referenceMinutes(saved.savedAt, now) : null;
+  const last = frames[frames.length - 1];
+  if (last) await saveReferenceFrame(camera, last, now);
+  return saved && minutes !== null ? { mimeType: saved.frame.mimeType, imageBase64: saved.frame.imageBase64, minutesBefore: minutes } : null;
 }
 
 /** Today's farm numbers for Oriya: deaths in the last 24 hours (with causes), feed on hand and used, live birds. */
@@ -106,15 +142,45 @@ export async function currentFlockCheck(house: string) {
   }
   const bought = purchases.reduce((sum, p) => sum + Number(p.bagSizeKg) * Number(p.quantityBags), 0);
   const stock = Math.max(0, bought - Number(used._sum.quantityKg ?? 0));
-  return buildFlockCheck({
+  const offset = farmOffset(process.env);
+  const check = buildFlockCheck({
     eventId: `chk-${now.toISOString().slice(0, 16).replace(/[^0-9]/g, "")}-${house.replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || "farm"}`,
-    occurredAt: now.toISOString(), house, deathsSince: since.toISOString(), deaths, causes,
+    occurredAt: isoWithOffset(now, offset), house, deathsSince: isoWithOffset(since, offset), deaths, causes,
     feedStockKg: purchases.length ? stock : undefined, feedUsedKg24h: Number(used24._sum.quantityKg ?? 0),
     alive: batches.length ? alive : undefined, ageDays: oldestDays, openHealthCases: healthCases,
   });
+  const climate = await currentClimate(now);
+  if (climate.length) check.climate = climate;
+  return check;
 }
 
-type OriyaAnswer = { accepted?: boolean; alertDetails?: Array<{ kind: string; urgent: boolean; text: string }>; findings?: { peopleVisible?: boolean } };
+type OriyaAnswer = { accepted?: boolean; alertDetails?: Array<{ kind: string; urgent: boolean; text: string }>; findings?: { peopleVisible?: boolean }; nextCheckMinutes?: unknown };
+
+// Schedule state, kept in Settings so it survives restarts.
+const LAST_NUMBERS = "ORIYA_LAST_NUMBERS_AT";
+const LAST_LIVE_VIEW = "ORIYA_LAST_LIVE_VIEW_AT";
+const NEXT_CHECK = "ORIYA_NEXT_CHECK_AT";
+const liveViewsKey = (now: Date) => `ORIYA_LIVE_VIEWS::${isoWithOffset(now, farmOffset(process.env)).slice(0, 10)}`;
+
+async function getSetting(key: string): Promise<string | null> {
+  return (await prisma.setting.findUnique({ where: { farmId_key: { farmId: FARM_ID, key } }, select: { value: true } }))?.value ?? null;
+}
+async function setSetting(key: string, value: string) {
+  await prisma.setting.upsert({ where: { farmId_key: { farmId: FARM_ID, key } }, create: { farmId: FARM_ID, key, value }, update: { value } });
+}
+const minutesSince = (value: string | null, now: Date) => {
+  const at = value ? Date.parse(value) : Number.NaN;
+  return Number.isFinite(at) ? Math.max(0, Math.floor((now.getTime() - at) / 60_000)) : null;
+};
+
+/** Oriya's "look again in N minutes" (10 to 60), kept as the time it is due; a sooner one replaces a later one. */
+async function rememberNextCheck(answers: OriyaAnswer[], now: Date) {
+  const minutes = answers.map((a) => a?.nextCheckMinutes).filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n >= 10 && n <= 60);
+  if (!minutes.length) return;
+  const due = new Date(now.getTime() + Math.min(...minutes) * 60_000);
+  const current = Date.parse((await getSetting(NEXT_CHECK)) ?? "");
+  if (!Number.isFinite(current) || current <= now.getTime() || due.getTime() < current) await setSetting(NEXT_CHECK, due.toISOString());
+}
 
 /** Keeps Oriya's alerts as health observations, so they show in Flockence's health pages. Text is Oriya's fixed wording. */
 async function keepAlerts(answer: OriyaAnswer, source: string) {
@@ -138,30 +204,81 @@ function refusalReason(reply: { status: number; json: unknown }): string {
   return typeof reason === "string" && /^[A-Z_]{3,40}$/.test(reason) ? reason : "NOT_ORIYA";
 }
 
-export interface PushOutcome { check: { status: number; alerts: number; reason: string } | null; snapshots: Array<{ camera: string; status: number | string; alerts: number }> }
+export interface PushOutcome {
+  check: { status: number; alerts: number; reason: string } | null;
+  snapshots: Array<{ camera: string; status: number | string; alerts: number; comparedWithEarlier?: boolean }>;
+  skipped?: "NOT_DUE" | "ALREADY_RUNNING";
+  liveViewsToday?: number;
+  nextCheckMinutes?: number | null;
+}
+
+let running = false;
 
 /**
  * One scheduled run: send today's numbers, then (optionally) pictures from each allowed camera. "fresh" pictures
  * wake the cameras and use battery; run them every 30-60 minutes, thumbnails in between.
  */
-export async function pushToOriya(options: { house: string; pictures: "none" | "thumbnail" | "fresh" }): Promise<PushOutcome | { error: "LINK_NOT_SET_UP" }> {
+export async function pushToOriya(options: { house: string; pictures: "none" | "thumbnail" | "fresh" | "auto" }): Promise<PushOutcome | { error: "LINK_NOT_SET_UP" }> {
   const config = oriyaLinkConfig(process.env);
   if (!config) return { error: "LINK_NOT_SET_UP" };
-  const outcome: PushOutcome = { check: null, snapshots: [] };
-  const check = await currentFlockCheck(options.house);
-  const sent = await postToOriya(config, "/api/public/farm/chicken-op/flock-checks", check);
-  outcome.check = { status: sent.status, alerts: sent.status === 201 ? await keepAlerts(sent.json as OriyaAnswer, "farm numbers") : 0, reason: refusalReason(sent) };
-  if (options.pictures === "none") return outcome;
-  for (const code of allowedCameras(process.env).keys()) {
-    const fresh = options.pictures === "fresh";
-    const frames = await framesFromCamera(code, fresh ? 3 : 1, 3, fresh);
-    if (!frames.ok) { outcome.snapshots.push({ camera: code, status: frames.reason, alerts: 0 }); continue; }
-    const snapshot = {
-      eventId: `snap-${Date.now()}-${code.replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || "cam"}`, type: "FLOCK_SNAPSHOT", occurredAt: frames.occurredAt,
-      house: options.house, camera: code, source: "BLINK", kind: fresh ? "LIVE_VIEW" : "THUMBNAIL", frames: frames.frames,
-    };
-    const reply = await postToOriya(config, "/api/public/farm/chicken-op/flock-snapshots", snapshot);
-    outcome.snapshots.push({ camera: code, status: reply.status, alerts: reply.status === 201 ? await keepAlerts(reply.json as OriyaAnswer, `camera ${code}`) : 0 });
+  if (running) return { check: null, snapshots: [], skipped: "ALREADY_RUNNING" };
+  running = true;
+  try {
+    await ensureFarm();
+    const now = new Date();
+    let pictures = options.pictures;
+    const todayKey = liveViewsKey(now);
+    let liveViewsToday = Number((await getSetting(todayKey)) ?? 0) || 0;
+    if (pictures === "auto") {
+      // The automatic schedule (scripts/oriya-watch.mjs, or cron every minute with "auto").
+      const nextCheck = Date.parse((await getSetting(NEXT_CHECK)) ?? "");
+      const decision = autoDecision({
+        hour: farmHour(now, farmOffset(process.env)),
+        minutesSinceNumbers: minutesSince(await getSetting(LAST_NUMBERS), now),
+        minutesSinceLiveView: minutesSince(await getSetting(LAST_LIVE_VIEW), now),
+        oriyaDueNow: Number.isFinite(nextCheck) && nextCheck <= now.getTime(),
+        liveViewsToday,
+        dailyCap: Number(process.env.ORIYA_DAILY_LIVE_VIEWS ?? DEFAULT_DAILY_LIVE_VIEWS) || DEFAULT_DAILY_LIVE_VIEWS,
+      });
+      if (!decision.numbers) return { check: null, snapshots: [], skipped: "NOT_DUE", liveViewsToday };
+      pictures = decision.pictures;
+    }
+    const outcome: PushOutcome = { check: null, snapshots: [] };
+    const answers: OriyaAnswer[] = [];
+    const check = await currentFlockCheck(options.house);
+    const sent = await postToOriya(config, "/api/public/farm/chicken-op/flock-checks", check);
+    outcome.check = { status: sent.status, alerts: sent.status === 201 ? await keepAlerts(sent.json as OriyaAnswer, "farm numbers") : 0, reason: refusalReason(sent) };
+    if (sent.status === 201) { answers.push(sent.json as OriyaAnswer); await setSetting(LAST_NUMBERS, now.toISOString()); }
+    if (pictures !== "none") {
+      const fresh = pictures === "fresh";
+      const climate = Array.isArray(check.climate) ? check.climate : [];
+      for (const code of allowedCameras(process.env).keys()) {
+        const frames = await framesFromCamera(code, fresh ? 3 : 1, 3, fresh);
+        if (!frames.ok) { outcome.snapshots.push({ camera: code, status: frames.reason, alerts: 0 }); continue; }
+        const reference = fresh ? await referenceFor(code, frames.frames, now) : null;
+        const snapshot = {
+          eventId: `snap-${Date.now()}-${code.replace(/[^A-Za-z0-9]/g, "").slice(0, 20) || "cam"}`, type: "FLOCK_SNAPSHOT", occurredAt: frames.occurredAt,
+          house: options.house, camera: code, source: "BLINK", kind: fresh ? "LIVE_VIEW" : "THUMBNAIL", frames: frames.frames,
+          ...(reference ? { reference } : {}), ...(climate.length ? { climate } : {}),
+        };
+        const reply = await postToOriya(config, "/api/public/farm/chicken-op/flock-snapshots", snapshot);
+        if (reply.status === 201) answers.push(reply.json as OriyaAnswer);
+        outcome.snapshots.push({ camera: code, status: reply.status, alerts: reply.status === 201 ? await keepAlerts(reply.json as OriyaAnswer, `camera ${code}`) : 0, comparedWithEarlier: Boolean(reference) });
+      }
+      if (fresh) {
+        liveViewsToday += 1;
+        await setSetting(todayKey, String(liveViewsToday));
+        await setSetting(LAST_LIVE_VIEW, now.toISOString());
+        // A Live View answers any "look again" that was due.
+        await prisma.setting.deleteMany({ where: { farmId: FARM_ID, key: NEXT_CHECK, value: { lte: now.toISOString() } } });
+      }
+    }
+    await rememberNextCheck(answers, now);
+    const nextAt = Date.parse((await getSetting(NEXT_CHECK)) ?? "");
+    outcome.nextCheckMinutes = Number.isFinite(nextAt) && nextAt > now.getTime() ? Math.ceil((nextAt - now.getTime()) / 60_000) : null;
+    outcome.liveViewsToday = liveViewsToday;
+    return outcome;
+  } finally {
+    running = false;
   }
-  return outcome;
 }

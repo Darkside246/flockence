@@ -64,6 +64,10 @@ if (-not $NoCameras) {
 
 # 3. Build (first time, or when asked)
 if ($Rebuild -or -not (Test-Path ".next\BUILD_ID")) {
+  # New tables (for example the thermometer readings) are added to the local test database; nothing is deleted.
+  Say "Updating the local database tables"
+  npx prisma db push
+  if ($LASTEXITCODE -ne 0) { Fail "The database could not be updated. Copy the red lines above and send them to Claude." }
   Say "Building the app (a few minutes the first time)"
   npm run build
   if ($LASTEXITCODE -ne 0) { Fail "The build failed. Copy the red lines above and send them to Claude." }

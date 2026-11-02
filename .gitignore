@@ -9,6 +9,8 @@ public/uploads/
 
 # Private Farm Vision uploads. Persist this directory on the application volume.
 storage/vision/
+# Last Live View picture per camera for Oriya (encrypted, private).
+storage/oriya-frames/
 
 # Database backup files contain sensitive farm and customer records.
 backups/

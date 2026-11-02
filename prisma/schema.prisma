@@ -219,6 +219,7 @@ model Farm {
   eggCollections EggCollection[]
   eggPackRuns EggPackRun[]
   layerStageEvents LayerStageEvent[]
+  thermometerReadings ThermometerReading[]
 }
 
 model DailyFlockCheck {
@@ -1077,4 +1078,19 @@ model BiosecurityLog {
   farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
   @@index([farmId, date])
+}
+/// One reading from a house thermometer (imported from the thermometer app's export, or sent live). The sensor is
+/// the farm's own name for it; it is what Oriya sees. No device ids, Wi-Fi details or account names are kept.
+model ThermometerReading {
+  id String @id @default(cuid())
+  farmId String
+  sensor String
+  readAt DateTime
+  temperatureC Decimal @db.Decimal(6,2)
+  humidityPercent Decimal? @db.Decimal(6,2)
+  source String
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  @@unique([farmId, sensor, readAt])
+  @@index([farmId, readAt])
 }
