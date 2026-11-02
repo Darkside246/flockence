@@ -332,6 +332,25 @@ async def media_thumb(path: str):
 
 # ---- live view: Blink immis (blinkpy local TCP MPEG-TS) or RTSP -> ffmpeg -> HLS ----
 
+
+def _blink_live_video_args() -> list[str]:
+    """How Blink's live video is prepared for the browser.
+
+    BLINK_LIVE_MODE=quality (default): re-encode at high quality (CRF 18, full resolution and frame rate, no
+    low-latency shortcuts that cost detail) with a keyframe exactly every 2 s, so every HLS piece is the same
+    length and playback is smooth. Uses more of the PC's processor.
+    BLINK_LIVE_MODE=copy: pass Blink's own H.264 through untouched (the best the camera sends, almost no
+    processor), but the pieces follow Blink's keyframes, which can make playback less even.
+    """
+    if os.environ.get("BLINK_LIVE_MODE", "quality").strip().lower() == "copy":
+        return ["-c:v", "copy", "-c:a", "aac", "-b:a", "128k"]
+    return [
+        "-c:v", "libx264", "-preset", "faster", "-crf", "18", "-maxrate", "6M", "-bufsize", "12M",
+        "-pix_fmt", "yuv420p", "-profile:v", "high",
+        "-force_key_frames", "expr:gte(t,n_forced*2)", "-sc_threshold", "0",
+        "-c:a", "aac", "-b:a", "128k",
+    ]
+
 async def _stop_live(name: str):
     live = state.lives.pop(name, None)
     if not live:
@@ -561,10 +580,8 @@ async def live_start(name: str):
                 # relay and forwards MPEG-TS packets to FFmpeg.
                 feed_task = await _start_blink_feed(stream, name)
                 proc = await asyncio.create_subprocess_exec(
-                    FFMPEG, "-loglevel", "warning", "-fflags", "nobuffer", "-i", stream.url,
-                    "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-c:a", "aac",
-                    # A keyframe exactly every 2 s, so every HLS piece is the same length and starts cleanly (smooth playback).
-                    "-force_key_frames", "expr:gte(t,n_forced*2)", "-sc_threshold", "0",
+                    FFMPEG, "-loglevel", "warning", "-fflags", "+genpts+discardcorrupt", "-i", stream.url,
+                    *_blink_live_video_args(),
                     "-f", "hls", "-hls_time", "2", "-hls_list_size", "6",
                     "-hls_flags", "delete_segments+omit_endlist+independent_segments", str(out / "index.m3u8"),
                     stdout=asyncio.subprocess.DEVNULL, stderr=ffmpeg_log,
