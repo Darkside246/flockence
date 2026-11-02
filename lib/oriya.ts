@@ -10,6 +10,7 @@ import {
   type OriyaClimateEntry, type ThermometerReadingInput,
 } from "@/lib/climate.mjs";
 import { loadReferenceFrame, saveReferenceFrame } from "@/lib/frame-store";
+import { pollSwitchbot } from "@/lib/thermometers";
 
 /**
  * Flockence's side of "Oriya is the brain" (docs/ORIYA_LINK.md). Flockence collects the farm numbers and Blink
@@ -245,6 +246,8 @@ export async function pushToOriya(options: { house: string; pictures: "none" | "
     }
     const outcome: PushOutcome = { check: null, snapshots: [] };
     const answers: OriyaAnswer[] = [];
+    // Fresh SwitchBot readings first (at most every 5 minutes), so the check carries the current temperatures.
+    await pollSwitchbot(now).catch(() => undefined);
     const check = await currentFlockCheck(options.house);
     const sent = await postToOriya(config, "/api/public/farm/chicken-op/flock-checks", check);
     outcome.check = { status: sent.status, alerts: sent.status === 201 ? await keepAlerts(sent.json as OriyaAnswer, "farm numbers") : 0, reason: refusalReason(sent) };

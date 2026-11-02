@@ -59,8 +59,12 @@ Suggested cron on the Flockence droplet:
 
   Running it twice adds nothing twice. Each check sends every thermometer's latest reading from the last 3 hours
   (and the one about an hour before it) as `climate`; older history is never sent. Oriya works out the heat index,
-  dew point gap, heating rate and quiet thermometers and answers with alerts and `nextCheckMinutes`. A live feed from
-  the thermometers (instead of exports) is the next step.
+  dew point gap, heating rate and quiet thermometers and answers with alerts and `nextCheckMinutes`.
+- **Live thermometers.** SwitchBot (with a SwitchBot Hub): put `SWITCHBOT_TOKEN` and `SWITCHBOT_SECRET` from the
+  SwitchBot app in `.env`, run `node scripts/switchbot-devices.mjs` to list the thermometer ids, and set
+  `SWITCHBOT_THERMOMETERS="Thermo 1=<id>,Floor 2=<id>"`. Before each check (at most every 5 minutes) Flockence reads
+  them from SwitchBot's cloud. Any other thermometer bridge can post to `/api/integrations/thermometers/readings` with
+  `THERMOMETER_PUSH_TOKEN` (strict body, at most 500 readings, 30 requests a minute).
 - **Earlier picture.** After each Live View, the camera's last picture is kept in `storage/oriya-frames/`, encrypted
   (AES-256-GCM, key derived from `AUTH_SECRET`, file named by a hash of the camera code, 0600). The next Live View
   5 to 120 minutes later sends it as `reference`, so Oriya can see which lying birds have not moved. Thumbnails are
