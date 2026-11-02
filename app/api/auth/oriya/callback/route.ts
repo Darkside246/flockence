@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createSession, setSessionCookie } from "@/lib/auth";
+import { ORIYA_SESSION_SECONDS, createSession, setSessionCookie } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { runAsFarm } from "@/lib/farm-scope";
 import { signOriyaBody } from "@/lib/oriya-link.mjs";
@@ -69,12 +69,12 @@ export async function GET(request: Request) {
       update: { name: identity.name, role: identity.role },
       select: { id: true },
     });
-    return createSession(user.id);
+    return createSession(user.id, ORIYA_SESSION_SECONDS);
   });
   if (!session) return page("Your farm is not set up in Flockence yet. In Oriya, open Farm > Poultry and choose Poultry.", 409);
 
   const response = NextResponse.redirect(new URL("/", process.env.APP_URL || request.url).toString(), 302);
-  response.headers.append("Set-Cookie", setSessionCookie(session.token));
+  response.headers.append("Set-Cookie", setSessionCookie(session.token, ORIYA_SESSION_SECONDS));
   response.headers.append("Set-Cookie", `${SIGN_IN_COOKIE}=; Path=/api/auth/oriya; HttpOnly; SameSite=Lax; Max-Age=0`);
   response.headers.set("Cache-Control", "no-store");
   return response;

@@ -94,6 +94,12 @@ Suggested cron on the Flockence droplet:
 - **Database test:** `DATABASE_URL=<throwaway db with "test" in its name> npx prisma db push` then
   `node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/farm-isolation.db.mjs`.
 
+- **Paid extra, Oriya-only server (2026-11-02).** Oriya opens Flockence only for a plan with the `flockence` feature
+  (migration 1587; the premium farm plan). On the server set `FLOCKENCE_ORIYA_ONLY=on`: without a session every page goes
+  to "Sign in with Oriya" and the API answers 401; local sign-up, password sign-in and resets are off; every response
+  carries `X-Robots-Tag: noindex`. Oriya sign-ins last 8 hours, then renew through Oriya (membership and plan checked
+  again). Still to build: Oriya's signed "sign them out" call on removal or downgrade.
+
 ## Oriya -> Flockence ("check camera 1 now")
 
 `POST https://flockence.oriya.si/api/integrations/oriya/camera-frames`, signed by Oriya:

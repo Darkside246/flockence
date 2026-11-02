@@ -7,6 +7,8 @@ import { consumePasswordReset, hashPassword, invalidateUserSessions, savePasswor
 import { runAsFarm } from "@/lib/farm-scope";
 
 export async function POST(request: Request) {
+  // Oriya-only server: accounts come only from Oriya ("Sign in with Oriya"); no local passwords.
+  if (process.env.FLOCKENCE_ORIYA_ONLY === "on") return NextResponse.json({ error: "Sign in with Oriya." }, { status: 404 });
   try {
     const body = await request.json();
     const token = typeof body.token === "string" ? body.token : "";

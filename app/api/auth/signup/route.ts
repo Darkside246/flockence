@@ -19,6 +19,8 @@ function constantTimeSecretMatch(expected: string, supplied: string) {
 
 /** Local accounts are made only on this install's own farm (the PC); farms from Oriya sign in with Oriya. */
 export async function POST(request: Request) {
+  // Oriya-only server: accounts come only from Oriya ("Sign in with Oriya"); no local passwords.
+  if (process.env.FLOCKENCE_ORIYA_ONLY === "on") return NextResponse.json({ error: "Sign in with Oriya." }, { status: 404 });
   return runAsFarm(DEFAULT_FARM_ID, () => signup(request));
 }
 

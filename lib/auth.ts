@@ -52,9 +52,10 @@ function secureCookieOptions(maxAge: number) {
   return `Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${isProduction() ? "; Secure" : ""}`;
 }
 
-export async function createSession(userId: string) {
+/** maxAgeSeconds: shorter for Oriya sign-ins, so a removal or downgrade in Oriya takes effect within hours. */
+export async function createSession(userId: string, maxAgeSeconds = SESSION_DAYS * 86400) {
   await ensureFarm();
-  const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000);
+  const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000);
   const token = signedSessionToken(userId, expiresAt.getTime());
   await prisma.setting.create({ data: { farmId: currentFarmId(), key: `${SESSION_PREFIX}${digest(token)}`, value: JSON.stringify({ userId, expiresAt: expiresAt.toISOString() }) } });
   return { token, expiresAt };
@@ -92,7 +93,9 @@ export async function sessionFromToken(token: string): Promise<{ userId: string;
   } catch { return null; }
 }
 
-export function setSessionCookie(token: string) { return `${SESSION_COOKIE}=${encodeURIComponent(token)}; ${secureCookieOptions(SESSION_DAYS * 86400)}`; }
+export function setSessionCookie(token: string, maxAgeSeconds = SESSION_DAYS * 86400) { return `${SESSION_COOKIE}=${encodeURIComponent(token)}; ${secureCookieOptions(maxAgeSeconds)}`; }
+/** Oriya sign-ins last 8 hours, then renew through Oriya (which checks membership and plan again). */
+export const ORIYA_SESSION_SECONDS = 8 * 3600;
 export function clearSessionCookie() { return `${SESSION_COOKIE}=; ${secureCookieOptions(0)}`; }
 
 export async function savePasswordHash(userId: string, passwordHash: string) {
