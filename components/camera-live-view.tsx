@@ -3,6 +3,8 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { api, enc, json } from "@/lib/camera-client";
 export function LiveView({ camera, source, ffmpeg, compact = false }: { camera: string; source: "blink" | "rtsp"; ffmpeg: boolean; compact?: boolean }) {
   const [smooth, setSmooth] = useState(false);
+  const deadline = useRef(0);
+  const restarts = useRef(0);
   const ownsSession = useRef(false);
   const video = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<"idle" | "starting" | "playing" | "failed">("idle");
@@ -56,8 +58,9 @@ export function LiveView({ camera, source, ffmpeg, compact = false }: { camera: 
     if (ownsSession.current) fetch(api(`cameras/${enc(camera)}/live/stop`), { method: "POST", keepalive: true }).catch(() => {});
   }, [camera]);
 
-  async function start() {
+  async function start(retrying = false) {
     if (startAbortRef.current) return;
+    if (!retrying) restarts.current = 0;
     const run = ++runRef.current;
     const controller = new AbortController();
     startAbortRef.current = controller;
@@ -69,7 +72,8 @@ export function LiveView({ camera, source, ffmpeg, compact = false }: { camera: 
     try {
       // Do not abort the start request itself: the server may already have
       // started FFmpeg. Invalidate the run and send stop if the user cancels.
-      const { playlist } = await json<{ playlist: string }>(api(`cameras/${enc(camera)}/live/start`), { method: "POST" });
+      const { playlist, expiresIn } = await json<{ playlist: string; expiresIn:number }>(api(`cameras/${enc(camera)}/live/start`), { method: "POST" });
+      if (!retrying) deadline.current = Date.now()+expiresIn*1000;
       startAccepted = true;
       ownsSession.current = true;
       if (!isCurrent()) {
@@ -150,6 +154,26 @@ export function LiveView({ camera, source, ffmpeg, compact = false }: { camera: 
     }
   }
 
+  useEffect(() => {
+    if (state !== "playing") return;
+    const run = runRef.current;
+    let lastTime = -1, lastProgress = Date.now(), recovering = false;
+    const timer = window.setInterval(async () => {
+      const el = video.current;
+      if (!el || recovering || runRef.current !== run) return;
+      if (Date.now() >= deadline.current) {await stop();return;}
+      if (el.paused || el.currentTime !== lastTime) {lastTime=el.currentTime;lastProgress=Date.now();return;}
+      if (Date.now()-lastProgress < 18000*(1+restarts.current)) return;
+      recovering = true;
+      clearVideo();
+      await stopRemote();
+      if (runRef.current !== run) return;
+      if (restarts.current >= 2) {setState("failed");setMessage("Live video stopped advancing. Check the camera and storage, then retry.");return;}
+      restarts.current++;
+      void start(true);
+    },2000);
+    return ()=>clearInterval(timer);
+  },[state,stop,stopRemote,clearVideo]);
   // Near-live fallback: a fresh still every 6 seconds while enabled.
   useEffect(() => { if (!near) return; const t = setInterval(() => setTick((n) => n + 1), 6000); return () => clearInterval(t); }, [near]);
 
@@ -157,7 +181,7 @@ export function LiveView({ camera, source, ffmpeg, compact = false }: { camera: 
     <div style={{ display: "flex", gap: 8 }}>
       {state === "playing" || state === "starting"
         ? <button className="button" onClick={stop}>Stop</button>
-        : <button className="button" onClick={start} disabled={!ffmpeg}>{compact ? "View live" : "Start live view"}</button>}
+        : <button className="button" onClick={()=>void start()} disabled={!ffmpeg}>{compact ? "View live" : "Start live view"}</button>}
       {state === "playing" && <button className="button" onClick={() => void video.current?.requestFullscreen?.()}>Fullscreen</button>}
       {!compact && <button className="button" onClick={() => setNear((v) => !v)}>{near ? "Stop near-live" : "Near-live stills"}</button>}</div></div>
     <label className="cx-buffer">Buffer <select value={smooth ? "smooth" : "fast"} disabled={state === "playing" || state === "starting"} onChange={e => setSmooth(e.target.value === "smooth")}>

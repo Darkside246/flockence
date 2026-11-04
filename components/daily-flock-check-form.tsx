@@ -82,6 +82,15 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(false);
 
+  const [sensor, setSensor] = useState<{sensor:string;readAt:string;temperatureC:string;humidityPercent:string|null}|null>(null);
+  useEffect(() => {
+    setSensor(null);
+    if (!batchId || date !== today()) return;
+    const controller = new AbortController();
+    fetch("/api/check-sensor?batchId="+encodeURIComponent(batchId),{cache:"no-store",signal:controller.signal})
+      .then(r=>r.ok?r.json():null).then(row=>{if(!controller.signal.aborted) setSensor(row);}).catch(()=>{});
+    return ()=>controller.abort();
+  }, [batchId,date]);
   const selectedBatch = useMemo(() => batches.find(batch => batch.id === batchId), [batches, batchId]);
 
   const refreshQueueCount = () => setQueueCount(readQueue().length);
@@ -215,6 +224,12 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       <label>Water used litres<input value={waterLiters} onChange={event => setWaterLiters(event.target.value)} type="number" min="0" step="0.1"/></label>
       <label>Average weight kg<input value={avgWeightKg} onChange={event => setAvgWeightKg(event.target.value)} type="number" min="0" step="0.001"/></label>
       <label>Birds weighed<input value={weightSampleQuantity} onChange={event => setWeightSampleQuantity(event.target.value)} type="number" min="1" step="1"/></label>
+      {sensor && <button type="button" className="button" onClick={()=>{
+        if (date !== today() || Date.now()-Date.parse(sensor.readAt)>15*60000) {setSensor(null);setMessage("Reading expired. Re-select the flock for a current reading.");return;}
+        setTemperatureC(String(sensor.temperatureC));setHumidityPercent(sensor.humidityPercent == null ? "" : String(sensor.humidityPercent));
+        const source = "Govee "+sensor.sensor+" polled "+sensor.readAt;
+        setNotes(n=>n.includes(source)?n:[n,source].filter(Boolean).join("\n"));
+      }}>Use {sensor.sensor} reading · {new Date(sensor.readAt).toLocaleTimeString()}</button>}
       <label>House temperature °C<input value={temperatureC} onChange={event => setTemperatureC(event.target.value)} type="number" step="0.1"/></label>
       <label>House humidity %<input value={humidityPercent} onChange={event => setHumidityPercent(event.target.value)} type="number" min="0" max="100" step="0.1"/></label>
       <label>Ammonia ppm<input value={ammoniaPpm} onChange={event => setAmmoniaPpm(event.target.value)} type="number" min="0" step="0.1"/></label>

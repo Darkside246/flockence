@@ -56,6 +56,19 @@ export function CameraWall({onStatus}: {onStatus?:(s:CameraWallStatus)=>void}) {
     finally{setLoading(false);}
   },[onStatus]);
   useEffect(()=>{void load();},[load]);
+  // Discover newly registered cameras without reloading the thumbnails or player.
+  useEffect(() => {
+    if (!refresh) return;
+    const controller = new AbortController();
+    const timer = window.setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const list = await json<Camera[]>(api("cameras"), {signal:controller.signal,cache:"no-store"});
+        if (!controller.signal.aborted) { setCams(list); onStatus?.({state:"ready",count:list.length}); }
+      } catch { /* Explicit Refresh exposes any connection error. */ }
+    }, 30000);
+    return () => {controller.abort();clearInterval(timer);};
+  },[refresh,onStatus]);
   const shown=visibleSlots(slots,cams.map(c=>c.name));
   async function choose(i:number,name:string) {
     const next=[...slots];const previous=next.indexOf(name);

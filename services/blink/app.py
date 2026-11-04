@@ -528,7 +528,9 @@ async def _reaper(name: str, live: Live, max_seconds: int):
             sizes = sum(f.stat().st_size for f in folder.iterdir() if f.is_file())
             age = time.time() - (folder / "index.m3u8").stat().st_mtime
         except FileNotFoundError:
-            continue
+            if time.time() - live.started < 30:
+                continue
+            sizes, age = 0, 31
         if storage_status()["critical"] or sizes > LIVE_LIMIT_BYTES or age > 30:
             log.warning("Stopped live view for %s: disk reserve, buffer limit or stale playlist (bytes=%d age=%.1fs)", name, sizes, age)
             await _stop_live(name)

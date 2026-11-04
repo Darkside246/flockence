@@ -7,4 +7,3 @@ export async function json<T>(url: string, init?: RequestInit): Promise<T> {
   if (!r.ok) throw new Error(d.error || d.detail || `Request failed (${r.status})`);
   return d as T;
 }
-

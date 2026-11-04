@@ -7,6 +7,6 @@ import type { Prisma } from "@prisma/client";
 export async function lockFlockOperations(tx: Prisma.TransactionClient, batchIds: readonly string[]) {
   const ids = [...new Set(batchIds.filter((id) => typeof id === "string" && id.length > 0))].sort();
   for (const id of ids) {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${"chicken-op-flock:" + id}, 0))`;
+    await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${"chicken-op-flock:" + id}, 0))`;
   }
 }

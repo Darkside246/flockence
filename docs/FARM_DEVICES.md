@@ -41,3 +41,15 @@ Provider references:
 - https://developer.govee.com/reference/get-devices-status
 - https://support.wyze.com/hc/en-us/articles/360051619871-Does-Wyze-Cam-v3-support-RTSP
 - https://github.com/mrlt8/docker-wyze-bridge
+
+## Dashboard and latency checks
+
+Each signed-in viewer can assign four camera positions. Automatic positions fill around assigned cameras, including cameras discovered while the dashboard is open. Take photo requests a new image and downloads it. Update image reloads the available still. The still label reports browser load time.
+
+Lower delay targets two segments in the HLS.js player. Smoother playback targets six. Blink transcoding targets one-second segments. RTSP copy mode and Blink copy mode depend on the camera encoder's keyframes. Native HLS browsers control their own buffering. To measure the result, use the same camera, browser and network and compare five light switches per mode with a stopwatch. The player stops retrying at the session limit or after two stalled-stream restarts.
+
+The sidecar warns below 5 GiB free and pauses disk-intensive work below 2 GiB. Its watchdog checks the live buffer every two seconds (64 MiB default per active camera; CAMERA_LIVE_BUFFER_MIB overrides). This is a sampled limit, not a filesystem quota. For recordings, keep an independent encrypted off-server copy with an explicit retention policy and periodically restore a sample.
+
+To prefill a daily check, add a batchIds array of verified flock IDs to the appropriate GOVEE_SENSORS entry. On today's check the operator can copy a reading polled in the last 15 minutes, with its source and polling time. Unmapped and ambiguous sensors do not generate a suggestion.
+
+Both pen APIs now share farm-owned profiles. On first access they reconcile legacy settings under a farm lock. Different same-name profiles retain numbered names. Owners and managers can review them and remove unneeded copies. The archive filter includes closed and slaughtered flocks on demand. Empty active broiler flocks can be closed without erasing source records; layers retain their stage workflow.

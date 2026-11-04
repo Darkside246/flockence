@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
+import { lockFlockOperations } from "@/lib/poultry-lock";
 import { reconcileLiveBirdsFromSnapshot } from "@/lib/poultry-metrics.mjs";
 
 export async function GET(request: Request) {
@@ -79,10 +80,10 @@ export async function POST(request: Request) {
     const batch = await prisma.$transaction(async (tx) => {
       if (newDealerName) {
         const existing = await tx.supplier.findFirst({ where: { farmId: currentFarmId(), name: { equals: newDealerName, mode: "insensitive" } }, select: { id: true } });
-        supplierId = existing?.id ?? (await tx.supplier.create({ data: { farmId: currentFarmId(), name: newDealerName, notes: "Chick dealer" }, select: { id: true } })).id;
+        supplierId = existing?.id ?? null;
       }
       const created = await tx.batch.create({ data: {
-        farmId: currentFarmId(), name: input.name, startDate, hatchDate, purchaseDate,
+        farm: {connect:{id:currentFarmId()}}, name: input.name, startDate, hatchDate, purchaseDate,
         species,
         productionType: productionType as "BROILER" | "LAYER",
         layerStage: layerStage as any,
@@ -98,14 +99,11 @@ export async function POST(request: Request) {
         expectedSlaughter, targetSlaughterAgeDays,
         slaughterDecisionMode: productionType === "BROILER" ? (input.slaughterDecisionMode || "AGE_OR_WEIGHT") : "MANUAL",
         targetLiveWeightKg, targetDressedWeightKg: null,
-        supplierId, status: "ACTIVE", recordStatus: "ACTUAL"
+        supplier: supplierId ? {connect:{id:supplierId}} : newDealerName ? {create:{farmId:currentFarmId(),name:newDealerName,notes:"Chick dealer"}} : undefined,
+        status: "ACTIVE", recordStatus: "ACTUAL",
+        birdCounts: {create:{date:startDate,liveCount:input.initialChicks,note:"Initial count"}},
+        layerStageEvents: layerStage ? {create:{farmId:currentFarmId(),fromStage:null,toStage:layerStage as any,date:startDate,reason:"INITIAL_SETUP"}} : undefined,
       } });
-      await tx.birdCount.create({ data: { batchId: created.id, date: startDate, liveCount: input.initialChicks, note: "Initial count" } });
-      if (layerStage) {
-        await tx.layerStageEvent.create({
-          data: { farmId: currentFarmId(), batchId: created.id, fromStage: null, toStage: layerStage as any, date: startDate, reason: "INITIAL_SETUP" },
-        });
-      }
       return created;
     });
     return NextResponse.json(batch, { status: 201 });
@@ -137,4 +135,28 @@ export async function DELETE(request: Request) {
   if (status === 409) return NextResponse.json({ error: "This flock has farm records. Its history must be retained." }, { status });
   if (status === 404) return NextResponse.json({ error: "Flock not found." }, { status });
   return NextResponse.json({ deleted: true });
+}
+
+export async function PATCH(request: Request) {
+  const session = await currentUserOrRoleResponse(request, ["OWNER"]);
+  if (session.response) return session.response;
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) return NextResponse.json({error:"Choose a flock."},{status:400});
+  const result = await prisma.$transaction(async tx => {
+    await lockFlockOperations(tx,[id]);
+    const flock = await tx.batch.findFirst({where:{id,farmId:currentFarmId()},include:{
+      birdCounts:{where:{date:{lte:new Date()}},orderBy:[{date:"desc"},{createdAt:"desc"}],take:1},
+      mortalityEvents:true,slaughterEvents:true,
+    }});
+    if (!flock) return 404;
+    if (flock.status === "CLOSED") return 200;
+    const count=reconcileLiveBirdsFromSnapshot(flock.initialChicks,flock.birdCounts[0] ?? null,[
+      ...flock.mortalityEvents.map(e=>({date:e.date,createdAt:e.createdAt,quantity:e.quantity})),
+      ...flock.slaughterEvents.map(e=>({date:e.date,createdAt:e.createdAt,quantity:e.sentQuantity}))]);
+    if (flock.productionType === "LAYER" || flock.species === "LAYER" || flock.status !== "ACTIVE" || count !== 0) return 409;
+    await tx.batch.update({where:{id},data:{status:"CLOSED"}});
+    return 200;
+  });
+  if (result!==200) return NextResponse.json({error:result===404?"Flock not found.":"Record the final bird movements before closing a broiler flock. For layers, use the stage workflow."},{status:result});
+  return NextResponse.json({closed:true});
 }
