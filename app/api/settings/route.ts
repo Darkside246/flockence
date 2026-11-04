@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { authError, requireCurrentUser, currentUserOrRoleResponse } from "@/lib/current-user";
 
-const reserved = ["AUTH_", "PENCFG::", "PEN::", "FARM_PEN", "CAMERA_WALL::", "FARM_INVITE::"];
+const reserved = ["DEVICE_PRIVATE::", "AUTH_", "PENCFG::", "PEN::", "FARM_PEN", "CAMERA_WALL::", "FARM_INVITE::"];
 const publicSettingFilter = { NOT: reserved.map(prefix => ({key:{startsWith:prefix}})) };
 
 export async function GET(request: Request) {

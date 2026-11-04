@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { currentFarmId } from "@/lib/operations";
 import type { FarmAccessRole } from "@/lib/current-user";
-import { DEFAULT_FARM_ID, currentFarmIdOrNull } from "@/lib/farm-scope";
+import { currentCameraService } from "@/lib/blink-sidecar";
 
 /**
  * Who may see the cameras, how often, and the headers that keep the video on this site (security review 2026-11-01).
@@ -13,12 +13,9 @@ import { DEFAULT_FARM_ID, currentFarmIdOrNull } from "@/lib/farm-scope";
  */
 const ALL_ROLES: FarmAccessRole[] = ["OWNER", "MANAGER", "WORKER", "READ_ONLY"];
 
-/**
- * The Blink camera service is one per install, connected to this install's own farm (FARM_ID). Until each farm has its
- * own camera service, other farms on the same server never reach it (many farms, 2026-11-02).
- */
+/** Only farms with their own camera service can use the camera routes. */
 export function camerasBelongToThisFarm(): boolean {
-  return currentFarmIdOrNull() === DEFAULT_FARM_ID;
+  return currentCameraService() !== null;
 }
 
 export function cameraViewRoles(env: Record<string, string | undefined> = process.env): FarmAccessRole[] {

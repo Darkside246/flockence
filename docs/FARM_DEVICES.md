@@ -2,7 +2,9 @@
 
 ## Temperature sensors
 
-Run on the backend with the same database and FARM_ID as Flockence. Keep GOVEE_API_KEY
+Owners can connect Govee in Settings, discover devices and confirm each sensor’s temperature unit. Read now collects a reading immediately. The scheduled polling command below also reads every farm’s saved devices. Re-enter keys if AUTH_SECRET changes.
+
+For legacy environment configuration, run on the backend with the same database and FARM_ID as Flockence. Keep GOVEE_API_KEY
 in the protected server environment. The collector only calls account discovery and
 device state on api.govee.com’s openapi host. It does not issue control commands.
 
@@ -53,3 +55,7 @@ The sidecar warns below 5 GiB free and pauses disk-intensive work below 2 GiB. I
 To prefill a daily check, add a batchIds array of verified flock IDs to the appropriate GOVEE_SENSORS entry. On today's check the operator can copy a reading polled in the last 15 minutes, with its source and polling time. Unmapped and ambiguous sensors do not generate a suggestion.
 
 Both pen APIs now share farm-owned profiles. On first access they reconcile legacy settings under a farm lock. Different same-name profiles retain numbered names. Owners and managers can review them and remove unneeded copies. The archive filter includes closed and slaughtered flocks on demand. Empty active broiler flocks can be closed without erasing source records; layers retain their stage workflow.
+
+## Camera services for additional farms
+
+The installation farm uses BLINK_SIDECAR_URL and BLINK_SIDECAR_TOKEN as before. For another business, provision a separate loopback camera service with a separate data directory, unused port and unique token. Set FARM_CAMERA_SERVICES in the web server environment to a JSON object keyed by the authenticated farm ID, for example `{"farm-id":{"port":8766,"token":"<unique random token of at least 32 characters>"}}`. Restart the web server after provisioning. The farm owner can then sign in to Blink or register and test local RTSP cameras in Settings.
