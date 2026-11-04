@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api, enc, json } from "@/lib/camera-client";
-export type Camera = { name: string; source: "blink" | "rtsp"; type: string | null; battery: string | number | null; armed: boolean | null; motionDetected: boolean | null; live: boolean; recording?: boolean };
+export type Camera = { temperature?:number|string|null; name: string; source: "blink" | "rtsp"; type: string | null; battery: string | number | null; armed: boolean | null; motionDetected: boolean | null; live: boolean; recording?: boolean };
 export type CameraStatus = { storage?: {low:boolean;critical:boolean;freeBytes:number}; connected: boolean; pending2fa: boolean; ffmpeg: boolean };
 type Status = CameraStatus;
 function ConnectCard({ status, onDone }: { status: Status; onDone: () => void }) {

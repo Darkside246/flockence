@@ -110,7 +110,7 @@ export default function CamerasPage() {
         <div className="segmented" style={{ marginBottom: 18 }}>{(["live", "stills", "recordings"] as Tab[]).map((t) => <button key={t} className={tab === t ? "selected" : ""} onClick={() => setTab(t)}>{t === "live" ? "Live" : t === "stills" ? "Pictures" : "Recordings"}</button>)}</div>
         {tab === "live" && <>
           <label>Camera<select value={selected} onChange={(e) => setSelected(e.target.value)}>{cameras.map((c) => <option key={c.name}>{c.name}</option>)}</select></label>
-          {selected && <LiveView key={selected} camera={selected} source={cameras.find((c) => c.name === selected)?.source ?? "rtsp"} ffmpeg={status.ffmpeg} />}</>}
+          {selected && <LiveView key={selected} camera={selected} temperatureF={cameras.find(c=>c.name===selected)?.temperature} source={cameras.find((c) => c.name === selected)?.source ?? "rtsp"} ffmpeg={status.ffmpeg} />}</>}
         {tab === "stills" && <Stills cameras={cameras} />}
         {tab === "recordings" && <Recordings cameras={cameras} />}
       </>}

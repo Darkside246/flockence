@@ -1,7 +1,16 @@
 "use client";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { api, enc, json } from "@/lib/camera-client";
-export function LiveView({ camera, source, ffmpeg, compact = false, children }: { camera: string; source: "blink" | "rtsp"; ffmpeg: boolean; compact?: boolean; children?: React.ReactNode }) {
+import {useCameraTemperature} from "./camera-temperature";
+export function LiveView({ camera, source, ffmpeg, compact = false, temperatureF, children }: { camera: string; source: "blink" | "rtsp"; ffmpeg: boolean; compact?: boolean; temperatureF?:number|string|null; children?: React.ReactNode }) {
+  const {badge,settings}=useCameraTemperature(camera,temperatureF,source==="blink");
+  const frame=useRef<HTMLDivElement>(null);
+  const [expanded,setExpanded]=useState(false);
+  useEffect(()=>{if(!expanded)return;const close=(e:KeyboardEvent)=>{if(e.key==="Escape")setExpanded(false);};window.addEventListener("keydown",close);return ()=>window.removeEventListener("keydown",close);},[expanded]);
+  async function enlarge(){
+    try {if(!frame.current?.requestFullscreen)throw Error();await frame.current.requestFullscreen();}
+    catch{setExpanded(true);}
+  }
   const [smooth, setSmooth] = useState(false);
   const deadline = useRef(0);
   const restarts = useRef(0);
@@ -177,28 +186,30 @@ export function LiveView({ camera, source, ffmpeg, compact = false, children }: 
   // Near-live fallback: a fresh still every 6 seconds while enabled.
   useEffect(() => { if (!near) return; const t = setInterval(() => setTick((n) => n + 1), 6000); return () => clearInterval(t); }, [near]);
 
-  const player = <video ref={video} aria-label={camera + " live video"} controls playsInline style={{ width: "100%", maxHeight: compact ? undefined : 520, background: "#000", display: state === "playing" ? "block" : "none" }} />;
+  const player = <video ref={video} aria-label={camera + " live video"} controls controlsList="nofullscreen" playsInline style={{ width: "100%", maxHeight: compact ? undefined : 520, background: "#000", display: state === "playing" ? "block" : "none" }} />;
 
-  return <div className={compact ? "cx-inline-live" : "card"}>
-    {compact && <div className="card cx-cam">
-      {state !== "playing" && children}
+  const viewport=<div ref={frame} className={(compact?"card cx-cam ":"")+"camera-temp-frame"+(expanded?" is-expanded":"")+(state==="playing"?" is-playing":"")}>
+
+      {compact && state !== "playing" && children}
       {player}
-    </div>}
+      {!compact && near && state!=="playing" && <img src={api(`cameras/${enc(camera)}/snapshot?fresh=true&t=${tick}`)} alt={camera} style={{width:"100%"}}/>}
+      {(compact || near || state==="playing") && badge}
+      <button className="button camera-temp-exit" onClick={()=>{setExpanded(false);if(document.fullscreenElement)void document.exitFullscreen();}}>Exit fullscreen</button>
+    </div>;
+  return <div className={compact ? "cx-inline-live" : "card"}>
+    {compact && viewport}
     <div className="section-head">{!compact && <div><h3>{camera}</h3><p>{source === "blink" ? "Live view stops automatically after 5 minutes to protect the camera battery." : "Live view stops automatically after 1 hour."}</p></div>}
     <div style={{ display: "flex", gap: 8 }}>
       {state === "playing" || state === "starting"
         ? <button className="button" onClick={stop}>Stop</button>
         : <button className="button" onClick={()=>void start()} disabled={!ffmpeg}>{compact ? "View live" : "Start live view"}</button>}
-      {state === "playing" && <button className="button" onClick={() => void video.current?.requestFullscreen?.()}>Fullscreen</button>}
+      {state === "playing" && <button className="button" onClick={enlarge}>Fullscreen</button>}
       {!compact && <button className="button" onClick={() => setNear((v) => !v)}>{near ? "Stop near-live" : "Near-live stills"}</button>}</div></div>
     <label className="cx-buffer">Buffer <select value={smooth ? "smooth" : "fast"} disabled={state === "playing" || state === "starting"} onChange={e => setSmooth(e.target.value === "smooth")}>
       <option value="fast">Lower delay</option><option value="smooth">Smoother playback</option></select></label>
     {!ffmpeg && <p role="alert">ffmpeg is not installed on the camera service, so live video is unavailable. Still images and recordings still work.</p>}
     {message && <p role={state === "failed" ? "alert" : "status"}>{message}</p>}
-    {!compact && player}
-    {near && state !== "playing" && (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={api(`cameras/${enc(camera)}/snapshot?fresh=true&t=${tick}`)} alt={`Latest picture from ${camera}`} style={{ width: "100%" }} />
-    )}
+    {!compact && viewport}
+    {settings}
   </div>;
 }

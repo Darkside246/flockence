@@ -6,7 +6,7 @@ import { api, enc, json } from "@/lib/camera-client";
 import { visibleSlots } from "@/lib/camera-slots.mjs";
 
 export type CameraWallStatus = { state:"loading"|"unavailable"|"ready"; count:number; message?:string };
-type Camera = { name:string; source:"blink"|"rtsp"; battery?:string|number|null; recording?:boolean };
+type Camera = { temperature?:number|string|null; name:string; source:"blink"|"rtsp"; battery?:string|number|null; recording?:boolean };
 const automatic: (string|null)[] = [null,null,null,null];
 
 function CameraTile({camera,ffmpeg,refresh}: {camera:Camera;ffmpeg:boolean;refresh:number}) {
@@ -28,7 +28,7 @@ function CameraTile({camera,ffmpeg,refresh}: {camera:Camera;ffmpeg:boolean;refre
     finally {setBusy(false);}
   }
   return <>
-    <LiveView camera={camera.name} source={camera.source} compact ffmpeg={ffmpeg}>
+    <LiveView camera={camera.name} source={camera.source} compact ffmpeg={ffmpeg} temperatureF={camera.temperature}>
       {image.url===url && image.failed ? <div className="cx-cam-offline"><div>No picture available</div></div> :
         <img key={url} src={url} className={image.url===url && image.loaded ? "is-loaded" : ""} alt={camera.name}
           onLoad={()=>setImage({url,loaded:new Date().toLocaleTimeString(),failed:false})} onError={()=>setImage({url,loaded:"",failed:true})} />}
