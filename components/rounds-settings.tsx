@@ -17,6 +17,7 @@ export function RoundsSettings(){
   <label><input type="checkbox" checked={p.email} onChange={e=>set({...p,email:e.target.checked})}/> Email reminders</label>
   <label>Email recipient<select value={p.emailUserId??""} onChange={e=>set({...p,emailUserId:e.target.value})}><option value="">All farm owners</option>{members.filter(m=>m.role!=="READ_ONLY").map(m=><option key={m.id} value={m.id}>{m.name} · {m.role}</option>)}</select></label>
   <label><input type="checkbox" checked={p.whatsapp} onChange={e=>set({...p,whatsapp:e.target.checked})}/> WhatsApp the farm’s linked Oriya operator</label>
+  <p>In signed-in Oriya farm chats, a photo alone can start a loss report. Oriya checks the image and its sent time, removes embedded metadata before AI analysis, and asks you to confirm the batch and count before saving a loss.</p>
   <button className="button" onClick={async()=>{setBusy(true);try{const r=await fetch("/api/rounds-policy",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});if(!r.ok)throw Error((await r.json()).error);setMsg("Reminder policy saved.");}catch(e){setMsg(e instanceof Error?e.message:"Save failed.");}finally{setBusy(false);}}}>Save reminders</button></fieldset>
   {ready && p.email && !emailReady && <p role="status">Email delivery needs a configured Resend sender on the Flockence server.</p>}
   {!owner && <small>Only the farm owner can change this policy.</small>}<p role="status">{msg}</p></section>;

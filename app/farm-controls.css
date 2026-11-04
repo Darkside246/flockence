@@ -1,0 +1,49 @@
+/* Keep form controls on the active theme, including the native option popup on Windows. */
+html[data-theme] .shell {
+  --control-fill: var(--surface-input);
+  --control-text: var(--text-on-input);
+  --control-edge: var(--border-subtle);
+  --control-accent: var(--accent-interactive);
+  --control-active-text: var(--text-on-nav-active);
+}
+html[data-theme="crystal"] .shell {
+  --control-fill: var(--cx-glass-1);
+  --control-text: var(--cx-text);
+  --control-edge: var(--cx-edge);
+  --control-accent: var(--cx-teal);
+  --control-active-text: var(--cx-bg-0);
+}
+html[data-theme] .shell :is(.button,.segmented button,select) {
+  border: 1px solid var(--control-edge) !important;
+  border-radius: var(--control-radius,10px);
+  background-color: var(--control-fill) !important;
+  background-image:none !important;
+  color: var(--control-text) !important;
+  font:inherit;
+}
+html[data-theme] .shell select {
+  color-scheme:dark;
+  appearance:auto;
+  padding-inline:.65rem;
+}
+html[data-theme] .shell :is(option,optgroup) {
+  color:var(--control-text);
+  background-color:var(--control-fill);
+}
+html[data-theme] .shell :is(.button,.segmented button,select):enabled:hover,
+html[data-theme] .shell a.button:hover {
+  border-color:var(--control-accent) !important;
+}
+html[data-theme] .shell :is(.button-primary,.segmented button.selected,.button[aria-pressed="true"]) {
+  background:var(--control-accent) !important;
+  color:var(--control-active-text) !important;
+}
+html[data-theme] .shell :is(.button,.segmented button,select):focus-visible {
+  outline:2px solid var(--control-accent) !important;
+  outline-offset:2px;
+}
+html[data-theme] .shell :is(.button,.segmented button,select):disabled {opacity:.62;cursor:not-allowed;}
+html[data-theme] .shell input:is([type="checkbox"],[type="radio"]) {
+  accent-color:var(--control-accent);
+  width:1.1rem;min-width:0;min-height:0;height:1.1rem;
+}
