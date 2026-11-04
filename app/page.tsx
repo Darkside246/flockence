@@ -95,7 +95,7 @@ export default function Home(){
           <div><div className="hero-kicker">Daily farm round</div><h3>What has been recorded today?</h3><p>{dailyRound ? dailyRound.date + " · one pass across the active flock records" : "Loading today's farm-round data."}</p></div>
           <a className="select-pill" href="/operations">Open daily check →</a>
         </div>
-        {!dailyRound ? <div className="empty"><strong>Daily round data is not available yet.</strong><span>Open Operations to record the first flock check.</span></div> :
+        {!dailyRound ? <div className="empty"><strong>Daily Rounds data is not available yet.</strong><span>Open Operations to record the first flock check.</span></div> :
         <>
           <div className="dashboard-grid">
             <div className="card metric-card"><div className="metric-label">Round coverage</div><div className="metric-value">{dailyRound.coverage.recordedFlocks}/{dailyRound.coverage.activeFlocks}</div><div className="metric-foot">{dailyRound.coverage.missingFlocks === 0 ? "All active flocks checked" : dailyRound.coverage.missingFlocks + " flock(s) still missing"}</div></div>

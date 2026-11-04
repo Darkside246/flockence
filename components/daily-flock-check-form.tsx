@@ -65,6 +65,8 @@ async function send(payload: DailyCheckPayload) {
 export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   const [batchId, setBatchId] = useState("");
   const [date, setDate] = useState(today());
+  const [zone,setZone]=useState("America/Barbados");
+  useEffect(()=>{fetch("/api/rounds-policy").then(r=>r.ok?r.json():null).then(p=>{if(p?.zone){setZone(p.zone);setDate(current=>current===today()?calendarDateInTimeZone(new Date(),p.zone)??current:current);}}).catch(()=>{});},[]);
   const [liveCount, setLiveCount] = useState("");
   const [feedKg, setFeedKg] = useState("");
   const [waterLiters, setWaterLiters] = useState("");
@@ -76,8 +78,20 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   const [litterCondition, setLitterCondition] = useState("");
   const [pantingObserved, setPantingObserved] = useState(false);
   const [wingSpreadingObserved, setWingSpreadingObserved] = useState(false);
+  const [pens,setPens]=useState<{id:string;name:string;active:boolean;feederSystem:string;drinkerSystem:string}[]>([]);
+  const [penId,setPen]=useState(""),[feedCheck,setFeedCheck]=useState(""),[waterCheck,setWaterCheck]=useState("");
+  const pen=pens.find(p=>p.id===penId);
+  useEffect(()=>{fetch("/api/pens").then(r=>r.ok?r.json():[]).then(rows=>setPens(rows.filter((p:{active:boolean})=>p.active))).catch(()=>{});},[]);
   const [notes, setNotes] = useState("");
   const [message, setMessage] = useState("");
+  const [latest,setLatest]=useState<{updatedAt:string;notes:string|null}|null>(null),[revision,setRevision]=useState(0);
+  useEffect(()=>{
+    setLatest(null);if(!batchId||!date)return;
+    const controller=new AbortController();
+    fetch("/api/daily-flock-check?"+new URLSearchParams({batchId,date}),{cache:"no-store",signal:controller.signal})
+      .then(r=>r.ok?r.json():[]).then(rows=>{if(!controller.signal.aborted)setLatest(rows[0]??null);}).catch(()=>{});
+    return ()=>controller.abort();
+  },[batchId,date,revision]);
   const [queueCount, setQueueCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(false);
@@ -85,12 +99,12 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   const [sensor, setSensor] = useState<{sensor:string;readAt:string;temperatureC:string;humidityPercent:string|null}|null>(null);
   useEffect(() => {
     setSensor(null);
-    if (!batchId || date !== today()) return;
+    if (!batchId || date !== calendarDateInTimeZone(new Date(),zone)) return;
     const controller = new AbortController();
     fetch("/api/check-sensor?batchId="+encodeURIComponent(batchId),{cache:"no-store",signal:controller.signal})
       .then(r=>r.ok?r.json():null).then(row=>{if(!controller.signal.aborted) setSensor(row);}).catch(()=>{});
     return ()=>controller.abort();
-  }, [batchId,date]);
+  }, [batchId,date,zone]);
   const selectedBatch = useMemo(() => batches.find(batch => batch.id === batchId), [batches, batchId]);
 
   const refreshQueueCount = () => setQueueCount(readQueue().length);
@@ -178,7 +192,8 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       litterCondition,
       pantingObserved,
       wingSpreadingObserved,
-      notes,
+      notes: [pen && "Pen: "+pen.name, feedCheck && (pen?.feederSystem || "Feeder")+": "+feedCheck,
+        waterCheck && (pen?.drinkerSystem || "Drinker")+": "+waterCheck, notes].filter(Boolean).join("\n"),
     };
 
     if (!navigator.onLine) {
@@ -193,7 +208,7 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
 
     try {
       await send(payload);
-      setMessage("Today's flock check saved.");
+      setRevision(v=>v+1);setMessage("Flock check saved for "+date+".");
     } catch (error) {
       if (!navigator.onLine) {
         try {
@@ -213,19 +228,23 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       <div><h2>Daily flock check</h2><p>One pass records the birds, feed, water, weight, climate and visible heat/welfare signs.</p></div>
       <span className="badge">{queueCount > 0 ? queueCount + " QUEUED" : online ? "ONLINE" : "OFFLINE"}</span>
     </div>
+    {latest && <p className="notice">Latest saved check for {date} · {new Date(latest.updatedAt).toLocaleTimeString([], {timeZone:zone,hour:"2-digit",minute:"2-digit"})} ({zone}){latest.notes?" · "+latest.notes:""}</p>}
     {queueCount > 0 && <p className="notice" role="status">{syncing ? "Syncing offline flock checks..." : queueCount + " flock check" + (queueCount === 1 ? "" : "s") + " waiting for a connection. They are kept by flock and date on this device."}</p>}
     {message && <p className="notice" role="status">{message}</p>}
     <form className="form grid2" onSubmit={submit}>
-      <label>Batch<select value={batchId} onChange={event => setBatchId(event.target.value)} required><option value="">Select batch</option>{batches.filter(batch => batch.status === "ACTIVE").map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
+      <label>Batch<select value={batchId} onChange={event => {setBatchId(event.target.value);setPen("");setFeedCheck("");setWaterCheck("");}} required><option value="">Select batch</option>{batches.filter(batch => batch.status === "ACTIVE").map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
       <label>Date<input value={date} type="date" max={today()} onChange={event => setDate(event.target.value)} required/></label>
       <label>Live birds (only if you counted them)<input value={liveCount} onChange={event => setLiveCount(event.target.value)} type="number" min="0" max={selectedBatch?.initialChicks ?? undefined} step="1" placeholder={selectedBatch?.liveBirdCount != null ? String(selectedBatch.liveBirdCount) : "Worked out for you"} aria-describedby="live-birds-hint"/>
         <small id="live-birds-hint" className="muted">{selectedBatch?.liveBirdCount != null ? `Worked out from your records: ${selectedBatch.liveBirdCount} (starting birds minus deaths and birds sent). ` : "Worked out from your records. "}Leave blank unless you did a head count; just record deaths as they happen.</small></label>
+      <label>Pen checked<select value={penId} onChange={e=>{setPen(e.target.value);setFeedCheck("");setWaterCheck("");}}><option value="">Select pen</option>{pens.map(p=><option value={p.id} key={p.id}>{p.name}</option>)}</select></label>
+      {pen && <><label>{pen.feederSystem || "Feeder"} check<select value={feedCheck} onChange={e=>setFeedCheck(e.target.value)}><option value="">Not checked</option><option>Feed available and equipment working</option><option>Refilled or adjusted</option><option>Needs attention</option></select></label>
+      <label>{pen.drinkerSystem || "Drinker"} check<select value={waterCheck} onChange={e=>setWaterCheck(e.target.value)}><option value="">Not checked</option><option>Clean water flowing</option><option>Refilled or adjusted</option><option>Needs attention</option></select></label></>}
       <label>Feed used kg<input value={feedKg} onChange={event => setFeedKg(event.target.value)} type="number" min="0" step="0.001"/></label>
       <label>Water used litres<input value={waterLiters} onChange={event => setWaterLiters(event.target.value)} type="number" min="0" step="0.1"/></label>
       <label>Average weight kg<input value={avgWeightKg} onChange={event => setAvgWeightKg(event.target.value)} type="number" min="0" step="0.001"/></label>
       <label>Birds weighed<input value={weightSampleQuantity} onChange={event => setWeightSampleQuantity(event.target.value)} type="number" min="1" step="1"/></label>
       {sensor && <button type="button" className="button" onClick={()=>{
-        if (date !== today() || Date.now()-Date.parse(sensor.readAt)>15*60000) {setSensor(null);setMessage("Reading expired. Re-select the flock for a current reading.");return;}
+        if (date !== calendarDateInTimeZone(new Date(),zone) || Date.now()-Date.parse(sensor.readAt)>15*60000) {setSensor(null);setMessage("Reading expired. Re-select the flock for a current reading.");return;}
         setTemperatureC(String(sensor.temperatureC));setHumidityPercent(sensor.humidityPercent == null ? "" : String(sensor.humidityPercent));
         const source = "Govee "+sensor.sensor+" polled "+sensor.readAt;
         setNotes(n=>n.includes(source)?n:[n,source].filter(Boolean).join("\n"));

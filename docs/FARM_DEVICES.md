@@ -59,3 +59,5 @@ Both pen APIs now share farm-owned profiles. On first access they reconcile lega
 ## Camera services for additional farms
 
 The installation farm uses BLINK_SIDECAR_URL and BLINK_SIDECAR_TOKEN as before. For another business, provision a separate loopback camera service with a separate data directory, unused port and unique token. Set FARM_CAMERA_SERVICES in the web server environment to a JSON object keyed by the authenticated farm ID, for example `{"farm-id":{"port":8766,"token":"<unique random token of at least 32 characters>"}}`. Restart the web server after provisioning. The farm owner can then sign in to Blink or register and test local RTSP cameras in Settings.
+
+In Settings, Govee equipment discovery includes non-temperature devices. Save a device and use Read device state to request its exposed capabilities. One current Govee Home developer key covers the devices on that account. A new key invalidates older keys.

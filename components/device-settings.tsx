@@ -4,17 +4,19 @@ import { useSession } from "./auth-gate";
 import { CameraSetup, type Camera, type CameraStatus } from "./camera-setup";
 import { api, json } from "@/lib/camera-client";
 
-type Device = {device:string;sku:string;label:string};
+type Device = {device:string;sku:string;label:string;temperature?:boolean;type?:string};
 type Sensor = {device:string;sku:string;name:string;unit:string};
-type Result = {connected?:boolean;sensors?:Sensor[];devices?:Device[];reading?:{temperatureC:number;humidityPercent:number|null;readAt:string}|null};
+type Result = {equipment?:Device[];state?:{name:string;value:unknown}[];connected?:boolean;sensors?:Sensor[];devices?:Device[];reading?:{temperatureC:number;humidityPercent:number|null;readAt:string}|null};
 
 function Thermometers() {
   const [provider,setProvider]=useState(""), [key,setKey]=useState(""), [connected,setConnected]=useState(false);
+  const [equipment,setEquipment]=useState<Device[]>([]);
   const [devices,setDevices]=useState<Device[]>([]), [sensors,setSensors]=useState<Sensor[]>([]);
   const [device,setDevice]=useState(""), [name,setName]=useState(""), [unit,setUnit]=useState("");
   const [message,setMessage]=useState(""), [busy,setBusy]=useState(false);
   function apply(result:Result) {
     if(result.connected!==undefined) {setConnected(result.connected); if(result.connected)setProvider("Govee");}
+    if(result.equipment)setEquipment(result.equipment);
     if(result.sensors)setSensors(result.sensors);
     if(result.devices)setDevices(result.devices);
   }
@@ -25,10 +27,12 @@ function Thermometers() {
       const result=await json<Result>("/api/device-settings",{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({action,key:action==="connect"?key:undefined,device:selected,name,unit})});
       apply(result);
-      if(action==="read") setMessage(result.reading ? result.reading.temperatureC+" °C"+(result.reading.humidityPercent==null?"":" · "+result.reading.humidityPercent+"% humidity")+" · "+new Date(result.reading.readAt).toLocaleString() : "Sensor offline or no current reading.");
-      else if(action==="disconnect"){setDevices([]);setDevice("");setKey("");setMessage("Govee disconnected.");}
+      if(action==="state")setMessage(result.state?.map(c=>c.name+" · "+(typeof c.value==="object"?JSON.stringify(c.value):String(c.value))).join(" | ") || "No current state reported.");
+      else if(action==="equipment")setMessage("Device saved for this farm.");
+      else if(action==="read") setMessage(result.reading ? result.reading.temperatureC+" °C"+(result.reading.humidityPercent==null?"":" · "+result.reading.humidityPercent+"% humidity")+" · "+new Date(result.reading.readAt).toLocaleString() : "Sensor offline or no current reading.");
+      else if(action==="disconnect"){setEquipment([]);setSensors([]);setDevices([]);setDevice("");setKey("");setMessage("Govee disconnected.");}
       else if(action==="select")setMessage("Sensor saved for this farm.");
-      else {setKey("");setDevice("");setMessage(result.devices?.length ? "Choose a temperature sensor below." : "Connected. This account exposes no supported temperature sensors.");}
+      else {setKey("");setDevice("");setMessage(result.devices?.length ? "Choose equipment below." : "Connected. This account exposes no devices through the API.");}
     } catch(e){setMessage(e instanceof Error?e.message:"Request failed.");} finally {setBusy(false);}
   }
   function choose(id:string) {
@@ -37,16 +41,18 @@ function Thermometers() {
     setName(saved?.name ?? devices.find(d=>d.device===id)?.label ?? "");
     setUnit(saved?.unit ?? "");
   }
-  return <section className="section card"><h2>Smart temperature devices</h2>
+  return <section className="section card"><h2>Smart equipment and temperature sensors</h2>
     <label>Provider<select value={provider} onChange={e=>setProvider(e.target.value)}><option value="">Choose a provider</option><option>Govee</option></select></label>
     {provider && <fieldset disabled={busy}><label>{connected?"Replace Govee API key":"Govee API key"}<input type="password" autoComplete="new-password" value={key} onChange={e=>setKey(e.target.value)}/></label>
       <button className="button" disabled={!key.trim()} onClick={()=>action("connect")}>Test and save key</button>
-      {connected && <><button className="button" onClick={()=>action("discover")}>Discover sensors</button>
+      {connected && <><button className="button" onClick={()=>action("discover")}>Discover devices</button>
       <button className="button" onClick={()=>{if(confirm("Disconnect Govee and stop collecting from these sensors?"))void action("disconnect");}}>Disconnect</button></>}
-      {!!devices.length && <><label>Temperature sensor<select value={device} onChange={e=>choose(e.target.value)}><option value="">Choose a device</option>{devices.map(d=><option key={d.device} value={d.device}>{d.label} · {d.sku} · {d.device}</option>)}</select></label>
-      {device && <><label>Sensor name<input value={name} maxLength={40} onChange={e=>setName(e.target.value)}/></label>
+      {!!devices.length && <><label>Govee equipment<select value={device} onChange={e=>choose(e.target.value)}><option value="">Choose a device</option>{devices.map(d=><option key={d.device} value={d.device}>{d.label} · {d.sku} · {d.device}</option>)}</select></label>
+      {device && <button className="button" onClick={()=>action("equipment")}>Save equipment</button>}
+      {devices.find(d=>d.device===device)?.temperature && <><label>Sensor name<input value={name} maxLength={40} onChange={e=>setName(e.target.value)}/></label>
       <label>Temperature unit reported by device<select value={unit} onChange={e=>setUnit(e.target.value)}><option value="">Choose unit</option><option value="C">Celsius</option><option value="F">Fahrenheit</option></select></label>
       <button className="button" disabled={!unit||!name.trim()} onClick={()=>action("select")}>Save sensor</button></>}</>}
+      {equipment.map(d=><p key={d.device}>{d.label} · {d.sku} <button className="button" onClick={()=>action("state",d.device)}>Read device state</button></p>)}
       {sensors.map(s=><p key={s.device}>{s.name} · {s.sku} <button className="button" onClick={()=>action("read",s.device)}>Read now</button></p>)}</fieldset>}
     {message && <p role="status">{message}</p>}</section>;
 }

@@ -2,12 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { withFarmPens, penKey } from "@/lib/farm-pens";
+import { feeders, drinkers } from "@/lib/pen-equipment";
 function normalize(input: any, fallback: any = {}) {
   return {
     name: typeof input.name === "string" && input.name.trim() ? input.name.trim() : fallback.name || "Pen",
     lengthM: Math.max(0, Number(input.lengthM ?? fallback.lengthM) || 0),
     widthM: Math.max(0, Number(input.widthM ?? fallback.widthM) || 0),
     housingMode: input.housingMode || fallback.housingMode || "OPEN_SIDED_HOT",
+    feederSystem: input.feederSystem ?? fallback.feederSystem ?? "",
+    drinkerSystem: input.drinkerSystem ?? fallback.drinkerSystem ?? "",
     orientation: input.orientation ?? fallback.orientation ?? "",
     feederPans: Math.max(0, Number(input.feederPans ?? fallback.feederPans) || 0),
     feederPanDiameterCm: Math.max(0, Number(input.feederPanDiameterCm ?? fallback.feederPanDiameterCm) || 33),
@@ -36,6 +39,7 @@ export async function POST(request: Request) {
   if (access.response) return access.response;
   const input = await request.json().catch(() => null);
   if (typeof input?.name !== "string" || !input.name.trim()) return NextResponse.json({error:"Pen name is required."},{status:400});
+  if ((input.feederSystem && !feeders.includes(input.feederSystem)) || (input.drinkerSystem && !drinkers.includes(input.drinkerSystem))) return NextResponse.json({error:"Choose a listed equipment type."},{status:400});
   const farmId = access.user!.farmId;
   return withFarmPens(farmId, async (tx, rows) => {
     const old = input.id && rows.find(row => row.key === penKey + input.id);

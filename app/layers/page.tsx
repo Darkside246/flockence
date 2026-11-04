@@ -1,4 +1,5 @@
 "use client";
+import {FeedTypePicker} from "@/components/feed-type-picker";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Nav } from "@/components/nav";
@@ -111,6 +112,7 @@ export default function LayersPage() {
   const [stageError, setStageError] = useState("");
   const [nextStage, setNextStage] = useState("CHICK");
   const [stageReason, setStageReason] = useState("");
+  const [stageFeed,setStageFeed]=useState("");
   const [stageNotes, setStageNotes] = useState("");
   const [stageHistory, setStageHistory] = useState<LayerStageEvent[]>([]);
 
@@ -239,7 +241,7 @@ export default function LayersPage() {
     : ["CHICK", "GROWER", "PULLET", "PRE_LAY", "LAYING", "MOLT", "SPENT", "CLOSED"];
 
   function selectLayerBatch(nextId: string) {
-    setBatchId(nextId);
+    setBatchId(nextId);setStageFeed("");
     const batch = layerBatches.find((row) => row.id === nextId);
     setLiveHensOnDate(date === localToday() && batch ? String(liveHens(batch)) : "");
     const options = batch?.layerStage
@@ -260,7 +262,7 @@ export default function LayersPage() {
       const saved = await readJson(await fetch("/api/layer-stage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ batchId: selectedBatch.id, toStage: nextStage, reason: stageReason, notes: stageNotes }),
+        body: JSON.stringify({ batchId: selectedBatch.id, toStage: nextStage, reason: stageReason, notes: [stageFeed && "Feed: "+stageFeed,stageNotes].filter(Boolean).join("\n") }),
       }));
       setBatches((current) => current.map((batch) => batch.id === selectedBatch.id
         ? { ...batch, layerStage: saved.batch.layerStage, status: saved.batch.status }
@@ -268,7 +270,7 @@ export default function LayersPage() {
       setStageHistory((current) => [saved.event as LayerStageEvent, ...current.filter((row) => row.id !== saved.event.id)]);
       setStageMessage("Flock stage updated and recorded in its lifecycle history.");
       setStageReason("");
-      setStageNotes("");
+      setStageNotes("");setStageFeed("");
       await loadData();
     } catch (e) {
       setStageError(e instanceof Error ? e.message : "Could not update layer stage.");
@@ -400,6 +402,7 @@ export default function LayersPage() {
               <label>Next stage<select value={nextStage} onChange={(event) => setNextStage(event.target.value)} required>
                 {allowedNextStages.map((stage) => <option key={stage} value={stage}>{stage.replaceAll("_", " ")}</option>)}
               </select></label>
+              <FeedTypePicker key={selectedBatch?.id+":"+stageHistory.length} value={stageFeed} onChange={setStageFeed} required={false}/>
               <label>Reason<input value={stageReason} onChange={(event) => setStageReason(event.target.value)} placeholder="Optional transition reason"/></label>
               <label style={{gridColumn:"1 / -1"}}>Notes<input value={stageNotes} onChange={(event) => setStageNotes(event.target.value)} placeholder="Optional stage notes"/></label>
               <button className="button" type="submit" disabled={stageSaving || allowedNextStages.length === 0}>{stageSaving ? "Saving stage…" : "Update flock stage"}</button>

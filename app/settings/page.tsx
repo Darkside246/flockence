@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { RoundsSettings } from "@/components/rounds-settings";
 import { DeviceSettings } from "@/components/device-settings";
 import { Nav } from "@/components/nav";
 import { useTheme } from "@/components/theme-provider";
@@ -33,6 +34,7 @@ export default function SettingsPage(){
     <header className="topbar"><div className="brand"><div className="brand-main"><div className="brand-mark">F</div><div><h1>Settings</h1><p>Control the way Flockence looks and works.</p></div></div><span className="badge">CONTROL CENTER</span></div></header>
     <Nav/>
     <main className="main">
+      <RoundsSettings/>
       <DeviceSettings/>
       <section className="hero"><div className="hero-kicker">Appearance</div><h2>Your operation. Your interface.</h2><p>Switch the visual style, information density, and shape without changing production data.</p></section>
       <section className="section card"><div className="section-head"><div><h3>Visual style</h3><p>Five built-in looks for different work environments.</p></div></div><div className="theme-grid">{themes.map(t=><button type="button" key={t.id} className={`theme-option ${theme===t.id?"selected":""}`} onClick={()=>setTheme(t.id)} aria-pressed={theme===t.id}><div className="theme-swatch" style={{background:t.bg}}><div style={{width:20,height:20,borderRadius:7,background:t.accent,margin:12}}/></div><span className="theme-name">{t.name}</span><span className="theme-desc">{t.desc}</span></button>)}</div></section>

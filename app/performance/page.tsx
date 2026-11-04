@@ -58,7 +58,7 @@ export default function PerformancePage() {
     <main className="main">
       <section className="dashboard-head">
         <div><div className="hero-kicker">Production intelligence</div><h2>Know what is happening before it becomes a problem.</h2><p>Broilers and layers use different performance logic. Missing measurements stay visible instead of becoming invented estimates.</p></div>
-        <div className="header-actions"><a className="button" href="/operations">Daily round</a><a className="button button-primary" href="/reports">Reports</a></div>
+        <div className="header-actions"><a className="button" href="/operations">Daily Rounds</a><a className="button button-primary" href="/reports">Reports</a></div>
       </section>
 
       {error && <section className="section card" role="alert"><strong>Performance data unavailable</strong><p>{error}</p></section>}

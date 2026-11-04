@@ -1,4 +1,5 @@
 "use client";
+import {FeedTypePicker} from "@/components/feed-type-picker";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Nav } from "@/components/nav";
@@ -27,7 +28,7 @@ export default function Finances() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [status, setStatus] = useState("");
-  const [feed, setFeed] = useState({ date: initialDate, feedType: "Broiler feed", bagSizeKg: "30", quantityBags: "", unitCost: "5600", batchId: "" });
+  const [feed, setFeed] = useState({ date: initialDate, feedType: "", bagSizeKg: "30", quantityBags: "", unitCost: "5600", batchId: "" });
   const [expense, setExpense] = useState({ date: initialDate, category: "Utilities", description: "", amount: "", batchId: "" });
   const [sale, setSale] = useState({ date: initialDate, customerName: "", description: "Whole chicken", quantity: "", unitPrice: "", amountPaid: "", batchId: "" });
 
@@ -79,7 +80,7 @@ export default function Finances() {
         <article className="card">
           <div className="section-head"><div><h3>Feed purchase</h3><p>Record incoming feed and optionally allocate it to a batch.</p></div><span className="pill">COST</span></div>
           <form className="form" onSubmit={async e => { e.preventDefault(); const saved = await submit("/api/feed", { ...feed, bagSizeKg: Number(feed.bagSizeKg), quantityBags: Number(feed.quantityBags), unitCostMinor: Number(feed.unitCost) }, "Feed purchase recorded."); if (saved) setFeed(v => ({ ...v, quantityBags: "" })); }}>
-            <div className="grid2"><label>Date<input type="date" value={feed.date} onChange={e => setFeed({ ...feed, date: e.target.value })} /></label><label>Feed type<input value={feed.feedType} onChange={e => setFeed({ ...feed, feedType: e.target.value })} /></label><label>Bag size (kg)<input type="number" min="0.001" step="0.001" value={feed.bagSizeKg} onChange={e => setFeed({ ...feed, bagSizeKg: e.target.value })} required /></label><label>Number of bags<input type="number" min="0.001" step="0.001" value={feed.quantityBags} onChange={e => setFeed({ ...feed, quantityBags: e.target.value })} required /></label><label>Cost per bag (BBD)<input type="number" min="0" step="0.01" value={Number(feed.unitCost) / 100} onChange={e => setFeed({ ...feed, unitCost: String(Math.round(Number(e.target.value) * 100)) })} required /></label><label>Batch allocation<select value={feed.batchId} onChange={e => setFeed({ ...feed, batchId: e.target.value })}><option value="">Farm-wide purchase</option>{batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label></div>
+            <div className="grid2"><label>Date<input type="date" value={feed.date} onChange={e => setFeed({ ...feed, date: e.target.value })} /></label><FeedTypePicker value={feed.feedType} onChange={feedType=>setFeed({...feed,feedType})}/><label>Bag size (kg)<input type="number" min="0.001" step="0.001" value={feed.bagSizeKg} onChange={e => setFeed({ ...feed, bagSizeKg: e.target.value })} required /></label><label>Number of bags<input type="number" min="0.001" step="0.001" value={feed.quantityBags} onChange={e => setFeed({ ...feed, quantityBags: e.target.value })} required /></label><label>Cost per bag (BBD)<input type="number" min="0" step="0.01" value={Number(feed.unitCost) / 100} onChange={e => setFeed({ ...feed, unitCost: String(Math.round(Number(e.target.value) * 100)) })} required /></label><label>Batch allocation<select value={feed.batchId} onChange={e => setFeed({ ...feed, batchId: e.target.value })}><option value="">Farm-wide purchase</option>{batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label></div>
             <button className="button button-primary" type="submit">Save feed purchase</button>
           </form>
         </article>

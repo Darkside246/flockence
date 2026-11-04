@@ -17,8 +17,11 @@ export async function GET(request: Request) {
   await ensureFarm();
   const { searchParams } = new URL(request.url);
   const batchId = searchParams.get("batchId");
+  const requestedDay=searchParams.get("date");
+  const day=requestedDay?parseCalendarDate(requestedDay):null;
+  if(requestedDay && !day)return NextResponse.json({error:"Invalid date."},{status:400});
   const rows = await prisma.dailyFlockCheck.findMany({
-    where: { farmId: currentFarmId(), ...(batchId ? { batchId } : {}) },
+    where: { farmId: currentFarmId(), ...(batchId ? { batchId } : {}), ...(day?{date:day}:{}) },
     include: { batch: true },
     orderBy: { date: "desc" },
     take: 100,

@@ -8,7 +8,7 @@ import { useSession } from "@/components/auth-gate";
 type NavItem = readonly [string, string, string];
 
 const groups: { label: string; items: NavItem[] }[] = [
-  { label: "Operate", items: [["Overview", "/", "home"], ["Flocks", "/batches", "flock"], ["Daily round", "/operations", "operations"], ["Egg production", "/layers", "eggs"], ["Layer performance", "/layers/performance", "performance"], ["Pack eggs", "/layers/packing", "package"], ["House", "/house", "house"], ["Pens", "/pens", "pens"], ["Health", "/health", "health"]] },
+  { label: "Operate", items: [["Overview", "/", "home"], ["Flocks", "/batches", "flock"], ["Daily Rounds", "/operations", "operations"], ["Egg production", "/layers", "eggs"], ["Layer performance", "/layers/performance", "performance"], ["Pack eggs", "/layers/packing", "package"], ["House", "/house", "house"], ["Pens", "/pens", "pens"], ["Health", "/health", "health"]] },
   { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Production", "/planning", "production"]] },
   { label: "Understand", items: [["Performance", "/performance", "performance"], ["Reports", "/reports", "reports"]] }
 ];
@@ -41,6 +41,7 @@ function NavIcon({name}:{name:string}) {
 export function Nav() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [inlineSearch,setInlineSearch]=useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [query, setQuery] = useState("");
   const session = useSession();
@@ -79,7 +80,14 @@ export function Nav() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  useEffect(() => { setCommandOpen(false); setQuery(""); }, [pathname]);
+  useEffect(() => {
+    setCommandOpen(false); setInlineSearch(false); setQuery("");
+    const links=JSON.parse(sessionStorage.getItem("flockence.navTrail") || "[]") as string[];
+    if(links[links.length-1]!==pathname){
+      if(links[links.length-2]===pathname)links.pop();else links.push(pathname);
+      sessionStorage.setItem("flockence.navTrail",JSON.stringify(links.slice(-30)));
+    }
+  }, [pathname]);
 
   const links = (items: NavItem[], mobile = false) => items.map(([label, href, icon]) =>
     <Link key={href} href={href} onClick={() => mobile && setOpen(false)} className={isActive(href) ? "active" : ""} title={label}>
@@ -88,10 +96,12 @@ export function Nav() {
   );
 
   return <>
-    <div className="nav-command-trigger">
-      <button type="button" onClick={() => setCommandOpen(true)} aria-label="Search Flockence"><span className="nav-command-icon">⌕</span><span>Find anything</span><kbd>⌘K</kbd></button>
+    <div className="farm-page-tools" onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget))setInlineSearch(false);}}>
+      {pathname!=="/" && <button type="button" className="button" onClick={()=>{const trail=JSON.parse(sessionStorage.getItem("flockence.navTrail")||"[]") as string[];const back=trail.at(-2);window.location.assign(back?.startsWith("/") && !back.startsWith("//")?back:"/");}}>← Back</button>}
+      <label><svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="8" cy="8" r="5"/><path d="m12 12 5 5"/></svg>
+      <input aria-label="Search Flockence" placeholder="Search" value={commandOpen?"":query} onFocus={()=>setInlineSearch(true)} onKeyDown={e=>{if(e.key==="Escape"){setInlineSearch(false);e.currentTarget.blur();}}} onChange={e=>{setQuery(e.target.value);setInlineSearch(true);}}/></label>
+      {inlineSearch && !commandOpen && <div className="farm-search-results">{results.length?results.map(([name,href])=><Link key={href} href={href} onClick={()=>setInlineSearch(false)}>{name}</Link>):<span>No matches</span>}</div>}
     </div>
-
     <nav className="nav" aria-label="Main navigation">
       <div className="nav-brand-block"><div className="nav-brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div>
       {visibleGroups.map(group => <div className="nav-group" key={group.label}><div className="nav-group-label">{group.label}</div>{links(group.items)}</div>)}
