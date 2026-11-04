@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     const expectedSlaughter = productionType === "BROILER"
       ? (input.expectedSlaughter ? new Date(input.expectedSlaughter) : new Date(lifecycleDate))
       : null;
-    if (expectedSlaughter) expectedSlaughter.setUTCDate(expectedSlaughter.getUTCDate() + targetSlaughterAgeDays);
+    if (expectedSlaughter && !input.expectedSlaughter) expectedSlaughter.setUTCDate(expectedSlaughter.getUTCDate() + targetSlaughterAgeDays);
     const targetLiveWeightKg = productionType === "BROILER" && input.targetLiveWeightKg != null && input.targetLiveWeightKg !== "" ? Number(input.targetLiveWeightKg) : null;
     if (targetLiveWeightKg !== null && (!Number.isFinite(targetLiveWeightKg) || targetLiveWeightKg <= 0)) return NextResponse.json({ error: "Target live weight must be positive." }, { status: 400 });
     // The chick dealer: one of this farm's suppliers, or a new one named here (owner, 2026-11-02). A supplier id from
@@ -112,4 +112,29 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid batch" }, { status: 400 });
   }
+}
+
+export async function DELETE(request: Request) {
+  const session = await currentUserOrRoleResponse(request, ["OWNER"]);
+  if (session.response) return session.response;
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Select a flock." }, { status: 400 });
+  const status = await prisma.$transaction(async tx => {
+    // Lock the parent before inspecting child rows so new FK references cannot race deletion.
+    const locked = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Batch" WHERE id = ${id} AND "farmId" = ${session.user!.farmId} FOR UPDATE`;
+    if (!locked.length) return 404;
+    const batch = await tx.batch.findUniqueOrThrow({ where: { id }, include: {
+      _count: true, birdCounts: true, layerStageEvents: true,
+    } });
+    const hasActivity = Object.entries(batch._count).some(([key, count]) =>
+      key !== "birdCounts" && key !== "layerStageEvents" && count > 0);
+    if (hasActivity || batch.birdCounts.length > 1 || batch.layerStageEvents.length > 1 ||
+        batch.birdCounts.some(row => row.note !== "Initial count" || row.liveCount !== batch.initialChicks) ||
+        batch.layerStageEvents.some(row => row.reason !== "INITIAL_SETUP")) return 409;
+    await tx.batch.delete({ where: { id } });
+    return 200;
+  });
+  if (status === 409) return NextResponse.json({ error: "This flock has farm records. Its history must be retained." }, { status });
+  if (status === 404) return NextResponse.json({ error: "Flock not found." }, { status });
+  return NextResponse.json({ deleted: true });
 }

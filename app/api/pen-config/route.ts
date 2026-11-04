@@ -65,3 +65,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save pen." }, { status: 500 });
   }
 }
+
+export async function DELETE(request: Request) {
+  const access = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
+  if (access.response) return access.response;
+  const id = new URL(request.url).searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Select a saved pen." }, { status: 400 });
+  const user = access.user!;
+  const result = await prisma.setting.deleteMany({ where: { farmId: user.farmId, key: keyFor(user.id, id) } });
+  return result.count ? NextResponse.json({ deleted: true }) : NextResponse.json({ error: "Pen not found." }, { status: 404 });
+}

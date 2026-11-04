@@ -12,6 +12,7 @@ import shutil
 import time
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -57,9 +58,9 @@ def url_for(name: str) -> str:
 
 def listing() -> list[dict]:
     return [
-        {"name": n, "type": "rtsp", "source": "rtsp", "battery": None, "armed": None,
+        {"name": n, "type": config.get("provider", "rtsp"), "source": "rtsp", "battery": None, "armed": None,
          "motionDetected": None, "recording": n in recorders and recorders[n].returncode is None}
-        for n in _load()
+        for n, config in _load().items()
     ]
 
 
@@ -188,6 +189,7 @@ class NewCamera(BaseModel):
     name: str
     url: str
     record: bool = False
+    provider: Literal["Wyze", "Reolink", "Amcrest", "Tapo", "Other RTSP"] = "Other RTSP"
 
 
 @router.post("/rtsp/cameras")
@@ -201,7 +203,7 @@ async def add_camera(body: NewCamera):
     data = _load()
     if name in data or any(slug(n) == slug(name) for n in data):
         raise HTTPException(409, "A camera with that name already exists")
-    data[name] = {"url": body.url.strip(), "record": body.record}
+    data[name] = {"url": body.url.strip(), "record": body.record, "provider": body.provider}
     _save(data)
     return {"name": name}
 
