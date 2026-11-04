@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       // A flock has one record for a given date, scope and weight type.
       // Re-entering the same measurement updates it instead of silently duplicating it.
       const existing = await tx.weightRecord.findFirst({
-        where: { batchId: batch.id, date, scope, liveOrDressed },
+        where: { batchId: batch.id, date, scope, liveOrDressed, NOT:{id:{startsWith:"daily:"}} },
         orderBy: { createdAt: "desc" },
       });
       const data = { quantity, avgWeightKg, scope, liveOrDressed };

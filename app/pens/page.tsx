@@ -7,7 +7,7 @@ type Pen={id:string;name:string;lengthM:number;widthM:number;housingMode:string;
 const blank:Pen={id:"",name:"",lengthM:10,widthM:12,housingMode:"OPEN_SIDED_HOT",orientation:"East-West",feederPans:3,feederPanDiameterCm:33,chainFeederMeters:0,nipples:12,bellDrinkers:0,fans:1,fanCapacityM3H:0,heatSources:1,waterTankLitres:0,notes:"",active:true};
 const n=(v:number|string)=>Number(v)||0;
 export default function PensPage(){
- const [pens,setPens]=useState<Pen[]>([]),[pen,setPen]=useState<Pen>(blank),[selected,setSelected]=useState("new"),[message,setMessage]=useState("Loading your pen profiles…"),[saving,setSaving]=useState(false);
+ const [pens,setPens]=useState<Pen[]>([]),[pen,setPen]=useState<Pen>(blank),[selected,setSelected]=useState("new"),[message,setMessage]=useState("Loading farm pen profiles…"),[saving,setSaving]=useState(false);
  const [flocks, setFlocks] = useState<{id:string;name:string;liveBirdCount:number;status:string}[]>([]);
  const [countSource, setCountSource] = useState("");
  useEffect(() => {
@@ -16,7 +16,7 @@ export default function PensPage(){
    }).catch(() => {});
  }, []);
  async function removePen() {
-   if (!pen.id || !window.confirm(`Delete your saved pen profile "${pen.name}"?`)) return;
+   if (!pen.id || !window.confirm(`Delete this shared farm pen "${pen.name}"?`)) return;
    setSaving(true);
    try {
      const r = await fetch("/api/pen-config?id=" + encodeURIComponent(pen.id), {method:"DELETE"});
@@ -29,11 +29,11 @@ export default function PensPage(){
  const [feed,setFeed]=useState(""),[prevBirds,setPrevBirds]=useState(""),[prevWeight,setPrevWeight]=useState(""),[currentBirds,setCurrentBirds]=useState(""),[currentWeight,setCurrentWeight]=useState("");
  const load=()=>fetch("/api/pen-config").then(async r=>{const d=await r.json();if(!r.ok)throw new Error(d.error||"Unable to load pens");return d;}).then((d:Pen[])=>{setPens(d);setMessage(d.length?`${d.length} saved pen${d.length===1?"":"s"}`:"No pen saved yet");if(d[0]){setSelected(d[0].id);setPen(d[0]);}}).catch(e=>setMessage(e.message));
  useEffect(()=>{load();},[]);
- const save=async()=>{if(!pen.name.trim()){setMessage("Enter a pen name first.");return;}setSaving(true);setMessage("Saving to your account…");try{const r=await fetch("/api/pen-config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pen.id?pen:{...pen,id:undefined})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Unable to save pen");setPen(d);setSelected(d.id);setMessage("Saved to your account");await load();}catch(e){setMessage(e instanceof Error?e.message:"Unable to save pen")}finally{setSaving(false)}};
+ const save=async()=>{if(!pen.name.trim()){setMessage("Enter a pen name first.");return;}setSaving(true);setMessage("Saving to the farm…");try{const r=await fetch("/api/pen-config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(pen.id?pen:{...pen,id:undefined})});const d=await r.json();if(!r.ok)throw new Error(d.error||"Unable to save pen");setPen(d);setSelected(d.id);setMessage("Saved to the farm");await load();}catch(e){setMessage(e instanceof Error?e.message:"Unable to save pen")}finally{setSaving(false)}};
  const area=floorAreaM2(n(pen.lengthM),n(pen.widthM)),density=stockingDensityKgM2(n(pen.lengthM),n(pen.widthM),n(birds),n(weight)),limit=stockingLimitKgM2(pen.housingMode as any),pan=feederPanRange(n(birds)),nip=nippleRange(n(birds),n(target)),chain=chainFeederRange(n(birds));
  const issues=useMemo(()=>{const r:string[]=[];if(n(birds)>0){if(density>limit)r.push(`Stocking density is ${density.toFixed(1)} kg/m², above the ${limit} kg/m² planning ceiling.`);else if(density>limit*.9)r.push(`Stocking density is ${density.toFixed(1)} kg/m² and close to the ${limit} kg/m² ceiling.`);if(pen.feederPans<pan.upper)r.push(`Plan for about ${pan.upper} feeder pans; ${pan.conservative} is the more conservative count.`);if(pen.nipples<nip.required)r.push(`Plan for about ${nip.required} drinking points at ${nip.perNipple} birds per point.`);}if(pen.fans===0&&pen.housingMode!=="CONTROLLED")r.push("Define an airflow plan for naturally ventilated housing.");if(pen.heatSources>0)r.push("Keep feed and water accessible without placing them directly under the main heat source.");return r;},[birds,density,limit,pan,nip,pen]);
  const gain=n(currentBirds)*n(currentWeight)-n(prevBirds)*n(prevWeight),fcr=n(feed)>0&&gain>0?n(feed)/gain:null;
- return <div className="shell"><header className="topbar"><div className="brand"><div><div className="hero-kicker">House intelligence</div><h1>My Pens</h1><p>Your pen layout is stored with your account, separate from your device.</p></div><span className="badge">USER OWNED</span></div></header><Nav/><main className="main">
+ return <div className="shell"><header className="topbar"><div className="brand"><div><div className="hero-kicker">House intelligence</div><h1>Farm Pens</h1><p>Your pen layout is stored with the farm, separate from your device.</p></div><span className="badge">USER OWNED</span></div></header><Nav/><main className="main">
   <div className="section-head"><div><h3>Pen profiles</h3><p>{message}</p></div><div style={{display:"flex",gap:8}}><button className="button" onClick={()=>{setSelected("new");setPen({...blank,id:"",name:""});setMessage("New unsaved pen")}}>New pen</button>{pen.id&&<button className="button" type="button" disabled={saving} onClick={removePen}>Delete pen profile</button>}{pen.id&&<button className="button button-primary" disabled={saving} onClick={save}>{saving?"Saving…":"Save changes"}</button>}</div></div>
   {pens.length>0&&<div className="flow" style={{marginBottom:16}}>{pens.map(p=><button key={p.id} className="button" onClick={()=>{setSelected(p.id);setPen(p);setMessage(p.name)}} style={{background:selected===p.id?"var(--primary-soft)":"var(--surface-solid)",color:selected===p.id?"var(--primary)":"var(--ink)"}}>{p.name}</button>)}</div>}
   <div className="segmented" style={{marginBottom:18}}><button className={tab==="setup"?"selected":""} onClick={()=>setTab("setup")}>Pen setup</button><button className={tab==="performance"?"selected":""} onClick={()=>setTab("performance")}>Flock performance</button></div>

@@ -322,3 +322,8 @@ html[data-theme="crystal"] .shell .nav a, html[data-theme="crystal"] .bottom-nav
   .cx-skel::after { animation: none; }
   .cx-cam img { transition: none; }
 }
+
+.cx-camera-actions,.cx-inline-live .section-head {display:flex;flex-wrap:wrap;gap:6px;margin:5px 0}
+.cx-cams article select {width:100%;margin-bottom:6px}
+.cx-inline-live .button,.cx-camera-actions .button {font-size:.8rem;padding:.35rem .6rem}
+.cx-inline-live .cx-buffer {font-size:.75rem}

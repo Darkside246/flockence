@@ -4,6 +4,7 @@ Camera addresses (which usually embed a camera password) are stored server-side
 in data/rtsp_cameras.json and are never returned by any endpoint.
 Live view, snapshots and recordings all go through ffmpeg.
 """
+from settings import storage_status, require_camera_space
 import asyncio
 import json
 import os
@@ -110,7 +111,7 @@ async def spawn_live(name: str, out_dir: Path, stderr=None) -> asyncio.subproces
         FFMPEG, "-loglevel", "error", "-fflags", "nobuffer", "-analyzeduration", "1000000", "-probesize", "500000",
         "-rtsp_transport", "tcp", "-i", url_for(name), *codec,
         "-f", "hls", "-hls_time", "2", "-hls_list_size", "5",
-        "-hls_flags", "delete_segments+omit_endlist", str(out_dir / "index.m3u8"),
+        "-hls_flags", "temp_file+delete_segments+omit_endlist", str(out_dir / "index.m3u8"),
         stdout=asyncio.subprocess.DEVNULL,
         stderr=stderr if stderr is not None else asyncio.subprocess.DEVNULL,
     )
@@ -119,6 +120,7 @@ async def spawn_live(name: str, out_dir: Path, stderr=None) -> asyncio.subproces
 async def start_recording(name: str):
     if name in recorders and recorders[name].returncode is None:
         return
+    require_camera_space()
     out = RECORDINGS_DIR / slug(name)
     out.mkdir(parents=True, exist_ok=True)
     recorders[name] = await asyncio.create_subprocess_exec(
@@ -145,10 +147,17 @@ async def supervise():
     """Restart recorders that died, and prune old recordings. Runs for the life of the app."""
     last_prune = 0.0
     while True:
-        if FFMPEG:
+        if storage_status()["critical"]:
+            for name in list(recorders):
+                await stop_recording(name)
+        elif FFMPEG:
             for name, cam in _load().items():
                 if cam.get("record") and (name not in recorders or recorders[name].returncode is not None):
-                    await start_recording(name)
+                    try:
+                        await start_recording(name)
+                    except HTTPException as exc:
+                        if exc.status_code != 507:
+                            raise
         if time.time() - last_prune > 3600:
             last_prune = time.time()
             cutoff = time.time() - RECORD_KEEP_DAYS * 86400
@@ -203,6 +212,8 @@ async def add_camera(body: NewCamera):
     data = _load()
     if name in data or any(slug(n) == slug(name) for n in data):
         raise HTTPException(409, "A camera with that name already exists")
+    if body.record:
+        require_camera_space()
     data[name] = {"url": body.url.strip(), "record": body.record, "provider": body.provider}
     _save(data)
     return {"name": name}
@@ -229,6 +240,8 @@ async def set_recording(name: str, action: str):
         raise HTTPException(404, "Unknown camera")
     if not FFMPEG:
         raise HTTPException(501, "ffmpeg not found; set FFMPEG_PATH")
+    if action == "start":
+        require_camera_space()
     data[name]["record"] = action == "start"
     _save(data)
     if action == "start":

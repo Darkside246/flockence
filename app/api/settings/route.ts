@@ -3,13 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { authError, requireCurrentUser, currentUserOrRoleResponse } from "@/lib/current-user";
 
-const publicSettingFilter = {
-  NOT: [
-    { key: { startsWith: "AUTH_" } },
-    { key: { startsWith: "PENCFG::" } },
-    { key: { startsWith: "FARM_INVITE::" } }
-  ]
-};
+const reserved = ["AUTH_", "PENCFG::", "PEN::", "FARM_PEN", "CAMERA_WALL::", "FARM_INVITE::"];
+const publicSettingFilter = { NOT: reserved.map(prefix => ({key:{startsWith:prefix}})) };
 
 export async function GET(request: Request) {
   try {
@@ -35,7 +30,7 @@ export async function PUT(request: Request) {
     for (const item of updates) {
       if (!item?.key) continue;
       const key = String(item.key);
-      if (key.startsWith("AUTH_") || key.startsWith("PENCFG::") || key.startsWith("FARM_INVITE::")) continue;
+      if (reserved.some(prefix => key.startsWith(prefix))) continue;
       await prisma.setting.upsert({ where: { farmId_key: { farmId: currentFarmId(), key } }, update: { value: String(item.value ?? "") }, create: { farmId: currentFarmId(), key, value: String(item.value ?? "") } });
     }
     if (input.farmName) await prisma.farm.update({ where: { id: currentFarmId() }, data: { name: String(input.farmName), currency: "BBD" } });

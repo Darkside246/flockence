@@ -24,6 +24,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
+from settings import require_camera_space, storage_status, LIVE_LIMIT_BYTES
 import rtsp
 from immi import extract_transport_stream_packets, patch_liveview_auth_header
 from settings import DATA_DIR, FFMPEG, LIVE_DIR, MIN_TOKEN_LENGTH, TOKEN, client_allowed, credentials_encrypted, open_credentials, require_token, seal_credentials, slug as _slug
@@ -172,6 +173,7 @@ async def status():
         "connected": bool(state.blink and state.blink.available),
         "pending2fa": state.pending_2fa,
         "ffmpeg": bool(FFMPEG),
+        "storage": storage_status(),
     }
 
 
@@ -347,7 +349,7 @@ def _blink_live_video_args() -> list[str]:
     return [
         "-c:v", "libx264", "-preset", "faster", "-crf", "18", "-maxrate", "6M", "-bufsize", "12M",
         "-pix_fmt", "yuv420p", "-profile:v", "high",
-        "-force_key_frames", "expr:gte(t,n_forced*2)", "-sc_threshold", "0",
+        "-force_key_frames", "expr:gte(t,n_forced*1)", "-sc_threshold", "0",
         "-c:a", "aac", "-b:a", "128k",
     ]
 
@@ -519,6 +521,18 @@ async def _start_blink_feed(stream, name: str):
 async def _reaper(name: str, live: Live, max_seconds: int):
     while name in state.lives and state.lives[name] is live:
         await asyncio.sleep(2)
+        if state.lives.get(name) is not live:
+            return
+        folder = live.log_path.parent
+        try:
+            sizes = sum(f.stat().st_size for f in folder.iterdir() if f.is_file())
+            age = time.time() - (folder / "index.m3u8").stat().st_mtime
+        except FileNotFoundError:
+            continue
+        if storage_status()["critical"] or sizes > LIVE_LIMIT_BYTES or age > 30:
+            log.warning("Stopped live view for %s: disk reserve, buffer limit or stale playlist (bytes=%d age=%.1fs)", name, sizes, age)
+            await _stop_live(name)
+            return
         elapsed = time.time() - live.started
         if live.feed_task and live.feed_task.done():
             failure = None
@@ -549,6 +563,7 @@ async def _reaper(name: str, live: Live, max_seconds: int):
 async def live_start(name: str):
     if not FFMPEG:
         raise HTTPException(501, "ffmpeg not found; set FFMPEG_PATH")
+    require_camera_space()
     is_rtsp = rtsp.has(name)
     max_seconds = RTSP_LIVE_MAX_SECONDS if is_rtsp else LIVE_MAX_SECONDS
     reply = {"playlist": f"/live/{_slug(name)}/index.m3u8", "expiresIn": max_seconds}
@@ -582,8 +597,8 @@ async def live_start(name: str):
                 proc = await asyncio.create_subprocess_exec(
                     FFMPEG, "-loglevel", "warning", "-fflags", "+genpts+discardcorrupt", "-i", stream.url,
                     *_blink_live_video_args(),
-                    "-f", "hls", "-hls_time", "2", "-hls_list_size", "6",
-                    "-hls_flags", "delete_segments+omit_endlist+independent_segments", str(out / "index.m3u8"),
+                    "-f", "hls", "-hls_time", "1", "-hls_list_size", "8",
+                    "-hls_flags", "temp_file+delete_segments+omit_endlist+independent_segments", str(out / "index.m3u8"),
                     stdout=asyncio.subprocess.DEVNULL, stderr=ffmpeg_log,
                 )
     except Exception:
@@ -642,10 +657,12 @@ async def live_stop(name: str):
 
 @app.get("/live/{slug}/{filename}")
 async def live_file(slug: str, filename: str):
-    if filename != Path(filename).name or slug != Path(slug).name:
-        raise HTTPException(400, "Bad path")
+    if not re.fullmatch(r"[A-Za-z0-9_]+", slug) or not re.fullmatch(r"index(?:\.m3u8|[0-9]+\.ts)", filename):
+        raise HTTPException(404, "Unknown stream file")
     path = LIVE_DIR / slug / filename
-    if not path.is_file():
+    try:
+        data = await asyncio.to_thread(path.read_bytes)
+    except FileNotFoundError:
         raise HTTPException(404, "Not ready")
     mt = "application/vnd.apple.mpegurl" if filename.endswith(".m3u8") else "video/mp2t"
-    return FileResponse(path, media_type=mt, headers={"Cache-Control": "no-store"})
+    return Response(data, media_type=mt, headers={"Cache-Control": "no-store"})

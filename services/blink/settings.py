@@ -107,3 +107,15 @@ def open_credentials(text: str) -> tuple[dict, bool]:
 
 def slug(name: str) -> str:
     return "".join(c if c.isalnum() else "_" for c in name)
+
+
+GIB = 1024 ** 3
+LIVE_LIMIT_BYTES = int(os.environ.get("CAMERA_LIVE_BUFFER_MIB", "64")) * 1024 ** 2
+
+def storage_status():
+    free = shutil.disk_usage(DATA_DIR).free
+    return {"freeBytes": free, "low": free < 5 * GIB, "critical": free < 2 * GIB}
+
+def require_camera_space(incoming=0):
+    if shutil.disk_usage(DATA_DIR).free - incoming < 2 * GIB:
+        raise HTTPException(507, "Camera storage needs at least 2 GiB free. Free space and retry.")

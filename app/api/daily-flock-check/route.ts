@@ -133,13 +133,7 @@ export async function POST(request: Request) {
         throw new Error("Weight sample quantity cannot exceed the live bird count for that day.");
       }
 
-      const weightRecord = avgWeightKg != null
-        ? await tx.weightRecord.findFirst({
-            where: { batchId, date, scope: "SAMPLE", liveOrDressed: "LIVE" },
-            orderBy: { createdAt: "desc" },
-          })
-        : null;
-
+      const previous = await tx.dailyFlockCheck.findUnique({where:{batchId_date:{batchId,date}}});
       const check = await tx.dailyFlockCheck.upsert({
         where: { batchId_date: { batchId, date } },
         create: {
@@ -168,37 +162,50 @@ export async function POST(request: Request) {
         });
       }
 
-      if (avgWeightKg != null) {
-        if (weightRecord) {
-          await tx.weightRecord.update({ where: { id: weightRecord.id }, data: { quantity: weightSampleQuantity ?? 1, avgWeightKg, scope: "SAMPLE", liveOrDressed: "LIVE" } });
-        } else {
-          await tx.weightRecord.create({ data: { batchId, date, quantity: weightSampleQuantity ?? 1, avgWeightKg, scope: "SAMPLE", liveOrDressed: "LIVE" } });
-        }
-      }
+      // Each projection has a stable key inside its own table. A normal entry
+      // on the same day is a separate measurement and is never an update target.
+      const id = "daily:" + check.id;
+      const ownedWeight = await tx.weightRecord.findUnique({where:{id}});
+      const legacyWeight = !ownedWeight && previous?.avgWeightKg != null &&
+        await tx.weightRecord.findFirst({where:{batchId,date,scope:"SAMPLE",liveOrDressed:"LIVE",NOT:{id:{startsWith:"daily:"}}}});
+      if (legacyWeight) {
+        // Old versions used an arbitrary same-day sample. Its origin is unknowable.
+        if (avgWeightKg !== Number(previous!.avgWeightKg) || weightSampleQuantity !== previous!.weightSampleQuantity)
+          throw new Error("This historical weight shares a same-day sample. Reconcile its source before changing it.");
+      } else if (avgWeightKg != null) {
+        const values = {quantity:weightSampleQuantity ?? 1, avgWeightKg};
+        await tx.weightRecord.upsert({where:{id}, create:{id,batchId,date,scope:"SAMPLE",liveOrDressed:"LIVE",...values},update:values});
+      } else if (ownedWeight) await tx.weightRecord.delete({where:{id}});
 
+      // Earlier builds explicitly marked feed rows generated from daily checks.
+      const feedRows = await tx.feedUsage.findMany({where:{batchId,date,OR:[{id},{note:{in:["Created from daily flock check.","Updated from daily flock check."]}}]}});
+      if (feedRows.length > 1) throw new Error("Multiple historical daily-check feed entries need reconciliation.");
+      const ownedFeed = feedRows[0];
       if (feedKg != null && latestFeedPurchase && Number(latestFeedPurchase.bagSizeKg) > 0) {
         const costPerKg = latestFeedPurchase.unitCostMinor / Number(latestFeedPurchase.bagSizeKg);
-        const costMinor = Math.max(0, Math.round(feedKg * costPerKg));
-        const existingFeed = await tx.feedUsage.findFirst({ where: { batchId, date, feedType: latestFeedPurchase.feedType } });
-        if (existingFeed) {
-          await tx.feedUsage.update({ where: { id: existingFeed.id }, data: { quantityKg: feedKg, costMinor, note: "Updated from daily flock check." } });
-        } else {
-          await tx.feedUsage.create({ data: { batchId, date, feedType: latestFeedPurchase.feedType, quantityKg: feedKg, costMinor, note: "Created from daily flock check." } });
-        }
-      }
+        const values = {quantityKg:feedKg,costMinor:Math.round(feedKg * costPerKg),feedType:latestFeedPurchase.feedType};
+        if (ownedFeed) await tx.feedUsage.update({where:{id:ownedFeed.id},data:values});
+        else await tx.feedUsage.create({data:{id,batchId,date,...values,note:"Created from daily flock check."}});
+      } else if (ownedFeed && feedKg == null) await tx.feedUsage.delete({where:{id:ownedFeed.id}});
 
       if (temperatureC != null || humidityPercent != null || ammoniaPpm != null || input.litterCondition || input.pantingObserved || input.wingSpreadingObserved) {
         const symptom = (input.pantingObserved || input.wingSpreadingObserved) ? "Heat / welfare signs observed" : "Daily environment check";
-        const existingObservation = await tx.healthObservation.findFirst({ where: { batchId, observedAt: date, symptom } });
         const observationData = {
           farmId: currentFarmId(), batchId, observedAt: date, symptom, category: "ENVIRONMENT",
           affectedCount: liveCount, severity: (input.pantingObserved || input.wingSpreadingObserved) ? "HIGH" : "LOW" as any,
           notes: input.notes ? String(input.notes) : null,
           temperatureC, humidityPercent,
         };
-        if (existingObservation) await tx.healthObservation.update({ where: { id: existingObservation.id }, data: observationData });
-        else await tx.healthObservation.create({ data: observationData });
-      }
+        const owned = await tx.healthObservation.findUnique({where:{id}});
+        const legacy = !owned && previous && await tx.healthObservation.findFirst({where:{
+          batchId,observedAt:date,category:"ENVIRONMENT",symptom:{in:["Heat / welfare signs observed","Daily environment check"]}
+        }});
+        if (legacy && (legacy.symptom !== symptom || String(legacy.temperatureC) !== String(temperatureC) ||
+            String(legacy.humidityPercent) !== String(humidityPercent) || legacy.notes !== observationData.notes ||
+            legacy.affectedCount !== liveCount))
+          throw new Error("Review the existing historical environment observation before changing this check.");
+        if (!legacy) await tx.healthObservation.upsert({where:{id},create:{id,...observationData},update:observationData});
+      } else await tx.healthObservation.deleteMany({where:{id,healthCaseId:null}});
 
       return check;
     });

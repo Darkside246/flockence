@@ -1,21 +1,13 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { api, enc, json } from "@/lib/camera-client";
+import { LiveView } from "@/components/camera-live-view";
 import { Nav } from "@/components/nav";
 
 type Camera = { name: string; source: "blink" | "rtsp"; type: string | null; battery: string | number | null; armed: boolean | null; motionDetected: boolean | null; live: boolean; recording?: boolean };
 type Clip = { id: string; camera: string; source: "blink" | "rtsp" | "import"; createdAt: string; media: string; thumbnail: string | null };
-type Status = { connected: boolean; pending2fa: boolean; ffmpeg: boolean };
+type Status = { storage?: {low:boolean;critical:boolean;freeBytes:number}; connected: boolean; pending2fa: boolean; ffmpeg: boolean };
 type Tab = "live" | "stills" | "recordings";
-
-const api = (p: string) => `/api/cameras/${p}`;
-const enc = encodeURIComponent;
-
-async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const r = await fetch(url, init);
-  const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || d.detail || `Request failed (${r.status})`);
-  return d as T;
-}
 
 function ConnectCard({ status, onDone }: { status: Status; onDone: () => void }) {
   const [username, setUsername] = useState(""), [password, setPassword] = useState(""), [pin, setPin] = useState("");
@@ -49,170 +41,6 @@ function ConnectCard({ status, onDone }: { status: Status; onDone: () => void })
     {error && <p role="alert">{error}</p>}</div>;
 }
 
-function LiveView({ camera, source, ffmpeg }: { camera: string; source: "blink" | "rtsp"; ffmpeg: boolean }) {
-  const video = useRef<HTMLVideoElement>(null);
-  const [state, setState] = useState<"idle" | "starting" | "playing" | "failed">("idle");
-  const [message, setMessage] = useState("");
-  const [tick, setTick] = useState(0);
-  const [near, setNear] = useState(false);
-  const hlsRef = useRef<{ destroy: () => void } | null>(null);
-  const startAbortRef = useRef<AbortController | null>(null);
-  const runRef = useRef(0);
-
-  const stopRemote = useCallback(async () => {
-    await fetch(api(`cameras/${enc(camera)}/live/stop`), { method: "POST", keepalive: true }).catch(() => {});
-  }, [camera]);
-
-  const clearVideo = useCallback(() => {
-    hlsRef.current?.destroy();
-    hlsRef.current = null;
-    const el = video.current;
-    if (el) {
-      el.pause();
-      el.removeAttribute("src");
-      el.load();
-    }
-  }, []);
-
-  const stop = useCallback(async () => {
-    runRef.current += 1;
-    const controller = startAbortRef.current;
-    startAbortRef.current = null;
-    controller?.abort();
-    clearVideo();
-    setState("idle");
-    setMessage("");
-    await stopRemote();
-  }, [clearVideo, stopRemote]);
-
-  useEffect(() => () => {
-    // Invalidate any in-flight start/poll loop before asking the sidecar to stop.
-    runRef.current += 1;
-    startAbortRef.current?.abort();
-    startAbortRef.current = null;
-    hlsRef.current?.destroy();
-    hlsRef.current = null;
-    const el = video.current;
-    if (el) {
-      el.pause();
-      el.removeAttribute("src");
-      el.load();
-    }
-    fetch(api(`cameras/${enc(camera)}/live/stop`), { method: "POST", keepalive: true }).catch(() => {});
-  }, [camera]);
-
-  async function start() {
-    if (startAbortRef.current) return;
-    const run = ++runRef.current;
-    const controller = new AbortController();
-    startAbortRef.current = controller;
-    const isCurrent = () => !controller.signal.aborted && runRef.current === run;
-    let startAccepted = false;
-
-    setState("starting");
-    setMessage("Waking the camera… this can take 10–20 seconds.");
-    try {
-      // Do not abort the start request itself: the server may already have
-      // started FFmpeg. Invalidate the run and send stop if the user cancels.
-      const { playlist } = await json<{ playlist: string }>(api(`cameras/${enc(camera)}/live/start`), { method: "POST" });
-      startAccepted = true;
-      if (!isCurrent()) {
-        await stopRemote();
-        return;
-      }
-
-      const url = api(playlist.replace(/^\//, ""));
-      let ready = false;
-      for (let i = 0; i < 40; i++) {
-        const response = await fetch(url, { signal: controller.signal, cache: "no-store" });
-        if (response.ok) {
-          ready = true;
-          break;
-        }
-        if (response.status !== 404) {
-          throw new Error(`Live playlist request failed (${response.status}).`);
-        }
-        if (i === 39) {
-          throw new Error("The camera did not start streaming.");
-        }
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 1000));
-        if (!isCurrent()) {
-          await stopRemote();
-          return;
-        }
-      }
-
-      if (!ready) throw new Error("The camera did not start streaming.");
-      if (!isCurrent()) {
-        await stopRemote();
-        return;
-      }
-
-      const Hls = (await import("hls.js")).default;
-      if (!isCurrent()) {
-        await stopRemote();
-        return;
-      }
-      const el = video.current;
-      if (!el) throw new Error("The video player is no longer available.");
-      if (Hls.isSupported()) {
-        // Play about 6 s behind live (3 pieces of 2 s) so a slow moment from Blink's relay does not freeze the
-        // picture; catch up gently instead of jumping. Recover from network and decoding hiccups instead of stopping.
-        const h = new Hls({ liveSyncDurationCount: 3, liveMaxLatencyDurationCount: 8, maxLiveSyncPlaybackRate: 1.15, backBufferLength: 10, maxBufferHole: 1 });
-        let recoveries = 0;
-        h.on(Hls.Events.ERROR, (_event, data) => {
-          if (!data.fatal || recoveries >= 5) return;
-          recoveries += 1;
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) h.startLoad();
-          else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) h.recoverMediaError();
-        });
-        hlsRef.current = h;
-        h.loadSource(url);
-        h.attachMedia(el);
-      } else {
-        el.src = url;
-      }
-      await el.play().catch(() => {});
-      if (!isCurrent()) {
-        clearVideo();
-        await stopRemote();
-        return;
-      }
-      setState("playing");
-      setMessage("");
-    } catch (e) {
-      // Stop/unmount aborts are expected, not user-facing stream failures.
-      if (!isCurrent()) {
-        if (startAccepted) await stopRemote();
-        return;
-      }
-      setState("failed");
-      setMessage(e instanceof Error ? e.message : "Live view failed.");
-      await stopRemote();
-    } finally {
-      if (startAbortRef.current === controller) startAbortRef.current = null;
-    }
-  }
-
-  // Near-live fallback: a fresh still every 6 seconds while enabled.
-  useEffect(() => { if (!near) return; const t = setInterval(() => setTick((n) => n + 1), 6000); return () => clearInterval(t); }, [near]);
-
-  return <div className="card"><div className="section-head"><div><h3>{camera}</h3><p>{source === "blink" ? "Live view stops automatically after 5 minutes to protect the camera battery." : "Live view stops automatically after 1 hour."}</p></div>
-    <div style={{ display: "flex", gap: 8 }}>
-      {state === "playing" || state === "starting"
-        ? <button className="button" onClick={stop}>Stop</button>
-        : <button className="button" onClick={start} disabled={!ffmpeg}>Start live view</button>}
-      {state === "playing" && <button className="button" onClick={() => void video.current?.requestFullscreen?.()}>Fullscreen</button>}
-      <button className="button" onClick={() => setNear((v) => !v)}>{near ? "Stop near-live" : "Near-live stills"}</button></div></div>
-    {!ffmpeg && <p role="alert">ffmpeg is not installed on the camera service, so live video is unavailable. Still images and recordings still work.</p>}
-    {message && <p role={state === "failed" ? "alert" : "status"}>{message}</p>}
-    <video ref={video} controls playsInline style={{ width: "100%", maxHeight: 520, background: "#000", display: state === "playing" ? "block" : "none" }} />
-    {near && state !== "playing" && (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={api(`cameras/${enc(camera)}/snapshot?fresh=true&t=${tick}`)} alt={`Latest picture from ${camera}`} style={{ width: "100%" }} />
-    )}
-  </div>;
-}
 function Stills({ cameras }: { cameras: Camera[] }) {
   const [stamp, setStamp] = useState<Record<string, number>>({}), [busy, setBusy] = useState("");
   function take(name: string) { setBusy(name); setStamp((s) => ({ ...s, [name]: Date.now() })); setTimeout(() => setBusy(""), 8000); }
@@ -327,6 +155,7 @@ export default function CamerasPage() {
   return <div className="shell"><header className="topbar"><div className="brand"><div><div className="hero-kicker">Site security</div><h1>Cameras</h1><p>Live view, latest pictures and recordings from Blink and local network cameras.</p></div><span className="badge">LIVE · STILLS · RECORDINGS</span></div></header><Nav /><main className="main">
     {error && <div className="card" role="alert"><p>{error}</p><p>Start the camera service from services/blink (see its README) and set BLINK_SIDECAR_TOKEN.</p></div>}
     {status && <>
+      {status.storage?.low && <p role="alert">Camera drive has {(status.storage.freeBytes / 2**30).toFixed(1)} GiB free. {status.storage.critical ? "Recording and live capture are paused until space is available." : "Free space before recording stops at 2 GiB."}</p>}
       <section className="card" id="camera-settings">
         <h2>Farm camera settings</h2>
         <label>Camera provider<select value={provider} onChange={e => setProvider(e.target.value)}>

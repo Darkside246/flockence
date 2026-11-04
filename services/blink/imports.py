@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from settings import require_camera_space
 from fastapi.responses import FileResponse
 
 from settings import DATA_DIR, require_token, slug
@@ -65,6 +66,7 @@ async def import_clip(request: Request, camera: str, created_at: str | None = No
                 size += len(chunk)
                 if size > MAX_BYTES:
                     raise HTTPException(413, f"Clip is larger than {MAX_BYTES // (1024 * 1024)} MB")
+                require_camera_space(len(chunk))
                 fh.write(chunk)
         if size == 0 or not _is_video(part):
             raise HTTPException(415, "That file is not an MP4 or MOV video")

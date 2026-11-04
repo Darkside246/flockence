@@ -1,11 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { authError, requireCurrentUser, currentUserOrRoleResponse } from "@/lib/current-user";
-
-const prefix = "PENCFG::";
-const keyFor = (userId: string, id: string) => `${prefix}${userId}::${id}`;
-const parse = (value: string) => { try { return JSON.parse(value); } catch { return null; } };
-
+import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
+import { withFarmPens, penKey } from "@/lib/farm-pens";
 function normalize(input: any, fallback: any = {}) {
   return {
     name: typeof input.name === "string" && input.name.trim() ? input.name.trim() : fallback.name || "Pen",
@@ -27,51 +23,40 @@ function normalize(input: any, fallback: any = {}) {
   };
 }
 
-async function getRows(user: { id: string; farmId: string }) {
-  return prisma.setting.findMany({ where: { farmId: user.farmId, key: { startsWith: `${prefix}${user.id}::` } }, orderBy: { updatedAt: "desc" } });
-}
 
 export async function GET(request: Request) {
-  try {
-    const user = await requireCurrentUser(request);
-    const rows = await getRows(user);
-    return NextResponse.json(rows.flatMap((row) => {
-      const data = parse(row.value);
-      return data && typeof data === "object" ? [{ id: row.key.slice(keyFor(user.id, "").length), ...data }] : [];
-    }));
-  } catch (error) {
-    const response = authError(error);
-    if (response) return response;
-    return NextResponse.json({ error: "Unable to load pen configurations." }, { status: 500 });
-  }
+  const access = await currentUserOrResponse(request);
+  if (access.response) return access.response;
+  return withFarmPens(access.user!.farmId, async (_tx, rows) =>
+    NextResponse.json(rows.map(row => ({ ...normalize(JSON.parse(row.value)), id: row.key.slice(penKey.length) }))));
 }
 
 export async function POST(request: Request) {
-  try {
-    const access = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
-    if (access.response) return access.response;
-    const user = access.user!;
-    const input = await request.json();
-    const rows = await getRows(user);
-    const data = normalize(input);
-    const duplicate = rows.find((row) => String(parse(row.value)?.name || "").trim().toLowerCase() === data.name.toLowerCase() && (!input.id || row.key !== keyFor(user.id, input.id)));
-    if (duplicate) return NextResponse.json({ error: "A pen with that name already exists for this user." }, { status: 409 });
-    const id = typeof input.id === "string" && input.id ? input.id : crypto.randomUUID();
-    await prisma.setting.upsert({ where: { farmId_key: { farmId: user.farmId, key: keyFor(user.id, id) } }, create: { farmId: user.farmId, key: keyFor(user.id, id), value: JSON.stringify(data) }, update: { value: JSON.stringify(data) } });
-    return NextResponse.json({ id, ...data });
-  } catch (error) {
-    const response = authError(error);
-    if (response) return response;
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to save pen." }, { status: 500 });
-  }
+  const access = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
+  if (access.response) return access.response;
+  const input = await request.json().catch(() => null);
+  if (typeof input?.name !== "string" || !input.name.trim()) return NextResponse.json({error:"Pen name is required."},{status:400});
+  const farmId = access.user!.farmId;
+  return withFarmPens(farmId, async (tx, rows) => {
+    const old = input.id && rows.find(row => row.key === penKey + input.id);
+    if (input.id && !old) return NextResponse.json({error:"Pen no longer exists."},{status:404});
+    const data = normalize(input, old ? JSON.parse(old.value) : {});
+    if (rows.some(r => r !== old && JSON.parse(r.value).name.trim().toLowerCase() === data.name.toLowerCase()))
+      return NextResponse.json({error:"That farm pen name is already in use."},{status:409});
+    const id = old ? input.id : crypto.randomUUID();
+    const key = penKey + id;
+    await tx.setting.upsert({where:{farmId_key:{farmId,key}},create:{farmId,key,value:JSON.stringify(data)},update:{value:JSON.stringify(data)}});
+    return NextResponse.json({id,...data});
+  });
 }
 
 export async function DELETE(request: Request) {
   const access = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
   if (access.response) return access.response;
+  const farmId = access.user!.farmId;
   const id = new URL(request.url).searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "Select a saved pen." }, { status: 400 });
-  const user = access.user!;
-  const result = await prisma.setting.deleteMany({ where: { farmId: user.farmId, key: keyFor(user.id, id) } });
-  return result.count ? NextResponse.json({ deleted: true }) : NextResponse.json({ error: "Pen not found." }, { status: 404 });
+  return withFarmPens(farmId, async tx => {
+    const result = await tx.setting.deleteMany({where:{farmId,key:penKey+id}});
+    return result.count ? NextResponse.json({deleted:true}) : NextResponse.json({error:"Pen not found."},{status:404});
+  });
 }
