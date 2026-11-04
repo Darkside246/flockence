@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { api, enc, json } from "@/lib/camera-client";
-export function LiveView({ camera, source, ffmpeg, compact = false }: { camera: string; source: "blink" | "rtsp"; ffmpeg: boolean; compact?: boolean }) {
+export function LiveView({ camera, source, ffmpeg, compact = false, children }: { camera: string; source: "blink" | "rtsp"; ffmpeg: boolean; compact?: boolean; children?: React.ReactNode }) {
   const [smooth, setSmooth] = useState(false);
   const deadline = useRef(0);
   const restarts = useRef(0);
@@ -177,7 +177,14 @@ export function LiveView({ camera, source, ffmpeg, compact = false }: { camera: 
   // Near-live fallback: a fresh still every 6 seconds while enabled.
   useEffect(() => { if (!near) return; const t = setInterval(() => setTick((n) => n + 1), 6000); return () => clearInterval(t); }, [near]);
 
-  return <div className={compact ? "cx-inline-live" : "card"}><div className="section-head">{!compact && <div><h3>{camera}</h3><p>{source === "blink" ? "Live view stops automatically after 5 minutes to protect the camera battery." : "Live view stops automatically after 1 hour."}</p></div>}
+  const player = <video ref={video} aria-label={camera + " live video"} controls playsInline style={{ width: "100%", maxHeight: compact ? undefined : 520, background: "#000", display: state === "playing" ? "block" : "none" }} />;
+
+  return <div className={compact ? "cx-inline-live" : "card"}>
+    {compact && <div className="card cx-cam">
+      {state !== "playing" && children}
+      {player}
+    </div>}
+    <div className="section-head">{!compact && <div><h3>{camera}</h3><p>{source === "blink" ? "Live view stops automatically after 5 minutes to protect the camera battery." : "Live view stops automatically after 1 hour."}</p></div>}
     <div style={{ display: "flex", gap: 8 }}>
       {state === "playing" || state === "starting"
         ? <button className="button" onClick={stop}>Stop</button>
@@ -188,7 +195,7 @@ export function LiveView({ camera, source, ffmpeg, compact = false }: { camera: 
       <option value="fast">Lower delay</option><option value="smooth">Smoother playback</option></select></label>
     {!ffmpeg && <p role="alert">ffmpeg is not installed on the camera service, so live video is unavailable. Still images and recordings still work.</p>}
     {message && <p role={state === "failed" ? "alert" : "status"}>{message}</p>}
-    <video ref={video} controls playsInline style={{ width: "100%", maxHeight: 520, background: "#000", display: state === "playing" ? "block" : "none" }} />
+    {!compact && player}
     {near && state !== "playing" && (
       // eslint-disable-next-line @next/next/no-img-element
       <img src={api(`cameras/${enc(camera)}/snapshot?fresh=true&t=${tick}`)} alt={`Latest picture from ${camera}`} style={{ width: "100%" }} />

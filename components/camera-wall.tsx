@@ -28,7 +28,7 @@ function CameraTile({camera,ffmpeg,refresh}: {camera:Camera;ffmpeg:boolean;refre
     finally {setBusy(false);}
   }
   return <>
-    <div className="card cx-cam">
+    <LiveView camera={camera.name} source={camera.source} compact ffmpeg={ffmpeg}>
       {image.url===url && image.failed ? <div className="cx-cam-offline"><div>No picture available</div></div> :
         <img key={url} src={url} className={image.url===url && image.loaded ? "is-loaded" : ""} alt={camera.name}
           onLoad={()=>setImage({url,loaded:new Date().toLocaleTimeString(),failed:false})} onError={()=>setImage({url,loaded:"",failed:true})} />}
@@ -36,10 +36,9 @@ function CameraTile({camera,ffmpeg,refresh}: {camera:Camera;ffmpeg:boolean;refre
       <div className="cx-cam-bottom"><span className="cx-tag">{image.url===url && image.failed ? "Unavailable" : "Still "+(image.url===url?image.loaded:"")}</span>
         {camera.battery != null && <span className="cx-tag">Battery {camera.battery}</span>}
         {camera.recording && <span className="cx-tag">Recording</span>}</div>
-    </div>
+    </LiveView>
     <div className="cx-camera-actions"><button type="button" className="button" disabled={busy} onClick={takePhoto}>Take photo</button>
       <button type="button" className="button" onClick={()=>setStamp(Date.now())}>Update image</button></div>
-    <LiveView camera={camera.name} source={camera.source} compact ffmpeg={ffmpeg}/>
     {message && <small role="status">{message}</small>}
   </>;
 }

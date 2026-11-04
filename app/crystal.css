@@ -327,3 +327,5 @@ html[data-theme="crystal"] .shell .nav a, html[data-theme="crystal"] .bottom-nav
 .cx-cams article select {width:100%;margin-bottom:6px}
 .cx-inline-live .button,.cx-camera-actions .button {font-size:.8rem;padding:.35rem .6rem}
 .cx-inline-live .cx-buffer {font-size:.75rem}
+
+.cx-cam video { position: absolute; inset: 0; height: 100%; object-fit: contain; z-index: 3; }
