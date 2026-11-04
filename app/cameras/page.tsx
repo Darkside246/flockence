@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { api, enc, json } from "@/lib/camera-client";
 import { LiveView } from "@/components/camera-live-view";
 import { Nav } from "@/components/nav";
@@ -153,19 +154,20 @@ export default function CamerasPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
   return <div className="shell"><header className="topbar"><div className="brand"><div><div className="hero-kicker">Site security</div><h1>Cameras</h1><p>Live view, latest pictures and recordings from Blink and local network cameras.</p></div><span className="badge">LIVE · STILLS · RECORDINGS</span></div></header><Nav /><main className="main">
-    {error && <div className="card" role="alert"><p>{error}</p><p>Start the camera service from services/blink (see its README) and set BLINK_SIDECAR_TOKEN.</p></div>}
-    {status && <>
-      {status.storage?.low && <p role="alert">Camera drive has {(status.storage.freeBytes / 2**30).toFixed(1)} GiB free. {status.storage.critical ? "Recording and live capture are paused until space is available." : "Free space before recording stops at 2 GiB."}</p>}
+    <Link className="button" href="/">← Back to dashboard</Link>
+    {error && <div className="card" role="alert"><p>{error}</p><button className="button" onClick={load}>Retry camera connection</button></div>}
+      {status?.storage?.low && <p role="alert">Camera drive has {(status.storage.freeBytes / 2**30).toFixed(1)} GiB free. {status.storage.critical ? "Recording and live capture are paused until space is available." : "Free space before recording stops at 2 GiB."}</p>}
       <section className="card" id="camera-settings">
         <h2>Farm camera settings</h2>
         <label>Camera provider<select value={provider} onChange={e => setProvider(e.target.value)}>
           {["Blink", "Wyze", "Reolink", "Amcrest", "Tapo", "Other RTSP"].map(name => <option key={name}>{name}</option>)}
         </select></label>
-        {provider === "Blink" ? (status.connected ? <p>Blink account connected.</p> : <ConnectCard status={status} onDone={load} />) : <>
+        {!status ? <p>{error ? "Reconnect the camera service to configure this provider." : "Checking camera service…"}</p> : provider === "Blink" ? (status.connected ? <p>Blink account connected.</p> : <ConnectCard status={status} onDone={load} />) : <>
           <p>{provider === "Wyze" ? "For Wyze Cam v3, enable RTSP in the Wyze app on supported firmware and copy its stream URL. An existing local bridge URL also works." : "Use a model with RTSP enabled and reachable from the camera service."}</p>
           <ManageCameras provider={provider} key={provider} cameras={cameras} onChange={load} />
         </>}
       </section>
+    {status && <>
       {cameras.length === 0 && <>
         <div className="card"><p>No cameras are connected yet. Connect your Blink account or add a network camera in Farm camera settings, or import clips you downloaded from the Blink app.</p></div>
         <div style={{ marginTop: 16 }}><Recordings cameras={cameras} /></div>

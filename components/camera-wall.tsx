@@ -78,7 +78,7 @@ export function CameraWall({onStatus}: {onStatus?:(s:CameraWallStatus)=>void}) {
     catch(e){setError(e instanceof Error?e.message:"Layout could not be saved.");}finally{setSaving(false);}
   }
   return <section><div className="cx-section-head"><div><div className="hero-kicker">Surveillance</div><h3>Cameras</h3></div>
-    <button className="button" disabled={saving||loading} onClick={load}>Refresh cameras</button><Link className="button" href="/cameras">All cameras</Link></div>
+    <button className="button" disabled={saving||loading} onClick={load}>Refresh cameras</button><Link className="button" href="/cameras#camera-settings">Camera settings</Link><Link className="button" href="/cameras">All cameras</Link></div>
     {error && <p role="alert">{error}</p>}
     <div className="cx-cams">{shown.map((name,i)=>{
       const camera=cams.find(c=>c.name===name);
