@@ -59,6 +59,7 @@ async function handle(request:Request) {
     else if (body.action === "select") {
       const device = devices.find(d=>d.device===body.device);
       if (!device?.temperature || typeof body.name !== "string") return reply({error:"Select a discovered sensor and enter a name."},400);
+      if (!sensors.some(s=>s.device===device.device) && sensors.length>=6) return reply({error:"Up to six sensors can be saved."},400);
       sensors = [...sensors.filter(s=>s.device!==device.device),{device:device.device,sku:device.sku,name:body.name.trim(),unit:body.unit}];
       try { configuredSensors(JSON.stringify(sensors)); } catch { return reply({error:"Use a unique sensor name of 1–40 letters, numbers, spaces, periods, underscores or dashes and select its unit."},400); }
     } else return reply({error:"Unknown action."},400);
@@ -71,6 +72,7 @@ async function handle(request:Request) {
     return reply({connected:true,monitoring:account?.monitoring ?? true,sensors,devices,equipment});
   } catch (error) {
     if(error instanceof Error && error.message==="Govee HTTP 401")return reply({error:"Govee rejected this key. Paste the latest developer API key issued in Govee Home → Settings → Apply for API Key. Generating a new key disables earlier keys on the account."},400);
+    if(error instanceof Error && error.message==="Govee reading is outside the supported range.")return reply({error:"The reading is outside the expected range. Check the sensor source unit in configuration. Fahrenheit data saved as Celsius must be corrected before collecting readings."},400);
     const detail = error instanceof Error && /^Govee HTTP \d{3}$/.test(error.message) ? error.message : "Device settings request failed";
     return reply({error:detail+". Check your connection and API key, then retry."},400);
   }

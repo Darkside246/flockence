@@ -3,6 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { configuredSensors } from "../lib/govee.mjs";
 
 const prisma = new PrismaClient();
+async function run() {
 try {
 
   if (process.argv.includes("--list")) {
@@ -26,7 +27,12 @@ try {
 } catch (error) {
   console.error("Govee setup or request failed.", error.message.startsWith("Govee HTTP") ? error.message : "Check server settings.");
   process.exitCode = 1;
-} finally { await prisma.$disconnect(); }
+} finally {
+  if (process.argv.includes("--watch")) setTimeout(run,60000);
+  else await prisma.$disconnect();
+}
+}
+void run();
 
 async function poll(farmId,key,sensors) {
   for (const sensor of sensors) {

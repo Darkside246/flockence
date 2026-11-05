@@ -91,3 +91,13 @@ html[data-theme] .shell .theme-option {padding:.5rem;}
 .settings-group > form > section {grid-column:1/-1;}
 html[data-theme] .shell .theme-option.selected {border-color:var(--control-accent);}
 html[data-theme] .shell .operation-picker label:has(input:checked) {color:var(--control-accent);}
+
+.planning-cards {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:1rem;}
+.planning-metrics,.sensor-values {display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;}
+.planning-metrics>div,.sensor-values>div {display:flex;flex-direction:column;gap:.4rem;min-width:0;}
+.planning-value {font-size:1.25rem;line-height:1.35;overflow-wrap:anywhere;}
+.sensor-readings {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:1rem;margin-block:1rem;}
+.sensor-reading {padding:1rem;border:1px solid var(--control-edge);border-radius:.75rem;}
+.sensor-values strong {font-size:1.7rem;line-height:1.3;}
+.sensor-reading p {font-size:.85rem;}
+.sensor-reading details {margin-top:.8rem;}

@@ -15,6 +15,8 @@ function Thermometers() {
   const [device,setDevice]=useState(""), [name,setName]=useState(""), [unit,setUnit]=useState("");
   const [message,setMessage]=useState(""), [busy,setBusy]=useState(false);
   const [monitoring,setMonitoring]=useState<boolean|null>(null);
+  const [readings,setReadings]=useState<Record<string,NonNullable<Result["reading"]>|null>>({});
+  const [displayUnit,setDisplayUnit]=useState("C");
   function apply(result:Result) {
     if(result.connected!==undefined) {setConnected(result.connected); if(result.connected)setProvider("Govee");}
     if(result.monitoring!==undefined)setMonitoring(result.monitoring);
@@ -32,7 +34,8 @@ function Thermometers() {
       if(action==="monitoring")setMessage(result.monitoring ? "Scheduled temperature collection enabled." : "Scheduled temperature collection paused.");
       else if(action==="state")setMessage(result.state?.map(c=>c.name+" · "+(typeof c.value==="object"?JSON.stringify(c.value):String(c.value))).join(" | ") || "No current state reported.");
       else if(action==="equipment")setMessage("Device saved for this farm.");
-      else if(action==="read") setMessage(result.reading ? result.reading.temperatureC+" °C"+(result.reading.humidityPercent==null?"":" · "+result.reading.humidityPercent+"% humidity")+" · "+new Date(result.reading.readAt).toLocaleString() : "Sensor offline or no current reading.");
+      else if(action==="read"){setReadings(previous=>({...previous,[selected]:result.reading??null}));}
+
       else if(action==="disconnect"){setEquipment([]);setSensors([]);setDevices([]);setDevice("");setKey("");setMessage("Govee disconnected.");}
       else if(action==="select")setMessage("Sensor saved for this farm.");
       else {setKey("");setDevice("");setMessage(result.devices?.length ? "Choose equipment below." : "Connected. This account exposes no devices through the API.");}
@@ -60,8 +63,21 @@ function Thermometers() {
         <button type="button" className="button" role="switch" aria-label="Scheduled temperature monitoring" aria-checked={monitoring} disabled={busy}
           onClick={()=>action("monitoring")}>{busy ? "Working…" : monitoring ? "On · Turn off" : "Off · Turn on"}</button>
       </div>}
-      {equipment.map(d=><p key={d.device}>{d.label} · {d.sku} <button className="button" onClick={()=>action("state",d.device)}>Read device state</button></p>)}
-      {sensors.map(s=><p key={s.device}>{s.name} · {s.sku} <button className="button" onClick={()=>action("read",s.device)}>Read now</button></p>)}</fieldset>}
+      {equipment.filter(d=>!sensors.some(s=>s.device===d.device)).map(d=><p key={d.device}>{d.label} · {d.sku} <button className="button" onClick={()=>action("state",d.device)}>Read device state</button></p>)}
+      {!!sensors.length && <label>Display temperature in<select value={displayUnit} onChange={e=>setDisplayUnit(e.target.value)}><option value="C">Celsius (°C)</option><option value="F">Fahrenheit (°F)</option></select></label>}
+      <div className="sensor-readings">{sensors.map(sensor=>{
+        const reading=readings[sensor.device];
+        const value=reading ? displayUnit==="F" ? reading.temperatureC*9/5+32 : reading.temperatureC : null;
+        return <article className="sensor-reading" key={sensor.device}>
+          <h3>{sensor.name}</h3><div className="sensor-values">
+            <div><span>Temperature</span><strong>{value==null?"—":value.toFixed(1)+" °"+displayUnit}</strong></div>
+            <div><span>Humidity</span><strong>{reading?.humidityPercent==null?"—":reading.humidityPercent.toFixed(1)+"%"}</strong></div>
+          </div>
+          <p>{reading ? "Updated "+new Date(reading.readAt).toLocaleTimeString() : readings[sensor.device]===null?"Sensor unavailable":"Refresh to get a reading"}</p>
+          <button className="button" disabled={busy} onClick={()=>action("read",sensor.device)}>{busy?"Working…":"Refresh reading"}</button>
+          <details><summary>Sensor configuration</summary><p>Saved source unit: {sensor.unit==="F"?"Fahrenheit":"Celsius"}</p><button className="button" onClick={()=>{choose(sensor.device);void action("discover");}}>Discover to edit sensor</button></details>
+        </article>;
+      })}</div></fieldset>}
     {message && <p role="status">{message}</p>}</section>;
 }
 function SettingsCameras(){
@@ -76,5 +92,5 @@ function SettingsCameras(){
 export function DeviceSettings(){
   const [cameraOpen,setCameraOpen]=useState(false);
   useEffect(()=>{setCameraOpen(window.location.hash === "#camera-settings");},[]);
-  return useSession()?.role==="OWNER" ? <><details className="section card settings-group"><summary>Equipment, sensors and integrations</summary><Thermometers/></details><details id="camera-settings" className="section card settings-group" open={cameraOpen} onToggle={event=>setCameraOpen(event.currentTarget.open)}><summary>Camera settings</summary><SettingsCameras/></details></> : <section className="card"><h2>Farm devices</h2><p>The farm owner manages device credentials.</p></section>;
+  return useSession()?.role==="OWNER" ? <><details id="sensor-settings" open={typeof window!=="undefined" && window.location.hash==="#sensor-settings" || undefined} className="section card settings-group"><summary>Equipment, sensors and integrations</summary><Thermometers/></details><details id="camera-settings" className="section card settings-group" open={cameraOpen} onToggle={event=>setCameraOpen(event.currentTarget.open)}><summary>Camera settings</summary><SettingsCameras/></details></> : <section className="card"><h2>Farm devices</h2><p>The farm owner manages device credentials.</p></section>;
 }

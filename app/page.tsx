@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { FarmOperationForm } from "@/components/farm-operation";
 import { useSession } from "@/components/auth-gate";
 import { showDestination } from "@/lib/farm-operation";
+import { PenEnvironment } from "@/components/pen-environment";
 import { Nav } from "@/components/nav";
 import { TaskPanel } from "@/components/task-panel";
 import { CameraWall, type CameraWallStatus } from "@/components/camera-wall";
@@ -73,7 +74,8 @@ export default function Home(){
         <div className="card cx-kpi"><span className="cx-kpi-icon"><CxIcon name="gauge" size={17}/></span><div className="metric-label">Operations score</div><div className="metric-value">{data?data.farmScore:"—"}</div><div className="cx-foot">from recorded farm data</div></div>
       </section>
 
-      <section className="cx-section"><CameraWall onStatus={setCamStatus}/></section>
+      <section className="cx-section"><CameraWall onStatus={setCamStatus}/>
+      <PenEnvironment/></section>
 
       <section className="cx-section">
         <div className="cx-section-head"><div><div className="hero-kicker">Environment</div><h3>Today&apos;s house conditions</h3><p>{dailyRound?`Recorded in today's flock checks · ${dailyRound.coverage.recordedFlocks} of ${dailyRound.coverage.activeFlocks} flocks checked`:"Loading today's recorded readings."}</p></div><a className="button" href="/operations">Daily check →</a></div>
