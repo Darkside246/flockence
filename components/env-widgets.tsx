@@ -42,9 +42,9 @@ export function EnvWidgets(p: Props) {
       <div className="cx-na">{p.waterLiters != null ? `${p.waterLiters.toFixed(1)} L water` : "No water recorded"}{p.waterToFeedRatio != null ? ` · ${p.waterToFeedRatio.toFixed(2)} L per kg` : ""}</div>
     </div>
     <div className="card cx-widget">
-      <div className="cx-label">Smart equipment &amp; sensors</div>
-      <div className="metric-value" style={{ fontSize: 18 }}>Not connected</div>
-      <div className="cx-na">Readings above come from daily flock checks ({p.flocksReporting}/{p.flocksActive} flocks today). No live sensors or smart plugs are linked yet.</div>
+      <div className="cx-label">Daily Rounds coverage</div>
+      <div className="metric-value">{p.flocksReporting} / {p.flocksActive}</div>
+      <div className="cx-na">Flocks reporting environmental readings today</div>
     </div>
   </div>;
 }

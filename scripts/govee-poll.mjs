@@ -17,7 +17,8 @@ try {
       await poll(legacyFarm,process.env.GOVEE_API_KEY,configuredSensors(process.env.GOVEE_SENSORS));
     for (const account of accounts) {
       try {
-        const {credential,sensors}=JSON.parse(account.value);
+        const {credential,sensors,monitoring}=JSON.parse(account.value);
+        if (monitoring === false) continue;
         await poll(account.farmId,openKey(credential,account.farmId),sensors);
       } catch { console.error("Could not load farm sensor settings.",account.farmId); process.exitCode=1; }
     }

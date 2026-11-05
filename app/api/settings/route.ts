@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { authError, requireCurrentUser, currentUserOrRoleResponse } from "@/lib/current-user";
 
+import { operationKey, isOperation } from "@/lib/farm-operation";
+
 const reserved = ["ROUNDS::","DEVICE_PRIVATE::", "AUTH_", "PENCFG::", "PEN::", "FARM_PEN", "CAMERA_WALL::", "FARM_INVITE::"];
 const publicSettingFilter = { NOT: reserved.map(prefix => ({key:{startsWith:prefix}})) };
 
@@ -27,6 +29,7 @@ export async function PUT(request: Request) {
     await ensureFarm();
     const input = await request.json();
     const updates = Array.isArray(input.settings) ? input.settings : [];
+    if (updates.some((item: {key?: string; value?: unknown} | null) => item?.key === operationKey && !isOperation(item.value))) return NextResponse.json({error:"Choose a poultry operation."},{status:400});
     for (const item of updates) {
       if (!item?.key) continue;
       const key = String(item.key);

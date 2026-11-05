@@ -5,16 +5,16 @@ type Reading={sensor:string;temperatureC:string;readAt:string};
 export function useCameraTemperature(camera:string,temperatureF:number|string|null|undefined,blink:boolean){
   const user=useSession();
   const key=user?JSON.stringify(["camera-temperature",user.farmId,user.id,camera]):"";
-  const [source,setSource]=useState(""),[open,setOpen]=useState(false),[rows,setRows]=useState<Reading[]>([]),[failed,setFailed]=useState(false);
-  useEffect(()=>{try{setSource(key?localStorage.getItem(key)??"":"");}catch{setSource("");}},[key]);
+  const [source,setSource]=useState(""),[open,setOpen]=useState(false),[rows,setRows]=useState<Reading[]>([]),[failed,setFailed]=useState(false),[loading,setLoading]=useState(false),[saveError,setSaveError]=useState(false);
+  useEffect(()=>{setRows([]);setFailed(false);setSaveError(false);try{setSource(key?localStorage.getItem(key)??"":"");}catch{setSource("");}},[key]);
   useEffect(()=>{
     if(!key || (!open && !source.startsWith("sensor:")))return;
     const controller=new AbortController();
-    async function load(){try {
+    async function load(){setLoading(true);try {
       const r=await fetch("/api/camera-temperatures",{signal:controller.signal,cache:"no-store"});
       if(!r.ok)throw Error();
       const data:Reading[]=await r.json();if(!controller.signal.aborted){setRows(data);setFailed(false);}
-    }catch{if(!controller.signal.aborted)setFailed(true);}}
+    }catch{if(!controller.signal.aborted)setFailed(true);}finally{if(!controller.signal.aborted)setLoading(false);}}
     void load();const timer=setInterval(load,60000);
     return ()=>{clearInterval(timer);controller.abort();};
   },[key,source,open]);
@@ -26,10 +26,13 @@ export function useCameraTemperature(camera:string,temperatureF:number|string|nu
     {Number.isFinite(value)?value.toFixed(1)+" °C"+(stale||failed&&source!=="blink"?" · last read":""):"Temp —"}
   </span>;
   const settings=<details className="camera-temp-settings" onToggle={e=>setOpen(e.currentTarget.open)}><summary>Temperature overlay</summary>
-    <label>Reading for {camera}<select value={source} onChange={e=>{const next=e.target.value;setSource(next);try{if(key)localStorage.setItem(key,next);}catch{}}}>
+    <label>Reading for {camera}<select value={source} onChange={e=>{const next=e.target.value;try{if(!key)throw Error();localStorage.setItem(key,next);setSource(next);setSaveError(false);}catch{setSaveError(true);}}}>
     <option value="">Off</option>{blink && <option value="blink">Blink camera temperature</option>}
     {source.startsWith("sensor:")&&!selected && <option value={source}>{source.slice(7)} · unavailable</option>}
     {rows.map(r=><option key={r.sensor} value={"sensor:"+r.sensor}>{r.sensor}</option>)}</select></label>
+    {saveError && <small role="alert">Could not save the overlay preference on this device.</small>}
+    {loading && <small role="status">Checking farm readings…</small>}
+    {!loading && !failed && !rows.length && !blink && <small>No thermometer readings available. Configure a sensor in Settings.</small>}
     {failed && <small>Farm thermometer readings could not be refreshed.</small>}</details>;
   return {badge,settings};
 }

@@ -61,7 +61,7 @@ function ManageCameras({ cameras, onChange, provider }: { provider: string; came
         setTest(c.name+" returned a picture.");
       }catch{setTest(c.name+" did not return a picture. Check the address and camera login.");}finally{setBusy(false);}}}>Test connection</button>
       <button className="button" disabled={busy} onClick={() => call(`rtsp/cameras/${enc(c.name)}/record/${c.recording ? "stop" : "start"}`, { method: "POST" })}>{c.recording ? "Stop recording" : "Start recording"}</button>
-      <button className="button" disabled={busy} onClick={() => { if (confirm(`Remove ${c.name} and its recordings?`)) call(`rtsp/cameras/${enc(c.name)}`, { method: "DELETE" }); }}>Remove</button></div>)}
+      <button className="button button-danger" disabled={busy} onClick={() => { if (confirm(`Remove ${c.name} and its recordings?`)) call(`rtsp/cameras/${enc(c.name)}`, { method: "DELETE" }); }}>Remove</button></div>)}
     <form onSubmit={add}>
       <label>Camera name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Brooder house" maxLength={40} /></label>
       <label>Camera username (if required)<input autoComplete="off" value={login} onChange={e=>setLogin(e.target.value)}/></label>

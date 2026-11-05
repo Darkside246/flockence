@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CameraSetup, type Camera, type CameraStatus as Status } from "@/components/camera-setup";
+import { type Camera, type CameraStatus as Status } from "@/components/camera-setup";
 import Link from "next/link";
 import { api, enc, json } from "@/lib/camera-client";
 import { LiveView } from "@/components/camera-live-view";
@@ -78,7 +78,7 @@ function Recordings({ cameras }: { cameras: Camera[] }) {
     {playing && <div style={{ marginBottom: 16 }}>
       <video src={playing.source === "blink" ? api(`media/clip?path=${enc(playing.media)}`) : api(playing.media)} controls autoPlay playsInline style={{ width: "100%", maxHeight: 520, background: "#000" }} />
       <p>{playing.camera} · {new Date(playing.createdAt).toLocaleString()}{playing.source === "import" ? " · imported" : ""}</p>
-      {playing.source === "import" && <button className="button" onClick={() => void removeImported(playing)}>Remove this imported clip</button>}</div>}
+      {playing.source === "import" && <button className="button button-danger" onClick={() => void removeImported(playing)}>Remove this imported clip</button>}</div>}
     <div className="grid2">{clips?.map((c) => <button key={c.id} className="button" onClick={() => setPlaying(c)} style={{ textAlign: "left" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {c.thumbnail ? <img src={api(`media/thumb?path=${enc(c.thumbnail)}`)} alt="" style={{ width: "100%" }} loading="lazy" /> : <div aria-hidden="true" style={{ aspectRatio: "16/9", background: "#000", opacity: 0.6 }} />}
@@ -100,7 +100,7 @@ export default function CamerasPage() {
     <Link className="button" href="/">← Back to dashboard</Link>
     {error && <div className="card" role="alert"><p>{error}</p><button className="button" onClick={load}>Retry camera connection</button></div>}
       {status?.storage?.low && <p role="alert">Camera drive has {(status.storage.freeBytes / 2**30).toFixed(1)} GiB free. {status.storage.critical ? "Recording and live capture are paused until space is available." : "Free space before recording stops at 2 GiB."}</p>}
-      <CameraSetup status={status} cameras={cameras} onChange={load}/>
+      <Link className="button" href="/settings#camera-settings">Camera settings</Link>
     {status && <>
       {cameras.length === 0 && <>
         <div className="card"><p>No cameras are connected yet. Connect your Blink account or add a network camera in Farm camera settings, or import clips you downloaded from the Blink app.</p></div>

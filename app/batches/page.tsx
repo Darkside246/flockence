@@ -1,5 +1,6 @@
 "use client";
 import { useEffect,useState } from "react";
+import { useSession } from "@/components/auth-gate";
 import { Nav } from "@/components/nav";
 
 type Batch={id:string;name:string;startDate:string;liveBirdCount?:number;productionType?:string|null;layerStage?:string|null;species?:string;breed?:string|null;strain?:string|null;sex?:string|null;hatchery?:string|null;sourceLot?:string|null;placementQuality?:string|null;hatchDate?:string|null;purchaseDate?:string|null;expectedSlaughter?:string|null;targetSlaughterAgeDays:number;slaughterDecisionMode:string;targetLiveWeightKg?:number|null;status:string;initialChicks:number;chickCostMinor:number;mortalityEvents:{quantity:number}[];birdCounts?:{liveCount:number}[]};
@@ -7,8 +8,9 @@ type Batch={id:string;name:string;startDate:string;liveBirdCount?:number;product
 async function readJson(r:Response){const t=await r.text();if(!r.ok)throw new Error(t||"Request failed.");return t?JSON.parse(t):null}
 
 export default function Batches(){
+ const session = useSession();
  const [batches,setBatches]=useState<Batch[]>([]); const [error,setError]=useState("");
- const [form,setForm]=useState({name:"",productionType:"BROILER",layerStage:"CHICK",species:"CHICKEN",breed:"",strain:"",sex:"MIXED",hatchery:"",sourceLot:"",placementQuality:"GOOD",placementNotes:"",hatchDate:"",purchaseDate:"",initialChicks:"",chickCost:"290",dealer:"",newDealer:"",targetAge:"42",mode:"AGE_OR_WEIGHT",targetWeight:""});
+ const [form,setForm]=useState({name:"",productionType:session?.operation === "layers" ? "LAYER" : "BROILER",layerStage:"CHICK",species:"CHICKEN",breed:"",strain:"",sex:"MIXED",hatchery:"",sourceLot:"",placementQuality:"GOOD",placementNotes:"",hatchDate:"",purchaseDate:"",initialChicks:"",chickCost:"290",dealer:"",newDealer:"",targetAge:"42",mode:"AGE_OR_WEIGHT",targetWeight:""});
  // Chick prices (owner, 2026-11-02): the usual price, or the price last paid to the chosen dealer; always editable.
  type ChickPrices={defaultPriceMinor:number;dealers:{id:string;name:string;lastPriceMinor:number|null;lastBought:string|null}[]};
  const [prices,setPrices]=useState<ChickPrices>({defaultPriceMinor:290,dealers:[]});

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "./auth-gate";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -19,8 +20,9 @@ const num = (n: number | null | undefined, digits = 0) => (n == null ? "—" : n
 
 /** Separate broiler and layer summaries. Every figure is recorded data; missing values show a dash and a reason. */
 export function ProductionPanels({ data, flocks, lifecycle }: { data: DashboardNumbers; flocks: RoundFlock[]; lifecycle: LifecycleRow[] }) {
+  const operation = useSession()?.operation;
   const [layer, setLayer] = useState<LayerPerformance | null>(null);
-  useEffect(() => { fetch("/api/layers/performance").then((r) => (r.ok ? r.json() : null)).then(setLayer).catch(() => setLayer(null)); }, []);
+  useEffect(() => { if (operation === "broilers") return; fetch("/api/layers/performance").then((r) => (r.ok ? r.json() : null)).then(setLayer).catch(() => setLayer(null)); }, [operation]);
 
   const broilerFlocks = flocks.filter((f) => !isLayer(f));
   const broilerChecked = broilerFlocks.filter((f) => f.checkedToday);
@@ -35,7 +37,7 @@ export function ProductionPanels({ data, flocks, lifecycle }: { data: DashboardN
   const s = layer?.summary;
 
   return <div className="cx-prod">
-    <div className="card cx-prod-card">
+    {operation !== "layers" && <div className="card cx-prod-card">
       <div className="section-head"><div><div className="hero-kicker">Broiler production</div><h3>Meat flocks</h3></div><Link className="button" href="/batches">Flocks →</Link></div>
       {!hasBroilers && <div className="cx-empty"><strong>No active broiler flocks</strong>Start a batch to see growth, feed and harvest readiness here.</div>}
       <div className="cx-prod-stats">
@@ -46,9 +48,9 @@ export function ProductionPanels({ data, flocks, lifecycle }: { data: DashboardN
         <Stat label="Harvest ready" value={hasBroilers ? String(ready) : "—"} foot={hasBroilers ? "Flock(s) at target weight" : "No flocks"} />
         <Stat label="Withdrawal holds" value={hasBroilers ? String(holds) : "—"} foot={hasBroilers ? (holds ? "Not saleable yet" : "None active") : "No flocks"} />
       </div>
-    </div>
+    </div>}
 
-    <div className="card cx-prod-card">
+    {operation !== "broilers" && <div className="card cx-prod-card">
       <div className="section-head"><div><div className="hero-kicker">Layer production</div><h3>Egg flocks</h3></div><Link className="button" href="/layers">Eggs →</Link></div>
       {!hasLayers && <div className="cx-empty"><strong>No active layer flocks</strong>Add a layer flock and record daily collections to see egg production here.</div>}
       <div className="cx-prod-stats">
@@ -59,6 +61,6 @@ export function ProductionPanels({ data, flocks, lifecycle }: { data: DashboardN
         <Stat label="Saleable eggs" value={s && s.saleableEggsOnCompleteDays > 0 ? num(s.saleableEggsOnCompleteDays) : "—"} foot="After withdrawal and grading" />
         <Stat label="Feed / dozen" value={s?.feedKgPerDozenSaleableEggs == null ? "—" : `${s.feedKgPerDozenSaleableEggs.toFixed(2)} kg`} foot="Recorded feed per saleable dozen" />
       </div>
-    </div>
+    </div>}
   </div>;
 }

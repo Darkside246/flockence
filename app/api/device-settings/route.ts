@@ -6,7 +6,7 @@ import { configuredSensors } from "@/lib/govee.mjs";
 
 type Sensor = { device:string; sku:string; name:string; unit:"C"|"F" };
 type Equipment = {device:string;sku:string;label:string};
-type Account = { equipment?:Equipment[]; credential:string; sensors:Sensor[] };
+type Account = { monitoring?:boolean; equipment?:Equipment[]; credential:string; sensors:Sensor[] };
 const reply = (data:unknown, status=200) => NextResponse.json(data,{status,headers:{"Cache-Control":"no-store"}});
 async function handle(request:Request) {
   const session = await currentUserOrRoleResponse(request, ["OWNER"]);
@@ -16,7 +16,7 @@ async function handle(request:Request) {
   try {
     const record = await prisma.setting.findUnique({where});
     const account:Account|null = record ? JSON.parse(record.value) : null;
-    if (request.method === "GET") return reply({connected:!!account,equipment:account?.equipment ?? [],sensors:account?.sensors ?? []});
+    if (request.method === "GET") return reply({connected:!!account,monitoring:!!account && account.monitoring !== false,equipment:account?.equipment ?? [],sensors:account?.sensors ?? []});
     const body = await request.json();
     if (body.action === "disconnect") {
       await prisma.setting.deleteMany({where:{farmId,key:accountKey}});
@@ -25,6 +25,13 @@ async function handle(request:Request) {
     if (body.action === "connect" && (typeof body.key !== "string" || !body.key.trim() || body.key.length > 512)) return reply({error:"Enter a valid Govee API key."},400);
     if (body.action !== "connect" && !account) return reply({error:"Connect Govee first."},400);
     const key = body.action === "connect" ? body.key.trim() : openKey(account!.credential,farmId);
+    if (body.action === "monitoring") {
+      if (!record || !account || !account.sensors.length || typeof body.enabled !== "boolean") return reply({error:"Save a temperature sensor first."},400);
+      const value = JSON.stringify({...account, monitoring:body.enabled});
+      const updated = await prisma.setting.updateMany({where:{farmId,key:accountKey,value:record.value},data:{value}});
+      if (!updated.count) return reply({error:"Settings changed. Reload and try again."},409);
+      return reply({monitoring:body.enabled});
+    }
     if (body.action === "read") {
       const sensor = account!.sensors.find(s=>s.device===body.device);
       if (!sensor) return reply({error:"Select a saved sensor."},400);
@@ -55,13 +62,13 @@ async function handle(request:Request) {
       sensors = [...sensors.filter(s=>s.device!==device.device),{device:device.device,sku:device.sku,name:body.name.trim(),unit:body.unit}];
       try { configuredSensors(JSON.stringify(sensors)); } catch { return reply({error:"Use a unique sensor name of 1–40 letters, numbers, spaces, periods, underscores or dashes and select its unit."},400); }
     } else return reply({error:"Unknown action."},400);
-    const value = JSON.stringify({credential:sealKey(key,farmId),sensors,equipment});
+    const value = JSON.stringify({monitoring:account?.monitoring ?? true,credential:sealKey(key,farmId),sensors,equipment});
     // Refuse stale settings when another owner changes or disconnects this account.
     if (record) {
       const updated = await prisma.setting.updateMany({where:{farmId,key:accountKey,value:record.value},data:{value}});
       if (!updated.count) return reply({error:"Settings changed. Reload and try again."},409);
     } else await prisma.setting.create({data:{farmId,key:accountKey,value}});
-    return reply({connected:true,sensors,devices,equipment});
+    return reply({connected:true,monitoring:account?.monitoring ?? true,sensors,devices,equipment});
   } catch (error) {
     if(error instanceof Error && error.message==="Govee HTTP 401")return reply({error:"Govee rejected this key. Paste the latest developer API key issued in Govee Home → Settings → Apply for API Key. Generating a new key disables earlier keys on the account."},400);
     const detail = error instanceof Error && /^Govee HTTP \d{3}$/.test(error.message) ? error.message : "Device settings request failed";

@@ -3,11 +3,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
+import type { FarmOperation } from "@/lib/farm-operation";
+
 const PUBLIC_PATHS = new Set(["/login", "/signup", "/forgot-password", "/reset-password"]);
 
-export type SessionUser = { id: string; farmId: string; name: string; email: string; role: "OWNER" | "MANAGER" | "WORKER" | "READ_ONLY" };
-const LOCAL_DEV_BYPASS = process.env.NODE_ENV === "development";
-const LOCAL_DEV_USER: SessionUser = { id: "local-development-owner", farmId: "default-farm", name: "Local Development Owner", email: "dev@flockence.local", role: "OWNER" };
+export type SessionUser = { operation?: FarmOperation | null; id: string; farmId: string; name: string; email: string; role: "OWNER" | "MANAGER" | "WORKER" | "READ_ONLY" };
 const SessionContext = createContext<SessionUser | null>(null);
 export function useSession() { return useContext(SessionContext); }
 
@@ -19,13 +19,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const isPublicPath = PUBLIC_PATHS.has(pathname);
 
   useEffect(() => {
-    if (LOCAL_DEV_BYPASS) {
-      setUser(LOCAL_DEV_USER);
-      setState("ready");
-      if (isPublicPath) router.replace("/");
-      return;
-    }
-
     if (isPublicPath) {
       setUser(null);
       setState("ready");
@@ -57,11 +50,6 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
     return () => { active = false; };
   }, [isPublicPath, pathname, router]);
-
-  if (LOCAL_DEV_BYPASS) {
-    if (isPublicPath) return null;
-    return <SessionContext.Provider value={LOCAL_DEV_USER}>{children}</SessionContext.Provider>;
-  }
 
   if (isPublicPath) return <>{children}</>;
   if (state === "ready") return <SessionContext.Provider value={user}>{children}</SessionContext.Provider>;

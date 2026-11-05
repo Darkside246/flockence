@@ -5,12 +5,16 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useSession } from "@/components/auth-gate";
 
+import { showDestination } from "@/lib/farm-operation";
+
 type NavItem = readonly [string, string, string];
 
 const groups: { label: string; items: NavItem[] }[] = [
-  { label: "Operate", items: [["Overview", "/", "home"], ["Flocks", "/batches", "flock"], ["Daily Rounds", "/operations", "operations"], ["Egg production", "/layers", "eggs"], ["Layer performance", "/layers/performance", "performance"], ["Pack eggs", "/layers/packing", "package"], ["House", "/house", "house"], ["Pens", "/pens", "pens"], ["Health", "/health", "health"]] },
-  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Production", "/planning", "production"]] },
-  { label: "Understand", items: [["Performance", "/performance", "performance"], ["Reports", "/reports", "reports"]] }
+  { label: "Dashboard", items: [["Farm overview","/","home"]] },
+  { label: "Flock management", items: [["Flocks","/batches","flock"],["Pens","/pens","pens"],["Health","/health","health"],["Traceability","/trace","trace"]] },
+  { label: "Production", items: [["Daily Rounds","/operations","operations"],["Egg production","/layers","eggs"],["Egg packing","/layers/packing","package"],["Inventory","/inventory","inventory"],["Production planning","/planning","production"],["Finances","/finances","money"]] },
+  { label: "Monitoring", items: [["House environment","/house","house"],["Cameras","/cameras","camera"]] },
+  { label: "Reports", items: [["Performance","/performance","performance"],["Layer performance","/layers/performance","eggs"],["Farm reports","/reports","reports"]] }
 ];
 const teamGroup = { label: "Manage", items: [["Team", "/team", "users"]] as NavItem[] };
 const settings: NavItem = ["Settings", "/settings", "settings"];
@@ -46,7 +50,7 @@ export function Nav() {
   const [query, setQuery] = useState("");
   const session = useSession();
   const canManage = session?.role === "OWNER" || session?.role === "MANAGER";
-  const visibleGroups = useMemo(() => canManage ? [...groups, teamGroup] : groups, [canManage]);
+  const visibleGroups = useMemo(() => (canManage ? [...groups, teamGroup] : groups).map(group => ({...group, items:group.items.filter(([,href])=>showDestination(href,session?.operation))})), [canManage,session?.operation]);
   const visibleItems = useMemo(() => visibleGroups.flatMap(group => group.items), [visibleGroups]);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
