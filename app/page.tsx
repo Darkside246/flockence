@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FarmOperationForm } from "@/components/farm-operation";
 import { useSession } from "@/components/auth-gate";
 import { showDestination } from "@/lib/farm-operation";
 import { PenEnvironment } from "@/components/pen-environment";
@@ -62,7 +61,6 @@ export default function Home(){
   return <div className="shell">
     <Nav/>
     <main className="main">
-      {!op && <FarmOperationForm/>}
       <DashboardHero chips={heroChips} actions={quick} />
 
       <section className="cx-kpis" aria-label="Key farm figures">

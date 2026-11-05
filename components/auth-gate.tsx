@@ -32,7 +32,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         if (response.ok) {
           const data = await response.json();
           if (active) {
-            setUser(data.user as SessionUser);
+            const signedInUser = data.user as SessionUser;
+            if (!signedInUser.operation && signedInUser.role === "OWNER" && pathname !== "/settings") {
+              router.replace("/settings#farm-operation");
+              return;
+            }
+            setUser(signedInUser);
             setState("ready");
           }
           return;
