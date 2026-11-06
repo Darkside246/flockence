@@ -1,0 +1,217 @@
+/* Flockence UI system. Loaded last, after the Cyber-Crystal files.
+   One place for: the shell (sidebar, breadcrumbs, page tabs), the four button variants, form controls and the page layout.
+   Colours are the existing Cyber-Crystal tokens; nothing here introduces a new palette. */
+
+html[data-theme] {
+  --ui-teal: var(--cx-teal, #35e0d0);
+  --ui-ice: var(--cx-ice, #69d9f5);
+  --ui-text: var(--cx-text, #edf8fc);
+  --ui-text-2: var(--cx-text-2, #a7bbc8);
+  --ui-text-3: var(--cx-text-3, #718b9c);
+  --ui-edge: var(--cx-edge, rgba(105, 217, 245, .20));
+  --ui-edge-hot: var(--cx-edge-hot, rgba(53, 224, 208, .55));
+  --ui-glass: rgba(11, 27, 43, .82);
+  --ui-glass-hover: rgba(53, 224, 208, .12);
+  --ui-danger: #ff526c;
+  --ui-focus: 0 0 0 3px rgba(53, 224, 208, .38);
+  --ui-control-h: 42px;
+  --ui-control-h-sm: 34px;
+  --ui-radius: 12px;
+  --ui-gap: 10px;
+  --ui-context-h: 54px;
+  --ui-tabs-h: 44px;
+}
+
+/* ───────────── Buttons: primary, secondary, tertiary, destructive ───────────── */
+html[data-theme] :is(.button, button.button, a.button, .primary, button.primary, .button-primary, .btn, .select-pill),
+html[data-theme] form button:not([type="button"]):not(.icon-button):not(.segmented button):not(.tab):not(.theme-option):not(.appearance-choice) {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  box-sizing: border-box; min-height: var(--ui-control-h); padding: 0 18px; margin: 0;
+  border-radius: var(--ui-radius); font: inherit; font-size: 13px; font-weight: 700; line-height: 1.2;
+  white-space: normal; text-align: center; text-decoration: none; cursor: pointer;
+  color: var(--ui-text) !important; -webkit-text-fill-color: currentColor;
+  background: var(--ui-glass) !important; border: 1px solid var(--ui-edge) !important; box-shadow: none;
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease, transform .08s ease;
+}
+html[data-theme] :is(.button, a.button, .select-pill):hover { background: var(--ui-glass-hover) !important; border-color: var(--ui-edge-hot) !important; transform: none; }
+
+/* Primary: the main action. Any plain submit button inside a form is the primary action of that form. */
+html[data-theme] :is(.button-primary, .primary, button.primary, .btn-primary, a.button-primary),
+html[data-theme] form button:not([type="button"]):not(.icon-button):not(.segmented button):not(.tab):not(.theme-option):not(.appearance-choice):not(.btn-danger):not(.btn-tertiary):not(.btn-secondary) {
+  color: #03121a !important; background: linear-gradient(135deg, var(--ui-teal), var(--ui-ice)) !important;
+  border-color: transparent !important; box-shadow: 0 6px 18px rgba(53, 224, 208, .22);
+}
+html[data-theme] :is(.button-primary, .primary, .btn-primary, a.button-primary):hover,
+html[data-theme] form button:not([type="button"]):not(.icon-button):not(.btn-danger):not(.btn-tertiary):not(.btn-secondary):hover {
+  filter: brightness(1.06); box-shadow: 0 8px 22px rgba(53, 224, 208, .3); transform: translateY(-1px);
+}
+
+/* Secondary: dark glass with a cyan edge (the default look of .button, repeated for clarity). */
+html[data-theme] :is(.btn-secondary, form button.btn-secondary) {
+  color: var(--ui-text) !important; background: var(--ui-glass) !important; border: 1px solid var(--ui-edge) !important; box-shadow: none;
+}
+
+/* Tertiary: text only. */
+html[data-theme] :is(.btn-tertiary, .link-button, form button.btn-tertiary) {
+  color: var(--ui-teal) !important; background: transparent !important; border-color: transparent !important; box-shadow: none;
+  min-height: var(--ui-control-h-sm); padding: 0 10px;
+}
+html[data-theme] :is(.btn-tertiary, .link-button):hover { background: rgba(53, 224, 208, .08) !important; border-color: transparent !important; }
+
+/* Destructive: unmistakably red. */
+html[data-theme] :is(.btn-danger, .danger, .button-danger, form button.btn-danger) {
+  color: #ffd9df !important; background: rgba(255, 82, 108, .14) !important; border: 1px solid rgba(255, 82, 108, .5) !important; box-shadow: none;
+}
+html[data-theme] :is(.btn-danger, .danger, .button-danger):hover { background: rgba(255, 82, 108, .26) !important; border-color: var(--ui-danger) !important; }
+
+/* Shared states and sizes. */
+html[data-theme] :is(.button, .primary, .button-primary, .btn, .select-pill, form button):focus-visible,
+html[data-theme] :is(input, select, textarea):focus-visible { outline: none; box-shadow: var(--ui-focus) !important; }
+html[data-theme] :is(.button, .primary, .button-primary, .btn, form button):active { transform: scale(.98); }
+html[data-theme] :is(.button, .primary, .button-primary, .btn, form button):disabled,
+html[data-theme] :is(.button, .primary, .button-primary, .btn)[aria-disabled="true"] { opacity: .45; cursor: not-allowed; transform: none; filter: none; box-shadow: none; }
+html[data-theme] .btn-sm { min-height: var(--ui-control-h-sm); padding: 0 12px; font-size: 12px; }
+html[data-theme] :is(.button, .primary, .button-primary, .btn) svg { width: 16px; height: 16px; flex: none; }
+
+/* Buttons never touch: a row of them wraps with a gap, and neighbours get breathing room even outside a flex row. */
+html[data-theme] .btn-row, html[data-theme] .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ui-gap); margin-top: 14px; }
+html[data-theme] :is(.button, .primary, .button-primary, .btn) + :is(.button, .primary, .button-primary, .btn, .notice),
+html[data-theme] form button + button { margin-inline-start: var(--ui-gap); }
+html[data-theme] form > button, html[data-theme] form > div > button { margin-block: 4px; }
+@media (max-width: 560px) {
+  html[data-theme] .form-actions > :is(.button, .primary, .button-primary, .btn, button) { flex: 1 1 100%; }
+  html[data-theme] form > button:not(.btn-tertiary) { width: 100%; }
+}
+
+/* ───────────── Form controls: one height, one look ───────────── */
+html[data-theme] :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), select) {
+  box-sizing: border-box; width: 100%; min-height: var(--ui-control-h); padding: 0 12px; border-radius: var(--ui-radius);
+  color: var(--ui-text) !important; background-color: rgba(8, 21, 34, .92) !important; border: 1px solid var(--ui-edge) !important;
+  font: inherit; font-size: 14px;
+}
+html[data-theme] textarea { box-sizing: border-box; width: 100%; min-height: 84px; padding: 10px 12px; border-radius: var(--ui-radius); color: var(--ui-text) !important; background-color: rgba(8, 21, 34, .92) !important; border: 1px solid var(--ui-edge) !important; font: inherit; font-size: 14px; }
+html[data-theme] select {
+  appearance: none; -webkit-appearance: none; padding-right: 38px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%2369d9f5' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center; background-size: 16px;
+}
+html[data-theme] select option, html[data-theme] select optgroup { background: #0b1b2b; color: var(--ui-text); }
+html[data-theme] :is(input, select, textarea):hover:not(:disabled) { border-color: var(--ui-edge-hot) !important; }
+html[data-theme] :is(input, select, textarea):focus { border-color: var(--ui-teal) !important; }
+html[data-theme] :is(input, select, textarea):disabled, html[data-theme] :is(input, select, textarea)[readonly] { opacity: .6; cursor: not-allowed; }
+html[data-theme] :is(input, select, textarea)::placeholder { color: var(--ui-text-3); }
+html[data-theme] input[type="checkbox"], html[data-theme] input[type="radio"] { accent-color: var(--ui-teal); width: 18px; height: 18px; min-height: 0; padding: 0; }
+html[data-theme] label { display: grid; gap: 6px; font-size: 12px; font-weight: 650; color: var(--ui-text-2); }
+html[data-theme] label:has(> input[type="checkbox"], > input[type="radio"]) { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+
+/* Segmented controls and tabs share one pill look. */
+html[data-theme] .segmented { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--ui-edge); border-radius: calc(var(--ui-radius) + 4px); background: rgba(8, 21, 34, .7); }
+html[data-theme] .segmented button { min-height: 36px; padding: 0 14px; border: 0 !important; border-radius: var(--ui-radius); background: transparent !important; color: var(--ui-text-2) !important; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+html[data-theme] .segmented button.selected { color: #03121a !important; background: linear-gradient(135deg, var(--ui-teal), var(--ui-ice)) !important; }
+
+/* ───────────── Shell: sidebar groups ───────────── */
+html[data-theme] .nav { overflow-y: auto; }
+html[data-theme] .nav::before, html[data-theme] .nav::after { display: none; content: none; }
+html[data-theme] .nav-groups { display: grid; gap: 2px; align-content: start; }
+html[data-theme] .nav-group { margin: 0; display: block; }
+html[data-theme] .nav-group-toggle {
+  display: flex; align-items: center; gap: 11px; width: 100%; min-height: 40px; padding: 0 11px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--ui-text-2); font: inherit; font-size: 12px; font-weight: 800; letter-spacing: .02em; cursor: pointer; text-align: left;
+}
+html[data-theme] .nav-group-toggle:hover { background: rgba(255, 255, 255, .05); color: var(--ui-text); }
+html[data-theme] .nav-group.open > .nav-group-toggle { color: var(--ui-text); }
+html[data-theme] .nav-group-name { flex: 1; }
+html[data-theme] .nav-chevron { width: 14px; height: 14px; transition: transform .16s ease; opacity: .7; }
+html[data-theme] .nav-group.open .nav-chevron { transform: rotate(180deg); }
+html[data-theme] .nav-group-items { display: grid; gap: 2px; margin: 2px 0 8px 17px; padding-left: 11px; border-left: 1px solid var(--ui-edge); }
+html[data-theme] .nav-group-items a { min-height: 36px; padding: 0 11px; font-size: 12.5px; border-radius: 9px; }
+html[data-theme] .nav-group-items a::before { display: none; }
+html[data-theme] .nav-group-items a.active {
+  color: #03121a; background: linear-gradient(135deg, var(--ui-teal), var(--ui-ice)); box-shadow: none; font-weight: 800;
+}
+html[data-theme] .nav-group-items a.active .nav-glyph { color: #03121a; }
+html[data-theme] .nav a::after { display: none; }
+
+/* ───────────── Shell: breadcrumbs, search, page tabs ───────────── */
+html[data-theme] .nav-command-trigger { display: none; }
+html[data-theme] .page-context {
+  position: fixed; z-index: 60; top: 0; left: calc(var(--sidebar-w) + 40px); right: 22px; padding: 10px 0 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 8px;
+  background: linear-gradient(180deg, rgba(5, 10, 18, .94) 70%, rgba(5, 10, 18, 0)); pointer-events: none;
+}
+html[data-theme] .page-context > * { pointer-events: auto; }
+html[data-theme] .mobile-nav-toggle { display: none; }
+html[data-theme] .breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; margin: 0; padding: 0; list-style: none; min-width: 0; font-size: 12px; color: var(--ui-text-3); }
+html[data-theme] .breadcrumbs li { display: inline-flex; align-items: center; }
+html[data-theme] .breadcrumbs li + li::before { content: "›"; margin: 0 8px; color: var(--ui-text-3); }
+html[data-theme] .breadcrumbs a { color: var(--ui-text-2); text-decoration: none; }
+html[data-theme] .breadcrumbs a:hover { color: var(--ui-teal); }
+html[data-theme] .breadcrumbs [aria-current="page"] { color: var(--ui-text); font-weight: 750; }
+html[data-theme] .context-search {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 10px 0 12px; border-radius: 10px; cursor: pointer;
+  background: rgba(10, 25, 42, .9); color: var(--ui-text-2); border: 1px solid var(--ui-edge); font: inherit; font-size: 12px;
+}
+html[data-theme] .context-search:hover { color: var(--ui-text); border-color: var(--ui-edge-hot); }
+html[data-theme] .context-search kbd { padding: 2px 6px; border-radius: 6px; border: 1px solid var(--ui-edge); font-size: 10px; color: var(--ui-text-3); font-family: inherit; }
+html[data-theme] .page-tabs {
+  grid-column: 1 / -1; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding-bottom: 8px; border-bottom: 1px solid var(--ui-edge);
+}
+html[data-theme] .page-tabs::-webkit-scrollbar { display: none; }
+html[data-theme] .page-tabs a {
+  flex: none; display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+  color: var(--ui-text-2); text-decoration: none; border: 1px solid transparent; white-space: nowrap;
+}
+html[data-theme] .page-tabs a:hover { color: var(--ui-text); background: rgba(255, 255, 255, .05); }
+html[data-theme] .page-tabs a.active { color: var(--ui-teal); border-color: var(--ui-edge-hot); background: rgba(53, 224, 208, .1); }
+/* make room for the fixed context bar above the page content */
+html[data-theme] .shell { padding-top: calc(var(--ui-context-h) + var(--ui-tabs-h) + 4px); }
+
+/* ───────────── Page layout standard ───────────── */
+html[data-theme] .page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px; margin: 0 0 18px; }
+html[data-theme] .page-head h1 { margin: 0; font-size: 26px; letter-spacing: -.02em; }
+html[data-theme] .page-head p { margin: 4px 0 0; color: var(--ui-text-2); font-size: 13px; max-width: 62ch; }
+html[data-theme] .page-head .btn-row { margin: 0; }
+html[data-theme] .section-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
+html[data-theme] .section-tabs :is(a, button) {
+  display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  color: var(--ui-text-2) !important; background: transparent !important; border: 1px solid var(--ui-edge) !important; text-decoration: none;
+}
+html[data-theme] .section-tabs :is(a, button):hover { color: var(--ui-text) !important; border-color: var(--ui-edge-hot) !important; }
+html[data-theme] .section-tabs :is(a, button)[aria-current="true"], html[data-theme] .section-tabs :is(a, button).active {
+  color: #03121a !important; background: linear-gradient(135deg, var(--ui-teal), var(--ui-ice)) !important; border-color: transparent !important;
+}
+html[data-theme] .section-tabs .tab-count { margin-left: 8px; padding: 1px 7px; border-radius: 999px; font-size: 11px; background: rgba(255, 255, 255, .12); }
+
+/* ───────────── Small screens ───────────── */
+@media (max-width: 980px) {
+  html[data-theme] .page-context { left: calc(var(--sidebar-w) + 26px); right: 14px; }
+}
+@media (max-width: 760px) {
+  html[data-theme] .page-context { left: 0; right: 0; padding: 8px 12px 0; grid-template-columns: auto minmax(0, 1fr) auto; }
+  html[data-theme] .mobile-nav-toggle {
+    display: inline-flex; align-items: center; justify-content: center; position: static; width: 40px; height: 40px; border-radius: 10px;
+    background: rgba(10, 25, 42, .9); color: var(--ui-text); border: 1px solid var(--ui-edge); cursor: pointer;
+  }
+  html[data-theme] .mobile-nav-toggle svg { width: 18px; height: 18px; }
+  html[data-theme] .context-search-text, html[data-theme] .context-search kbd { display: none; }
+  html[data-theme] .context-search { width: 40px; min-height: 40px; justify-content: center; padding: 0; }
+  html[data-theme] .page-tabs { padding-bottom: 6px; margin: 0 -12px; padding-inline: 12px; }
+  html[data-theme] .mobile-drawer { display: block; overflow-y: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] * { transition: none !important; }
+}
+
+/* The old floating search button needed 70px above each page banner; the context bar replaces it. */
+html[data-theme] .shell .topbar { margin-top: 6px !important; }
+
+/* Settings Centre rows */
+html[data-theme] .settings-links { display: grid; gap: 8px; }
+html[data-theme] .settings-link {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; border-radius: var(--ui-radius);
+  border: 1px solid var(--ui-edge); background: rgba(8, 21, 34, .6); color: var(--ui-text); text-decoration: none;
+}
+html[data-theme] a.settings-link:hover { border-color: var(--ui-edge-hot); background: var(--ui-glass-hover); }
+html[data-theme] .settings-link strong { display: block; font-size: 14px; }
+html[data-theme] .settings-link small { display: block; margin-top: 2px; color: var(--ui-text-2); font-size: 12px; }
+html[data-theme] .settings-link.static { cursor: default; }

@@ -58,7 +58,7 @@ export default function PerformancePage() {
     <main className="main">
       <section className="dashboard-head">
         <div><div className="hero-kicker">Production intelligence</div><h2>Know what is happening before it becomes a problem.</h2><p>Broilers and layers use different performance logic. Missing measurements stay visible instead of becoming invented estimates.</p></div>
-        <div className="header-actions"><a className="button" href="/operations">Daily round</a><a className="button button-primary" href="/reports">Reports</a></div>
+        <div className="header-actions"><a className="button" href="/daily-round">Daily round</a><a className="button button-primary" href="/reports">Reports</a></div>
       </section>
 
       {error && <section className="section card" role="alert"><strong>Performance data unavailable</strong><p>{error}</p></section>}
@@ -118,7 +118,7 @@ export default function PerformancePage() {
 
       <section className="section card">
         <div className="section-head"><div><div className="hero-kicker">Operator alerts</div><h3>What deserves attention?</h3><p>These are prompts for investigation, not automatic diagnoses or forced decisions.</p></div><span className="badge">{alerts.length} OPEN</span></div>
-        {alerts.length ? <div className="list">{alerts.slice(0, 20).map((item, index) => <div className="row" key={item.flock + "-" + item.signal + "-" + index}><div><strong>{item.flock}</strong><span>{item.type} · {signalLabel(item.signal)}</span></div><a className="button" href={item.type === "Layer" ? "/layers" : "/operations"}>Open</a></div>)}</div> : <div className="empty"><strong>No calculated warnings.</strong><span>Continue the normal daily round and keep measurements current.</span></div>}
+        {alerts.length ? <div className="list">{alerts.slice(0, 20).map((item, index) => <div className="row" key={item.flock + "-" + item.signal + "-" + index}><div><strong>{item.flock}</strong><span>{item.type} · {signalLabel(item.signal)}</span></div><a className="button" href={item.type === "Layer" ? "/layers" : "/daily-round"}>Open</a></div>)}</div> : <div className="empty"><strong>No calculated warnings.</strong><span>Continue the normal daily round and keep measurements current.</span></div>}
       </section>
 
       <section className="section card"><h3>Data quality rule</h3><p>{data?.dataQuality.note ?? "Performance uses recorded data only."}</p></section>

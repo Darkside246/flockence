@@ -14,6 +14,7 @@ import { AppearanceControl } from "@/components/appearance-control";
 import { AuthGate } from "@/components/auth-gate";
 import { BannerPhoto } from "@/components/banner-photo";
 import "./crystal-photos.css";
+import "./ui-system.css";
 
 export const metadata: Metadata = {
   title: "Flockence | Intelligent Poultry Management",

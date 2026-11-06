@@ -21,7 +21,7 @@ function Icon({name}:{name:string}){const paths:Record<string,string>={bell:"M6 
 
 const quick=[
   ["plus","New batch","Start a production flock","/batches#new"],
-  ["bird","Record mortality","Log birds lost today","/operations"],
+  ["bird","Record mortality","Log birds lost today","/daily-round"],
   ["feed","Add feed","Purchase or usage entry","/finances#feed"],
   ["money","Record sale","Chicken, parts or customer sale","/finances#sale"],
   ["eggs","Record eggs","Enter and grade today’s layer collection","/layers"],
@@ -71,7 +71,7 @@ export default function Home(){
       <section className="cx-section"><CameraWall onStatus={setCamStatus}/></section>
 
       <section className="cx-section">
-        <div className="cx-section-head"><div><div className="hero-kicker">Environment</div><h3>Today&apos;s house conditions</h3><p>{dailyRound?`Recorded in today's flock checks · ${dailyRound.coverage.recordedFlocks} of ${dailyRound.coverage.activeFlocks} flocks checked`:"Loading today's recorded readings."}</p></div><a className="button" href="/operations">Daily check →</a></div>
+        <div className="cx-section-head"><div><div className="hero-kicker">Environment</div><h3>Today&apos;s house conditions</h3><p>{dailyRound?`Recorded in today's flock checks · ${dailyRound.coverage.recordedFlocks} of ${dailyRound.coverage.activeFlocks} flocks checked`:"Loading today's recorded readings."}</p></div><a className="button" href="/daily-round">Daily check →</a></div>
         <EnvWidgets temperatureC={envTemp} humidityPercent={envHum} ammoniaPpm={envAmmonia} feedKg={dailyRound&&dailyRound.coverage.recordedFlocks>0?dailyRound.totals.feedKg:null} waterLiters={dailyRound&&dailyRound.coverage.recordedFlocks>0?dailyRound.totals.waterLiters:null} waterToFeedRatio={dailyRound?.totals.waterToFeedRatio??null} flocksReporting={dailyRound?.coverage.recordedFlocks??0} flocksActive={dailyRound?.coverage.activeFlocks??0} />
       </section>
 
@@ -93,7 +93,7 @@ export default function Home(){
       <section className="section card">
         <div className="section-head">
           <div><div className="hero-kicker">Daily farm round</div><h3>What has been recorded today?</h3><p>{dailyRound ? dailyRound.date + " · one pass across the active flock records" : "Loading today's farm-round data."}</p></div>
-          <a className="select-pill" href="/operations">Open daily check →</a>
+          <a className="select-pill" href="/daily-round">Open daily check →</a>
         </div>
         {!dailyRound ? <div className="empty"><strong>Daily round data is not available yet.</strong><span>Open Operations to record the first flock check.</span></div> :
         <>
@@ -125,10 +125,10 @@ export default function Home(){
         }
       </section>
 
-      <section className="section card"><div className="section-head"><div><div className="hero-kicker">Quick action hub</div><h3>Do the next farm task in a few taps</h3><p>Large targets for fast use in the yard, shed or office.</p></div><a className="select-pill" href="/operations">Open operations →</a></div><div className="quick-hub">{quick.map(([icon,title,desc,href])=><a className="quick-action" href={href} key={title}><span className="quick-icon"><Icon name={icon}/></span><span><strong>{title}</strong><span>{desc}</span></span></a>)}</div></section>
+      <section className="section card"><div className="section-head"><div><div className="hero-kicker">Quick action hub</div><h3>Do the next farm task in a few taps</h3><p>Large targets for fast use in the yard, shed or office.</p></div><a className="select-pill" href="/daily-round">Open operations →</a></div><div className="quick-hub">{quick.map(([icon,title,desc,href])=><a className="quick-action" href={href} key={title}><span className="quick-icon"><Icon name={icon}/></span><span><strong>{title}</strong><span>{desc}</span></span></a>)}</div></section>
 
       <section className="section card"><div className="section-head"><div><div className="hero-kicker">Procurement</div><h3>Know when to buy feed</h3><p>Estimate from recorded feed purchases, recent usage and active flock demand.</p></div><span className="badge">{procurement?.feed.reorderRecommended?"REORDER":"OK"}</span></div>{procurement?<div className="stats"><div><span>Estimated feed on hand</span><strong>{procurement.feed.onHandEstimateKg.toFixed(1)} kg</strong></div><div><span>7-day average use</span><strong>{procurement.feed.averageDailyUsageKg.toFixed(1)} kg/day</strong></div><div><span>Projected need</span><strong>{procurement.feed.projectedNeedToAgeTargetKg.toFixed(1)} kg</strong></div><div><span>Suggested reorder</span><strong>{procurement.feed.reorderRecommendationKg.toFixed(1)} kg</strong></div></div>:<div className="empty"><strong>Procurement data not ready.</strong><span>Record feed purchases and usage to activate the recommendation.</span></div>}</section>
-      <section className="section grid2"><TaskPanel batches={lifecycle.map(row=>({id:row.batch.id,name:row.batch.name}))}/><div className="card"><div className="section-head"><div><div className="hero-kicker">Today&apos;s priority</div><h3>Use the signals, not the spreadsheets</h3><p>Flockence now brings lifecycle, house checks, withdrawal, weather, procurement, stock and tasks together on the same operating surface.</p></div></div><div className="stats"><div><span>Lifecycle</span><strong>{lifecycle.length} active</strong></div><div><span>Weather</span><strong>{weather?.configured&&weather.weather?weather.weather.current.heatRisk:"not set"}</strong></div><div><span>Feed</span><strong>{procurement?.feed.reorderRecommended?"Reorder":"OK"}</strong></div><div><span>Next action</span><strong>Open Operations</strong></div></div><a className="button button-primary" href="/operations" style={{marginTop:14,display:"inline-block"}}>Open daily operations</a></div></section>
+      <section className="section grid2"><TaskPanel batches={lifecycle.map(row=>({id:row.batch.id,name:row.batch.name}))}/><div className="card"><div className="section-head"><div><div className="hero-kicker">Today&apos;s priority</div><h3>Use the signals, not the spreadsheets</h3><p>Flockence now brings lifecycle, house checks, withdrawal, weather, procurement, stock and tasks together on the same operating surface.</p></div></div><div className="stats"><div><span>Lifecycle</span><strong>{lifecycle.length} active</strong></div><div><span>Weather</span><strong>{weather?.configured&&weather.weather?weather.weather.current.heatRisk:"not set"}</strong></div><div><span>Feed</span><strong>{procurement?.feed.reorderRecommended?"Reorder":"OK"}</strong></div><div><span>Next action</span><strong>Open Operations</strong></div></div><a className="button button-primary" href="/daily-round" style={{marginTop:14,display:"inline-block"}}>Open daily operations</a></div></section>
       <section className="section card"><div className="section-head"><div><div className="hero-kicker">Operating loop</div><h3>Two production paths, one farm record</h3><p>Broiler and layer workflows share flock, feed, health, stock and financial records without sharing the wrong production milestones.</p></div></div><div className="grid2"><div><strong>Broilers</strong><div className="flow"><span>CHICKS</span><b>→</b><span>GROWTH</span><b>→</b><span>HARVEST</span><b>→</b><span>PROCESSING</span><b>→</b><span>MEAT STOCK</span><b>→</b><span>SALES</span></div></div><div><strong>Layers</strong><div className="flow"><span>CHICKS</span><b>→</b><span>PULLETS</span><b>→</b><span>LAYING</span><b>→</b><span>COLLECTION</span><b>→</b><span>GRADING</span><b>→</b><span>PACKING</span><b>→</b><span>CARTON LOTS</span><b>→</b><span>SALES</span></div></div></div></section>
     </main>
   </div>

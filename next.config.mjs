@@ -5,6 +5,10 @@ const nextConfig = {
     // for its proxy layer and cuts them off at 10 MB by default, so allow clips up to the service limit.
     proxyClientMaxBodySize: "600mb",
   },
+  async redirects() {
+    // Pages that moved when the app was reorganised (see lib/nav-config.ts). Old links and bookmarks keep working.
+    return [{ source: "/operations", destination: "/daily-round", permanent: true }];
+  },
 };
 
 export default nextConfig;
