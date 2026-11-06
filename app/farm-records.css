@@ -81,3 +81,18 @@ dialog.ui-dialog .check-line input { width: 18px; height: 18px; min-height: 0; f
 }
 .button.button-danger:hover:enabled { filter: brightness(1.08); }
 .button:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Live bird count (the bird ledger), flock insights and the pre-slaughter check. */
+.span-2 { grid-column: 1 / -1; }
+.live-birds, .preflight { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-default); background: var(--bg-surface-secondary); }
+.live-birds-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.live-birds-number { font-size: 26px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text-heading, var(--text-primary)); }
+.live-birds-head > span { font-size: 14px; color: var(--text-secondary); }
+.live-birds-head > .button { margin-left: auto; }
+.live-birds-working { margin-top: 10px; display: grid; gap: 8px; }
+.live-birds-working p, .flock-insights p { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.preflight ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 1.45; }
+.preflight-warn { color: var(--status-warning); font-weight: 650; }
+.flock-insights { display: grid; gap: 8px; }
+.insight-alerts { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--status-warning); }
+.insight-alerts strong { color: inherit; }

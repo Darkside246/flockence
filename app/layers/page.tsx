@@ -1,4 +1,5 @@
 "use client";
+import { compareToBaseline } from "@/lib/farm-engine.mjs";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Nav } from "@/components/nav";
@@ -167,7 +168,12 @@ export default function LayersPage() {
     }
 
     const batch = layerBatches.find((row) => row.id === batchId);
-    setLiveHensOnDate(date === localToday() && batch ? String(liveHens(batch)) : "");
+    setLiveHensOnDate("");
+    if (batch) {
+      fetch("/api/flock-ledger?" + new URLSearchParams({ batchId, date }), { cache: "no-store" })
+        .then((r) => r.json()).then((d) => { if (d?.ok && Number.isSafeInteger(d.live)) setLiveHensOnDate((current) => current === "" ? String(d.live) : current); })
+        .catch(() => { if (date === localToday()) setLiveHensOnDate(String(liveHens(batch))); });
+    }
     setSaleableEggs("0"); setDirtyEggs("0"); setCrackedEggs("0");
     setFloorEggs("0"); setRejectedEggs("0"); setAverageEggWeightG(""); setNotes("");
     setGrades({ SMALL: "0", MEDIUM: "0", LARGE: "0", EXTRA_LARGE: "0", JUMBO: "0", UNGRADED: "0" });
@@ -226,6 +232,7 @@ export default function LayersPage() {
     };
   });
   const trendMaxEggs = Math.max(1, ...trendDays.map((day) => day.eggs));
+  const baseline = henDayRate == null ? null : compareToBaseline(henDayRate, trendDays.filter((day) => day.date < date && day.henDayRate != null).map((day) => day.henDayRate as number));
   const trendTotalEggs = trendDays.reduce((sum, day) => sum + day.eggs, 0);
   const stageOnCollectionDate = selectedBatch ? layerStageOnDate(selectedBatch, date) : null;
   const canSave = Boolean(batchId) && stageOnCollectionDate === "LAYING" && !saving && allCountsValid && gradeTotal === number(saleableEggs);
@@ -352,7 +359,7 @@ export default function LayersPage() {
         <div className="card metric-card"><div className="metric-label">Active layer flocks</div><div className="metric-value">{activeLayerBatches.length}</div><div className="metric-foot">flocks currently laying or being managed</div></div>
         <div className="card metric-card"><div className="metric-label">Live layer birds</div><div className="metric-value">{totalHens.toLocaleString()}</div><div className="metric-foot">latest recorded count across active layer flocks</div></div>
         <div className="card metric-card"><div className="metric-label">Eggs collected</div><div className="metric-value">{selectedDayEggs.toLocaleString()}</div><div className="metric-foot">{date} · all layer flocks</div></div>
-        <div className="card metric-card"><div className="metric-label">Hen-day production</div><div className="metric-value">{henDayRate == null ? "—" : henDayRate.toFixed(1) + "%"}</div><div className="metric-foot">{henDayRate == null ? (layingHens === 0 ? "No flocks at laying stage" : `Collection missing for ${missingLayerCollections} laying flock(s)`) : "total eggs divided by live hens in laying-stage flocks"}</div></div>
+        <div className="card metric-card"><div className="metric-label">Hen-day production</div><div className="metric-value">{henDayRate == null ? "—" : henDayRate.toFixed(1) + "%"}</div><div className="metric-foot">{henDayRate == null ? (layingHens === 0 ? "No flocks at laying stage" : `Collection missing for ${missingLayerCollections} laying flock(s)`) : baseline?.ok ? `${baseline.direction === "level" ? "Level with" : Math.abs(baseline.difference!).toFixed(1) + " points " + baseline.direction} the flock's usual ${baseline.baseline}% (median of ${baseline.days} days)` : "total eggs divided by live hens in laying-stage flocks"}</div></div>
         <div className="card metric-card"><div className="metric-label">Saleable rate</div><div className="metric-value">{selectedDaySaleableRate == null ? "—" : selectedDaySaleableRate.toFixed(1) + "%"}</div><div className="metric-foot">{selectedDaySaleable.toLocaleString()} saleable of {selectedDayEggs.toLocaleString()} eggs</div></div>
         <div className="card metric-card"><div className="metric-label">Non-saleable eggs</div><div className="metric-value">{selectedDayRows.length && missingLayerCollections === 0 ? selectedDayNonSaleable.toLocaleString() : "—"}</div><div className="metric-foot">{missingLayerCollections > 0 ? `${missingLayerCollections} laying flock collection(s) missing` : selectedDayWithdrawalCondemned > 0 ? `${selectedDayWithdrawalCondemned.toLocaleString()} condemned under withdrawal` : "Dirty, cracked, floor and rejected"}</div></div>
       </section>
@@ -419,7 +426,7 @@ export default function LayersPage() {
           <form className="form" onSubmit={submit}>
           <div className="grid2">
             <label>Collection date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required/></label>
-            <label>Live hens on this date<input type="number" min="1" step="1" value={liveHensOnDate} onChange={(event) => setLiveHensOnDate(event.target.value)} required/><span className="muted">{date === localToday() ? "Today's latest flock count is prefilled. Confirm it before saving." : "Historical dates start blank so today's bird count is not accidentally used for an earlier date. Enter the actual live hens for that day."}</span></label>
+            <label>Live hens on this date<input type="number" min="1" step="1" value={liveHensOnDate} onChange={(event) => setLiveHensOnDate(event.target.value)} required/><span className="muted">Worked out from the flock's records for this date (birds placed and added, less deaths, culls and birds sent). Change it only if you counted the hens.</span></label>
           </div>
           <div className="section-head"><div><h3>Egg outcome</h3><p>Use exclusive categories so every egg is counted once.</p></div><strong>{currentTotal.toLocaleString()} total eggs</strong></div>
           <div className="grid">

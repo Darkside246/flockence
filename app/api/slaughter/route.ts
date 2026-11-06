@@ -4,7 +4,8 @@ import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { prisma } from "@/lib/prisma";
 import { assertHarvestAllowed } from "@/lib/withdrawal";
 import { lockFlockOperations } from "@/lib/poultry-lock";
-import { calculateLiveBirdsAtDate, isCalendarDateNotFuture, isWithinInitialFlockCount, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
+import { isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
+import { liveBirdsOn, loadFlockLedger } from "@/lib/flock-ledger";
 
 export async function POST(request: Request) {
   const session = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
@@ -60,6 +61,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Dressed weight cannot exceed live weight." }, { status: 400 });
     }
 
+    const dressedDefinition = input.dressedDefinition === "CARCASS" || input.dressedDefinition === "CARCASS_WITH_GIBLETS" ? input.dressedDefinition : null;
+    const storageOverride = typeof input.storageOverrideReason === "string" && input.storageOverrideReason.trim() ? input.storageOverrideReason.trim().slice(0, 300) : null;
     const chillingCompletedAt = input.chillingCompletedAt
       ? new Date(input.chillingCompletedAt)
       : null;
@@ -101,8 +104,14 @@ export async function POST(request: Request) {
       }, { status: 409 });
     }
 
+    // One id per press of Save: a retry after a dropped connection returns the first record, never a second slaughter.
+    const key = typeof input.submissionId === "string" && /^[A-Za-z0-9-]{8,64}$/.test(input.submissionId) ? "slaughter:" + input.submissionId : undefined;
     const event = await prisma.$transaction(async (tx) => {
       await lockFlockOperations(tx, [batch.id]);
+      if (key) {
+        const again = await tx.slaughterEvent.findUnique({ where: { id: key } });
+        if (again) return again;
+      }
 
       const currentBatch = await tx.batch.findFirst({
         where: { id: batch.id, farmId: currentFarmId() },
@@ -126,59 +135,13 @@ export async function POST(request: Request) {
         throw new Error("HARVEST_BLOCKED_WITHDRAWAL: " + withdrawalBlockers.map((row) => row.productName).join(", "));
       }
 
-      const [allMortality, allSlaughter] = await Promise.all([
-        tx.mortalityEvent.aggregate({
-          where: { batchId: batch.id },
-          _sum: { quantity: true },
-        }),
-        tx.slaughterEvent.aggregate({
-          where: { batchId: batch.id },
-          _sum: { sentQuantity: true },
-        }),
-      ]);
-      const [latestSnapshot, deathsToDate, dispatchesToDate] = await Promise.all([
-        tx.birdCount.findFirst({
-          where: { batchId: batch.id, date: { lte: date } },
-          orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-        }),
-        tx.mortalityEvent.findMany({
-          where: { batchId: batch.id, date: { lte: date } },
-          select: { quantity: true, date: true, createdAt: true },
-        }),
-        tx.slaughterEvent.findMany({
-          where: { batchId: batch.id, date: { lte: date } },
-          select: { sentQuantity: true, date: true, createdAt: true },
-        }),
-      ]);
-      const availableOnFarm = calculateLiveBirdsAtDate(
-        currentBatch.initialChicks,
-        latestSnapshot,
-        [
-          ...deathsToDate.map(row => ({
-            quantity: row.quantity, date: row.date, createdAt: row.createdAt,
-          })),
-          ...dispatchesToDate.map(row => ({
-            quantity: row.sentQuantity, date: row.date, createdAt: row.createdAt,
-          })),
-        ],
-        date,
-      );
-      if (availableOnFarm == null || sentQuantity > availableOnFarm) {
-        throw new Error("Birds sent on this date cannot exceed the reconciled birds on the farm.");
+      const availableOnFarm = await liveBirdsOn(tx, batch.id, date);
+      if (sentQuantity > availableOnFarm) {
+        throw new Error(`Only ${availableOnFarm} birds were on the farm on that date, so ${sentQuantity} cannot be sent to slaughter.`);
       }
-
-      if (!isWithinInitialFlockCount(
-        currentBatch.initialChicks,
-        allMortality._sum.quantity ?? 0,
-        allSlaughter._sum.sentQuantity ?? 0,
-        0,
-        sentQuantity,
-      )) {
-        throw new Error("Birds sent plus recorded deaths cannot exceed the flock's remaining bird count.");
-      }
-
       const created = await tx.slaughterEvent.create({
         data: {
+          ...(key ? { id: key } : {}),
           batchId: batch.id,
           date,
           sentQuantity,
@@ -187,21 +150,11 @@ export async function POST(request: Request) {
           slaughterCostMinor,
           liveWeightKg,
           dressedWeightKg,
+          dressedDefinition: dressedWeightKg != null ? dressedDefinition : null,
           chillingCompletedAt,
           notes: typeof input.notes === "string" && input.notes.trim() ? input.notes.trim() : null,
         },
       });
-
-      const [totalMortality, totalSlaughter] = await Promise.all([
-        tx.mortalityEvent.aggregate({
-          where: { batchId: batch.id },
-          _sum: { quantity: true },
-        }),
-        tx.slaughterEvent.aggregate({
-          where: { batchId: batch.id },
-          _sum: { sentQuantity: true },
-        }),
-      ]);
 
       const liveCount = Math.max(0, availableOnFarm - sentQuantity);
       await tx.birdCount.create({
@@ -213,8 +166,9 @@ export async function POST(request: Request) {
         },
       });
 
-      const totalAccounted = (totalMortality._sum.quantity ?? 0) + (totalSlaughter._sum.sentQuantity ?? 0);
-      const fullyProcessed = totalAccounted >= currentBatch.initialChicks;
+      const after = await loadFlockLedger(tx, batch.id);
+      if (!after?.balance.ok) throw new Error(after?.balance.error ?? "This slaughter does not fit the flock's later records.");
+      const fullyProcessed = after.balance.live === 0;
       const latestSlaughter = fullyProcessed
         ? await tx.slaughterEvent.findFirst({
             where: { batchId: batch.id },
@@ -230,7 +184,9 @@ export async function POST(request: Request) {
         },
       });
 
-      return created;
+      // The store did not have room on the pre-slaughter check and someone chose to go ahead: keep who, when and why.
+      if (storageOverride) await tx.auditLog.create({ data: { farmId: currentFarmId(), userId: session.user!.id, action: "STORAGE_OVERRIDE", entity: "SlaughterEvent", entityId: created.id, afterJson: JSON.stringify({ reason: storageOverride, birds: sentQuantity }) } });
+      return { ...created, liveBirdsNow: after.balance.live };
     });
 
     return NextResponse.json(event, { status: 201 });

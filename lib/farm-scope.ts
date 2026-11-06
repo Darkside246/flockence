@@ -84,7 +84,7 @@ export function runUnscoped<T>(work: () => T | Promise<T>): Promise<T> {
 /** Tables that carry farmId themselves. */
 export const FARM_MODELS = new Set([
   "AuditLog", "Batch", "BeddingPurchase", "BiosecurityLog", "Customer", "DailyFlockCheck", "DiagnosticTest", "EggCollection",
-  "EggPackRun", "Equipment", "Expense", "FarmTask", "FeedPurchase", "HealthCase", "HealthCaseEvent", "HealthObservation", "InventoryMovement",
+  "EggPackRun", "Equipment", "Expense", "FarmTask", "FeedPurchase", "HealthCase", "HealthCaseEvent", "BirdMovement", "HealthObservation", "InventoryMovement",
   "LayerStageEvent", "ManureRecord", "Product", "ProductionPlan", "RecurringExpense", "Sale", "Setting", "StorageLocation",
   "StorageTemperatureLog", "Supplier", "ThermometerReading", "TransportEvent", "TransportationExpense", "Treatment", "User",
   "VisionMedia", "WeatherSnapshot",
@@ -128,6 +128,7 @@ export const FOREIGN_KEYS: Record<string, Record<string, string>> = {
   HouseholdConsumption: { batchId: "Batch" }, WeightRecord: { batchId: "Batch" }, AuditLog: { userId: "User" },
   HealthCase: { batchId: "Batch", openedByUserId: "User" },
   HealthCaseEvent: { healthCaseId: "HealthCase", userId: "User" },
+  BirdMovement: { batchId: "Batch" },
   HealthObservation: { visionMediaId: "VisionMedia", batchId: "Batch", healthCaseId: "HealthCase" },
   Treatment: { batchId: "Batch", healthCaseId: "HealthCase", administeredByUserId: "User" },
   DiagnosticTest: { batchId: "Batch", healthCaseId: "HealthCase" }, FarmTask: { batchId: "Batch", assignedToUserId: "User" },

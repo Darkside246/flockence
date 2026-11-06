@@ -201,6 +201,7 @@ model Farm {
   customers Customer[]
   users User[]
   auditLogs AuditLog[]
+  birdMovements BirdMovement[]
   productionPlans ProductionPlan[]
   healthCases HealthCase[]
   healthCaseEvents HealthCaseEvent[]
@@ -412,6 +413,7 @@ model Batch {
   supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   birdCounts BirdCount[]
   mortalityEvents MortalityEvent[]
+  birdMovements BirdMovement[]
   feedPurchases FeedPurchase[]
   feedUsage FeedUsage[]
   beddingPurchases BeddingPurchase[]
@@ -454,8 +456,12 @@ model MortalityEvent {
   batchId String
   date DateTime
   quantity Int
+  /// DIED (found dead), CULLED (removed on purpose) or MISSING (confirmed gone, cause unknown). All three leave the flock.
+  kind String @default("DIED")
   reason String?
   notes String?
+  /// Set when the quantity or kind was corrected; the before/after is in AuditLog.
+  correctedAt DateTime?
   createdAt DateTime @default(now())
   batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   @@index([batchId, date])
@@ -581,6 +587,8 @@ model SlaughterEvent {
   slaughterCostMinor Int
   liveWeightKg Decimal? @db.Decimal(12,3)
   dressedWeightKg Decimal? @db.Decimal(12,3)
+  /// What dressedWeightKg includes: CARCASS (no giblets) or CARCASS_WITH_GIBLETS. Only rows that say so are used to learn the farm's yield.
+  dressedDefinition String?
   chillingCompletedAt DateTime?
   notes String?
   batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
@@ -1127,4 +1135,31 @@ model ThermometerReading {
   farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   @@unique([farmId, sensor, readAt])
   @@index([farmId, readAt])
+}
+
+/// Birds that join a flock, or move between houses inside it. Losses (died, culled, missing) are MortalityEvent rows and
+/// birds sent to slaughter are SlaughterEvent rows, so every bird leaving is counted in exactly one place.
+model BirdMovement {
+  id String @id @default(cuid())
+  farmId String
+  batchId String
+  date DateTime
+  /// ADDITION (more birds join the flock) or TRANSFER (birds move from one house to another; the flock total is unchanged)
+  type String
+  quantity Int
+  fromHouse String?
+  toHouse String?
+  /// Where added birds came from: hatchery, supplier or own hatch.
+  source String?
+  costMinor Int?
+  notes String?
+  createdByUserId String?
+  /// A movement entered by mistake is voided, never deleted, so the history stays readable.
+  voidedAt DateTime?
+  voidReason String?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  @@index([batchId, date])
+  @@index([farmId, date])
 }

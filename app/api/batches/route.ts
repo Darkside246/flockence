@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
+import { rebuildBirdProjections } from "@/lib/flock-ledger";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { isCalendarDateNotFuture, parseCalendarDate, reconcileLiveBirdsFromSnapshot } from "@/lib/poultry-metrics.mjs";
 
@@ -179,7 +180,9 @@ export async function PUT(request: Request) {
     if (flock.status === "CLOSED") return { error: "This flock is closed. Its set-up can no longer be changed.", status: 409 };
     const isLayer = flock.productionType === "LAYER" || String(flock.species).toUpperCase() === "LAYER";
     const accounted = flock.mortalityEvents.reduce((sum, row) => sum + row.quantity, 0) + flock.slaughterEvents.reduce((sum, row) => sum + row.sentQuantity, 0);
-    if (initialChicks < accounted) return { error: `${accounted} birds are already recorded as lost or sent for processing, so fewer than ${accounted} chicks cannot have been placed.`, status: 409 };
+    // Birds added later count too: placed + added must cover every bird lost or sent.
+    const added = (await tx.birdMovement.aggregate({ where: { batchId: id, type: "ADDITION", voidedAt: null }, _sum: { quantity: true } }))._sum.quantity ?? 0;
+    if (initialChicks + added < accounted) return { error: `${accounted} birds are already recorded as lost or sent for processing${added ? ` and ${added} were added later` : ""}, so fewer than ${accounted - added} chicks cannot have been placed.`, status: 409 };
     const earliest = [...flock.mortalityEvents, ...flock.slaughterEvents, ...flock.weights, ...flock.dailyFlockChecks].map(row => row.date.getTime());
     if (earliest.length && startDate.getTime() > Math.min(...earliest)) return { error: "The placement date cannot be later than records already saved for this flock. Change or remove those records first.", status: 409 };
 
@@ -209,7 +212,8 @@ export async function PUT(request: Request) {
     // number. A head count typed in from a daily check is a real count of the birds, so it is left alone.
     const delta = initialChicks - flock.initialChicks;
     for (const row of flock.birdCounts.filter(count => count.note === "Initial count")) await tx.birdCount.update({ where: { id: row.id }, data: { date: startDate, liveCount: initialChicks } });
-    if (delta !== 0) for (const row of flock.birdCounts.filter(count => count.note?.startsWith("Calculated after"))) await tx.birdCount.update({ where: { id: row.id }, data: { liveCount: Math.max(0, row.liveCount + delta) } });
+    // The worked-out counts are rebuilt from the events rather than shifted, so they can never drift from the ledger.
+    if (delta !== 0) await rebuildBirdProjections(tx, id);
     for (const row of flock.layerStageEvents.filter(event => event.reason === "INITIAL_SETUP")) await tx.layerStageEvent.update({ where: { id: row.id }, data: { date: startDate } });
     return { ok: true as const };
   });

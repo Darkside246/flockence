@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { calendarDateInTimeZone } from "@/lib/poultry-metrics.mjs";
+import { FlockInsightsPanel, LiveBirdsPanel, useFlockLedger } from "@/components/flock-numbers";
 
 type Batch = { id: string; name: string; initialChicks: number; status: string; productionType?: string | null; species?: string; liveBirdCount?: number | null };
 
@@ -13,6 +14,7 @@ type DailyCheckPayload = {
   /** Birds found dead at this check; saved as a mortality record for the same day. */
   diedCount: number | null;
   diedReason: string;
+  culledCount: number | null;
   /** One id per press of Save, so a retry after a dropped connection never counts the same deaths twice. */
   submissionId: string;
   feedKg: number | null;
@@ -73,6 +75,7 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   const [liveCount, setLiveCount] = useState("");
   const [diedCount, setDiedCount] = useState("");
   const [diedReason, setDiedReason] = useState("");
+  const [culledCount, setCulledCount] = useState("");
   const [feedKg, setFeedKg] = useState("");
   const [waterLiters, setWaterLiters] = useState("");
   const [avgWeightKg, setAvgWeightKg] = useState("");
@@ -89,6 +92,8 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   const [syncing, setSyncing] = useState(false);
   const [online, setOnline] = useState(false);
 
+  const [revision, setRevision] = useState(0);
+  const ledger = useFlockLedger(batchId, date, revision);
   const selectedBatch = useMemo(() => batches.find(batch => batch.id === batchId), [batches, batchId]);
 
   const refreshQueueCount = () => setQueueCount(readQueue().length);
@@ -157,7 +162,7 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
     event.preventDefault();
     setMessage("");
     const counted = liveCount.trim() !== "";
-    if (diedCount.trim() !== "" && (!Number.isSafeInteger(Number(diedCount)) || Number(diedCount) < 0)) {
+    if ([diedCount, culledCount].some(v => v.trim() !== "" && (!Number.isSafeInteger(Number(v)) || Number(v) < 0))) {
       setMessage("Birds that died must be a whole number of 0 or more.");
       return;
     }
@@ -172,6 +177,7 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       liveCount: counted ? Number(liveCount) : null,
       diedCount: diedCount.trim() === "" ? null : Number(diedCount),
       diedReason,
+      culledCount: culledCount.trim() === "" ? null : Number(culledCount),
       submissionId: crypto.randomUUID(),
       feedKg: numberOrNull(feedKg),
       waterLiters: numberOrNull(waterLiters),
@@ -189,7 +195,7 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
     if (!navigator.onLine) {
       try {
         enqueue(payload);
-        setDiedCount("");setDiedReason("");setLiveCount("");
+        setDiedCount("");setDiedReason("");setCulledCount("");setLiveCount("");
         setMessage("No connection. This flock check is saved on this device for automatic sync.");
       } catch {
         setMessage("No connection, and the device could not save the offline record. Do not leave the page until the connection returns.");
@@ -198,9 +204,9 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
     }
 
     try {
-      await send(payload);
-      setDiedCount("");setDiedReason("");setLiveCount("");
-      setMessage("Flock check saved for "+date+".");
+      const saved = await send(payload);
+      setDiedCount("");setDiedReason("");setCulledCount("");setLiveCount("");
+      setRevision(v=>v+1);setMessage("Flock check saved for "+date+"."+(saved?.liveBirdsNow!=null?" "+saved.liveBirdsNow+" live birds remaining"+(saved.lossesRecorded?" after "+saved.lossesRecorded+" lost today":"")+".":""));
     } catch (error) {
       if (!navigator.onLine) {
         try {
@@ -225,9 +231,12 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
     <form className="form grid2" onSubmit={submit}>
       <label>Batch<select value={batchId} onChange={event => setBatchId(event.target.value)} required><option value="">Select batch</option>{batches.filter(batch => batch.status === "ACTIVE").map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
       <label>Date<input value={date} type="date" max={today()} onChange={event => setDate(event.target.value)} required/></label>
+      <div className="span-2"><LiveBirdsPanel ledger={ledger} date={date}/></div>
+      {batchId && <div className="span-2"><FlockInsightsPanel batchId={batchId} revision={revision}/></div>}
       <label>Birds that died (count these first)<input value={diedCount} onChange={event => setDiedCount(event.target.value)} type="number" min="0" step="1" placeholder="0" aria-describedby="died-birds-hint"/>
         <small id="died-birds-hint" className="muted">Count the dead birds you found today. They are saved as deaths for this day and taken off the flock first. Leave blank if none.</small></label>
       <label>Cause, if known<select value={diedReason} onChange={event => setDiedReason(event.target.value)}><option value="">Not known</option><option>Found dead at the round</option><option>Sickness signs</option><option>Heat stress</option><option>Crushed or smothered</option><option>Culled (weak or injured)</option><option>Predator</option></select></label>
+      <label>Birds culled (optional)<input value={culledCount} onChange={event => setCulledCount(event.target.value)} type="number" min="0" step="1" placeholder="0"/></label>
       <label>Live birds (only if you counted them)<input value={liveCount} onChange={event => setLiveCount(event.target.value)} type="number" min="0" max={selectedBatch?.initialChicks ?? undefined} step="1" placeholder={selectedBatch?.liveBirdCount != null ? String(selectedBatch.liveBirdCount) : "Worked out for you"} aria-describedby="live-birds-hint"/>
         <small id="live-birds-hint" className="muted">{selectedBatch?.liveBirdCount != null ? `Worked out from your records: ${selectedBatch.liveBirdCount} (starting birds minus deaths and birds sent). ` : "Worked out from your records. "}Leave blank unless you did a head count. If you do count, count after the dead birds are removed; the deaths above are taken off first.</small></label>
       <label>Feed used kg<input value={feedKg} onChange={event => setFeedKg(event.target.value)} type="number" min="0" step="0.001"/></label>

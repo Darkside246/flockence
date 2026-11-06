@@ -4,7 +4,8 @@ import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
-import { calculateLiveBirdsAtDate, isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
+import { isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
+import { closeIfEmpty, liveBirdsOn, loadFlockLedger } from "@/lib/flock-ledger";
 
 function validNumber(value: unknown, min = 0) {
   if (value === "" || value == null) return null;
@@ -50,6 +51,11 @@ export async function POST(request: Request) {
     const diedCount = diedText === "" ? 0 : Number(diedText);
     if (!Number.isSafeInteger(diedCount) || diedCount < 0) {
       return NextResponse.json({ error: "Birds that died must be a whole number of 0 or more." }, { status: 400 });
+    }
+    const culledText = input.culledCount === "" || input.culledCount == null ? "" : String(input.culledCount);
+    const culledCount = culledText === "" ? 0 : Number(culledText);
+    if (!Number.isSafeInteger(culledCount) || culledCount < 0) {
+      return NextResponse.json({ error: "Birds culled must be a whole number of 0 or more." }, { status: 400 });
     }
     const diedReason = typeof input.diedReason === "string" && input.diedReason.trim() ? input.diedReason.trim().slice(0, 120) : null;
     const submissionId = typeof input.submissionId === "string" && /^[A-Za-z0-9-]{8,64}$/.test(input.submissionId) ? input.submissionId : null;
@@ -129,44 +135,28 @@ export async function POST(request: Request) {
         }
       }
 
-      const reconciledOnFarm = async () => {
-        const [latestSnapshot, deathsToDate, dispatchesToDate] = await Promise.all([
-          tx.birdCount.findFirst({ where: { batchId, date: { lte: date } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }] }),
-          tx.mortalityEvent.findMany({ where: { batchId, date: { lte: date } }, select: { quantity: true, date: true, createdAt: true } }),
-          tx.slaughterEvent.findMany({ where: { batchId, date: { lte: date } }, select: { sentQuantity: true, date: true, createdAt: true } }),
-        ]);
-        return calculateLiveBirdsAtDate(
-          batch.initialChicks,
-          latestSnapshot,
-          [
-            ...deathsToDate.map(event => ({ quantity: event.quantity, date: event.date, createdAt: event.createdAt })),
-            ...dispatchesToDate.map(event => ({ quantity: event.sentQuantity, date: event.date, createdAt: event.createdAt })),
-          ],
-          date,
-        );
-      };
-
-      // 1. Deaths first. A repeat of the same submission (a retry after a dropped connection) is recognised and not counted twice.
-      if (diedCount > 0) {
-        const deathId = submissionId ? "daily-died:" + submissionId : undefined;
-        const already = deathId ? await tx.mortalityEvent.findUnique({ where: { id: deathId } }) : null;
-        if (!already) {
-          const available = await reconciledOnFarm();
-          if (available == null) throw new Error("The live bird count for that date could not be worked out from the flock's records.");
-          if (diedCount > available) throw new Error("More birds are recorded as dead (" + diedCount + ") than are on the farm for that date (" + available + ").");
-          await tx.mortalityEvent.create({
-            data: { ...(deathId ? { id: deathId } : {}), batchId, date, quantity: diedCount, reason: diedReason, notes: "Counted at the daily flock check." },
-          });
-          await tx.birdCount.create({ data: { batchId, date, liveCount: available - diedCount, note: "Calculated after mortality entry" } });
-          if (available - diedCount <= 0) await tx.batch.update({ where: { id: batchId }, data: { status: "CLOSED", actualSlaughter: null } });
-        }
+      // 1. Losses first: found dead, then culled (removed on purpose). Each is its own record so they are never mixed.
+      // A repeat of the same submission (a retry after a dropped connection) is recognised and not counted twice.
+      const losses: Array<[kind: "DIED" | "CULLED", count: number, prefix: string, reason: string | null]> = [["DIED", diedCount, "daily-died:", diedReason], ["CULLED", culledCount, "daily-culled:", null]];
+      for (const [kind, count, prefix, reason] of losses) {
+        if (count <= 0) continue;
+        const lossId = submissionId ? prefix + submissionId : undefined;
+        if (lossId && await tx.mortalityEvent.findUnique({ where: { id: lossId } })) continue;
+        const available = await liveBirdsOn(tx, batchId, date);
+        if (count > available) throw new Error(`${count} birds recorded as ${kind === "DIED" ? "dead" : "culled"}, but only ${available} were on the farm on that date.`);
+        await tx.mortalityEvent.create({ data: { ...(lossId ? { id: lossId } : {}), batchId, date, quantity: count, kind, reason, notes: "Counted at the daily flock check." } });
+        await tx.birdCount.create({ data: { batchId, date, liveCount: available - count, note: "Calculated after mortality entry" } });
+      }
+      if (diedCount > 0 || culledCount > 0) {
+        const after = await loadFlockLedger(tx, batchId);
+        if (!after?.balance.ok) throw new Error(after?.balance.error ?? "These losses do not fit the flock's later records.");
+        await closeIfEmpty(tx, batchId);
       }
 
       // 2. Then the live count, which now already has those deaths taken off.
-      const maximumOnFarmCount = await reconciledOnFarm();
-      if (maximumOnFarmCount == null) throw new Error("The live bird count for that date could not be worked out from the flock's records.");
+      const maximumOnFarmCount = await liveBirdsOn(tx, batchId, date);
       if (countedLive != null && countedLive > maximumOnFarmCount) {
-        throw new Error("Observed live bird count cannot exceed the reconciled on-farm count for that date.");
+        throw new Error(`You counted ${countedLive}, but the records only account for ${maximumOnFarmCount} birds on that date. If birds were added, record them under Change bird numbers first.`);
       }
       const liveCount = countedLive ?? maximumOnFarmCount;
       if (avgWeightKg != null && weightSampleQuantity != null && weightSampleQuantity > liveCount) {
@@ -240,7 +230,8 @@ export async function POST(request: Request) {
         else await tx.healthObservation.create({ data: observationData });
       }
 
-      return check;
+      const now = await loadFlockLedger(tx, batchId);
+      return { ...check, liveBirdsNow: now?.balance.live ?? null, lossesRecorded: diedCount + culledCount };
     });
 
     return NextResponse.json(row, { status: 201 });
