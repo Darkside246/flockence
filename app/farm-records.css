@@ -102,3 +102,9 @@ dialog.ui-dialog .check-line input { width: 18px; height: 18px; min-height: 0; f
 .check-pair > legend { width: 100%; padding: 0; margin: 0 0 7px; font-size: 12px; font-weight: 700; color: var(--text-secondary); }
 .check-pair > label { display: flex; align-items: center; gap: 10px; min-height: 42px; margin: 0; white-space: nowrap; }
 .check-pair > label > input { width: 18px; height: 18px; min-height: 0; flex: none; margin: 0; }
+
+/* Water meter or tank beside its reading; tick-box lines; the waste list. */
+.inline-pair { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr); gap: 8px; }
+.shell .check-line { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.shell .check-line input { width: 18px; height: 18px; min-height: 0; flex: none; }
+.waste-list { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13px; line-height: 1.5; }

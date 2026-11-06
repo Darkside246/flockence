@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { calibrateYield, estimateLiveWeight, recoveredWeight, REFERENCE_YIELD, storagePreflight, type YieldDefinition } from "./farm-engine.mjs";
 import { loadFlockLedger } from "./flock-ledger";
+import { ageOn, flockGrowth } from "./flock-insights";
 
 type Tx = Prisma.TransactionClient;
 const n = (v: unknown) => (v == null ? null : Number(v));
@@ -36,8 +37,14 @@ export async function farmYieldCalibration(tx: Tx, farmId: string, definition: Y
 }
 
 /** Best available average live weight for a flock right now, with where it came from. Never invents one. */
-async function currentLiveWeight(tx: Tx, batchId: string) {
+async function currentLiveWeight(tx: Tx, batchId: string, onDate?: Date) {
   const weighed = await tx.weightRecord.findFirst({ where: { batchId, liveOrDressed: "LIVE" }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], select: { avgWeightKg: true, date: true, quantity: true } });
+  // Weighed more than 3 days before the slaughter date: the birds have grown since, so use this flock's growth curve.
+  if (weighed && onDate && onDate.getTime() - weighed.date.getTime() > 3 * 86400000) {
+    const b = await tx.batch.findFirst({ where: { id: batchId }, select: { hatchDate: true, startDate: true } });
+    const growth = b ? await flockGrowth(tx, batchId, ageOn(b, onDate)) : null;
+    if (growth?.ok && growth.atAge) return { kg: growth.atAge.kg, status: "FORECAST" as const, basis: `Forecast for day ${growth.atAge.ageDays} from this flock's growth (${growth.model}, ${growth.weighingDays} weighing days)${growth.atAge.rangeKg ? `, ${growth.atAge.rangeKg[0]}–${growth.atAge.rangeKg[1]} kg` : ""}.`, date: onDate };
+  }
   if (weighed) return { kg: Number(weighed.avgWeightKg), status: "MEASURED" as const, basis: `Average of ${weighed.quantity} bird(s) weighed on ${weighed.date.toISOString().slice(0, 10)}.`, date: weighed.date };
   const batch = await tx.batch.findFirst({ where: { id: batchId }, select: { targetLiveWeightKg: true } });
   if (batch?.targetLiveWeightKg != null) return { kg: Number(batch.targetLiveWeightKg), status: "FORECAST" as const, basis: "No birds weighed yet; using the flock's target live weight.", date: null };
@@ -56,7 +63,7 @@ export async function planSlaughter(tx: Tx, farmId: string, p: { batchId: string
   const born = batch?.hatchDate ?? batch?.startDate ?? null;
   const ageDays = born ? Math.floor((p.date.getTime() - new Date(born.toISOString().slice(0, 10) + "T00:00:00Z").getTime()) / 86400000) : null;
   const live = ledger.balance.ok ? ledger.balance.live! : null;
-  const weight = await currentLiveWeight(tx, p.batchId);
+  const weight = await currentLiveWeight(tx, p.batchId, p.date);
   const { calibration, unlabelledSlaughters } = await farmYieldCalibration(tx, farmId, definition);
   const ratio = calibration.ok ? { value: calibration.ratio!, low: calibration.ratio! - 2 * calibration.sd!, high: calibration.ratio! + 2 * calibration.sd!, from: `your farm's last ${calibration.n} weighed slaughters` }
     : definition === "CARCASS" ? { value: (REFERENCE_YIELD.CARCASS.low + REFERENCE_YIELD.CARCASS.high) / 2, low: REFERENCE_YIELD.CARCASS.low, high: REFERENCE_YIELD.CARCASS.high, from: `a typical range (${REFERENCE_YIELD.CARCASS.source}); not yet calibrated to your farm` } : null;
@@ -64,7 +71,7 @@ export async function planSlaughter(tx: Tx, farmId: string, p: { batchId: string
     status: "ESTIMATED" as const,
     carcassKg: Math.round(p.birds * weight.kg * ratio.value * 1000) / 1000,
     rangeKg: [Math.round(p.birds * weight.kg * ratio.low * 1000) / 1000, Math.round(p.birds * weight.kg * ratio.high * 1000) / 1000] as [number, number],
-    basis: `${p.birds} birds × ${weight.kg} kg (${weight.status === "MEASURED" ? "weighed" : "target"}) × ${(ratio.value * 100).toFixed(1)}% carcass yield from ${ratio.from}.`,
+    basis: `${p.birds} birds × ${weight.kg} kg (${weight.status === "MEASURED" ? "weighed" : weight.basis.startsWith("Forecast") ? "forecast" : "target"}) × ${(ratio.value * 100).toFixed(1)}% carcass yield from ${ratio.from}.`,
   } : null;
 
   let storage = null as null | ReturnType<typeof storagePreflight> & { location?: string };

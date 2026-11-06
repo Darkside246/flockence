@@ -17,5 +17,5 @@ export async function GET(request: Request) {
   const farmId = currentFarmId();
   const owned = await prisma.batch.findFirst({ where: { id: batchId, farmId }, select: { id: true } });
   if (!owned || !today) return NextResponse.json({ error: "Flock not found." }, { status: 404 });
-  return NextResponse.json(await prisma.$transaction(tx => flockInsights(tx, farmId, batchId, today, { heatAboveC: Number.isFinite(heat) && heat > 0 ? heat : undefined })));
+  return NextResponse.json(await prisma.$transaction(tx => flockInsights(tx, farmId, batchId, today, { heatAboveC: Number.isFinite(heat) && heat > 0 ? heat : undefined, bandC: Number(q.get("bandC")) > 0 ? Number(q.get("bandC")) : undefined })));
 }

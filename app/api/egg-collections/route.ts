@@ -111,7 +111,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: validation.errors.join(" ") }, { status: 400 });
     }
     const {
-      liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs,
+      liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, brokenEggs, householdEggs, hatchingEggs,
       floorEggs, rejectedEggs, averageEggWeightG, notes, grades: gradeCounts,
     } = validation.value;
 
@@ -186,10 +186,10 @@ export async function POST(request: Request) {
       const collection = existing
         ? await tx.eggCollection.update({
             where: { id: existing.id },
-            data: { liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
+            data: { liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, brokenEggs, householdEggs, hatchingEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
           })
         : await tx.eggCollection.create({
-            data: { ...(syncId ? { id: syncId } : {}), farmId: currentFarmId(), batchId, date, liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
+            data: { ...(syncId ? { id: syncId } : {}), farmId: currentFarmId(), batchId, date, liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, brokenEggs, householdEggs, hatchingEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
           });
 
       const oldGrades = new Map((existing?.grades ?? []).map((row) => [row.grade as EggGrade, row]));

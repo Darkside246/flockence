@@ -84,13 +84,36 @@ API, on a throwaway Postgres container with a fresh schema, through the real rou
 - J: a repeated addition, death, daily check and slaughter are each counted once.
 - K: the dashboard, flock list, ledger and insights agree. Voiding an addition takes the birds back off everywhere.
 
-## Not built yet (honest list)
+## Second round (2026-11-06): the eight items that were not built
 
-1. **Feed leftovers, spillage and returns**: the engine can tell feed issued from feed eaten (scenario E passes as maths), but the app has no form or table for leftover or spilt feed yet.
-2. **Water tank and meter readings**: the engine handles meters (including resets); the app still only has litres on the daily check.
-3. **Egg breakdown**: the existing collection form has dirty, cracked, floor and rejected eggs. Broken, kept-for-house and set-for-hatching are in the engine but not the form.
-4. **Slaughter straight into stock**: meat still enters inventory when the processing pack is recorded, not at slaughter, so the storage check cannot count meat from a slaughter whose pack is not recorded.
-5. **Waste and by-product accounting** beyond the existing manure records.
-6. **House allocation at placement**: flocks are not linked to a house when they are placed, so the house split is only as good as the transfers recorded.
-7. **Age-specific heat thresholds**: heat exposure uses a single threshold (32 °C by default), not a temperature curve by age.
-8. **Forecasting models beyond medians**: there is no regression of weight on age yet; it needs more weighed history.
+| Item | How it works now |
+| --- | --- |
+| Feed leftovers, spillage and returns | `FeedUsage` gains `leftoverKg`, `spillageKg`, `returnedKg`; the daily check asks for them after "feed put in the feeders". Eaten = put out + yesterday's leftover − today's leftover − spilt − returned, only on days the leftover was weighed (otherwise shown as "put out", not "eaten"). Store = bought − put out + taken back; procurement uses the same figure. `GET /api/feed-ledger`. |
+| Water meters and tanks | New `WaterReading` (meter dial or tank level, refills and other use). A reading on the daily check fills in the litres used itself; a separate "Feed and water" form takes readings at any time. A meter that goes backwards or a tank that rises without a refill is flagged, not turned into a number. `GET/POST /api/water-readings`. |
+| Eggs | `brokenEggs`, `householdEggs`, `hatchingEggs` on the collection; the categories must add up to the total; older forms that do not send them still save. |
+| Slaughter straight into stock | With a dressed weight, what it includes, and a store chosen, the slaughter save creates the whole-bird stock lot, its processing output and its stock movement in the same transaction, once. The processing pack then only needs giblets, feet, cuts and waste; entering the same whole birds again is refused. |
+| Waste and by-products | Dead birds by kind and how they were disposed of (new `MortalityEvent.disposal`), processing outputs split into food, by-products and waste with what was done with them, the unaccounted part of the live weight when it was weighed, damaged eggs, spilt feed, manure and stock written off. `GET /api/waste-summary`. |
+| House at placement | `Batch.placementHouse`, chosen from the pens when the flock is made or edited; transfers move birds from it. |
+| Heat by age | Broiler whole-house targets from the Ross handbook table by age (30 °C at day 0 down to 20 °C from day 27), with ±3 °C counted as on target, alongside the fixed 32 °C heat-stress line. |
+| Weight forecast | Least-squares fit of this flock's live weighings against age: a straight line with 3–4 weighing days, a curve with 5 or more; a 95% prediction range from the fit; never more than 21 days past the last weighing. The pre-slaughter check uses it when the last weighing is more than 3 days old. |
+
+### A bug found on the way (existed before this work)
+
+The farm-isolation layer checked every linked id outside the current transaction, so a save that created a row and then
+pointed at it in the same transaction (an egg collection's stock item, a new product in the processing pack) was refused
+with `LINK_OUTSIDE_FARM`. Rows created by the same request through the scoped client are now remembered and accepted;
+the farm-isolation tests (8) still pass.
+
+### Second-round tests
+
+31 API checks on a throwaway database (feed 300 + 150 − 100 → 350 kg and 93 kg eaten; carry-over; refused over-spill; meter
+1000 → 1250 = 250 L; tank with refill and other use = 450 L; rising tank flagged; eggs 90/3/2/3/2 saved and a mismatch
+refused; 40 birds stocked once on a retry; freezer space counts them; processing pack refuses the duplicate; waste
+summary by kind, disposal and output; house split 70/30; 40-day target 20 °C; growth curve from 5 weighings and the
+forecast used for slaughter planning), plus the first 37 checks again, 114 unit tests and the 11 existing database tests.
+
+## Still not built
+
+1. Statistical models beyond medians and least squares (no seasonal or cross-flock models).
+2. Heat targets for layers and other species: only broilers have an age table.
+3. A counted opening stock for feed: the store figure is feed bought through Flockence.

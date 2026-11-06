@@ -95,6 +95,7 @@ export async function POST(request: Request) {
         sourceLot: input.sourceLot ? String(input.sourceLot).trim() : null,
         placementQuality: input.placementQuality ? String(input.placementQuality).trim().toUpperCase() : null,
         placementNotes: input.placementNotes ? String(input.placementNotes).trim() : null,
+        placementHouse: typeof input.placementHouse === "string" && input.placementHouse.trim() ? input.placementHouse.trim().slice(0, 80) : null,
         lifecycleDateSource: hatchDate ? "HATCH_DATE" : purchaseDate ? "PURCHASE_DATE_ESTIMATE" : "START_DATE",
         initialChicks: input.initialChicks, chickCostMinor,
         expectedSlaughter, targetSlaughterAgeDays,
@@ -204,7 +205,7 @@ export async function PUT(request: Request) {
     await tx.batch.update({ where: { id }, data: {
       name, initialChicks, startDate, hatchDate, purchaseDate, targetSlaughterAgeDays, targetLiveWeightKg, expectedSlaughter,
       lifecycleDateSource: hatchDate ? "HATCH_DATE" : purchaseDate ? "PURCHASE_DATE_ESTIMATE" : "START_DATE",
-      breed: text(input.breed), strain: text(input.strain), hatchery: text(input.hatchery), sourceLot: text(input.sourceLot), placementNotes: text(input.placementNotes, 500),
+      breed: text(input.breed), strain: text(input.strain), hatchery: text(input.hatchery), sourceLot: text(input.sourceLot), placementNotes: text(input.placementNotes, 500), placementHouse: text(input.placementHouse, 80),
       ...(chickCostMinor !== null ? { chickCostMinor } : {}),
     } });
     // The first bird count and layer stage are the flock's own set-up rows, so they follow the corrected values.

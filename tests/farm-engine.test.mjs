@@ -224,3 +224,61 @@ test("birds never assigned to a house are taken to be in the house the farmer mo
   assert.deepEqual(b.houses, [{ name: "Not assigned to a house", birds: 10 }, { name: "House B", birds: 10 }]);
   assert.equal(b.houseWarning, null);
 });
+
+import { feederConsumption, tankUsage, broilerTargetTemp, growthForecast } from "../lib/farm-engine.mjs";
+
+test("E (daily): 100 kg put out, 5 kg left, 2 kg spilt → 93 kg eaten; the 5 kg carries into tomorrow", () => {
+  const r = feederConsumption([
+    { date: "2026-11-01", issuedKg: 100, leftoverKg: 5, spillageKg: 2 },
+    { date: "2026-11-02", issuedKg: 95, leftoverKg: 4 },
+  ]);
+  assert.equal(r.days[0].eatenKg, 93);
+  assert.equal(r.days[1].openingKg, 5);
+  assert.equal(r.days[1].eatenKg, 96);       // 95 + 5 − 4
+  assert.equal(r.eatenKg, 189);
+});
+
+test("a day without a leftover weighing is not counted as eaten, and breaks the carry-over", () => {
+  const r = feederConsumption([
+    { date: "2026-11-01", issuedKg: 100 },
+    { date: "2026-11-02", issuedKg: 100, leftoverKg: 3 },
+    { date: "2026-11-03", issuedKg: 100, leftoverKg: 2 },
+  ]);
+  assert.equal(r.days[0].eatenKg, null);
+  assert.equal(r.days[1].eatenKg, null);     // how much was in the feeders at the start is not known
+  assert.equal(r.days[2].eatenKg, 101);      // 100 + 3 − 2
+  assert.equal(r.measuredDays, 1);
+});
+
+test("water tank: level, refills and other use give the water used; a rise without a refill is flagged", () => {
+  const u = tankUsage([
+    { at: "2026-11-01T06:00Z", levelL: 1000 },
+    { at: "2026-11-02T06:00Z", levelL: 900, addedL: 300, otherUseL: 50 },
+    { at: "2026-11-03T06:00Z", levelL: 950 },
+  ]);
+  assert.equal(u[0].litres, 350);   // 1000 + 300 − 900 − 50
+  assert.equal(u[1].litres, null);
+  assert.equal(u[1].status, "UNVERIFIED");
+});
+
+test("age-based house temperature follows the handbook table and holds at 20 °C from day 27", () => {
+  assert.equal(broilerTargetTemp(0).targetC, 30);
+  assert.equal(broilerTargetTemp(4.5).targetC, 27.5);
+  assert.equal(broilerTargetTemp(21).targetC, 22);
+  assert.equal(broilerTargetTemp(40).targetC, 20);
+  assert.equal(broilerTargetTemp(-1), null);
+});
+
+test("growth forecast: needs 3 weighing days, gives a range from the fit, never far past the data", () => {
+  assert.equal(growthForecast([{ ageDays: 7, kg: 0.18 }, { ageDays: 14, kg: 0.45 }]).ok, false);
+  const s = [[7, 0.19], [14, 0.47], [21, 0.92], [28, 1.48], [35, 2.08]].map(([ageDays, kg]) => ({ ageDays, kg }));
+  const f = growthForecast(s, { atAgeDays: 42, targetKg: 2.5 });
+  assert.equal(f.model, "curve (quadratic)");
+  assert.ok(f.atAge.kg > 2.6 && f.atAge.kg < 2.9, String(f.atAge.kg));
+  assert.ok(f.atAge.rangeKg[0] < f.atAge.kg && f.atAge.rangeKg[1] > f.atAge.kg);
+  assert.ok(f.reachesTargetAtAge >= 38 && f.reachesTargetAtAge <= 41, String(f.reachesTargetAtAge));
+  assert.equal(growthForecast(s, { atAgeDays: 70 }).atAge, null);
+  const line = growthForecast(s.slice(0, 3), { atAgeDays: 28 });
+  assert.equal(line.model, "straight line");
+  assert.equal(line.atAge.kg, 1.257);  // least squares through days 7, 14, 21
+});

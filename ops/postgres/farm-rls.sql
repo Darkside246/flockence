@@ -32,6 +32,7 @@ BEGIN
       ('HealthCase', 'farmId', NULL),
       ('HealthCaseEvent', 'farmId', NULL),
       ('BirdMovement', 'farmId', NULL),
+      ('WaterReading', 'farmId', NULL),
       ('HealthObservation', 'farmId', NULL),
       ('InventoryMovement', 'farmId', NULL),
       ('LayerStageEvent', 'farmId', NULL),

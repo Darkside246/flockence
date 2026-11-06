@@ -18,7 +18,15 @@ type DailyCheckPayload = {
   /** One id per press of Save, so a retry after a dropped connection never counts the same deaths twice. */
   submissionId: string;
   feedKg: number | null;
+  leftoverKg: number | null;
+  spillageKg: number | null;
+  returnedKg: number | null;
   waterLiters: number | null;
+  waterReadingL: number | null;
+  waterSource: string;
+  waterKind: "METER" | "TANK";
+  waterAddedL: number | null;
+  disposal: string;
   avgWeightKg: number | null;
   weightSampleQuantity: number | null;
   temperatureC: number | null;
@@ -77,7 +85,13 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   const [diedReason, setDiedReason] = useState("");
   const [culledCount, setCulledCount] = useState("");
   const [feedKg, setFeedKg] = useState("");
+  const [leftoverKg, setLeftoverKg] = useState(""), [spillageKg, setSpillageKg] = useState(""), [returnedKg, setReturnedKg] = useState("");
   const [waterLiters, setWaterLiters] = useState("");
+  const [waterReadingL, setWaterReadingL] = useState(""), [waterAddedL, setWaterAddedL] = useState("");
+  const [waterKind, setWaterKind] = useState<"METER" | "TANK">("METER");
+  const [waterSource, setWaterSource] = useState("");
+  useEffect(() => { try { const saved = localStorage.getItem("flockence-water-source"); if (saved) setWaterSource(saved); } catch { /* storage blocked */ } }, []);
+  const [disposal, setDisposal] = useState("");
   const [avgWeightKg, setAvgWeightKg] = useState("");
   const [weightSampleQuantity, setWeightSampleQuantity] = useState("");
   const [temperatureC, setTemperatureC] = useState("");
@@ -180,7 +194,10 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       culledCount: culledCount.trim() === "" ? null : Number(culledCount),
       submissionId: crypto.randomUUID(),
       feedKg: numberOrNull(feedKg),
+      leftoverKg: numberOrNull(leftoverKg), spillageKg: numberOrNull(spillageKg), returnedKg: numberOrNull(returnedKg),
       waterLiters: numberOrNull(waterLiters),
+      waterReadingL: numberOrNull(waterReadingL), waterSource: waterSource.trim(), waterKind, waterAddedL: numberOrNull(waterAddedL),
+      disposal,
       avgWeightKg: numberOrNull(avgWeightKg),
       weightSampleQuantity: numberOrNull(weightSampleQuantity),
       temperatureC: numberOrNull(temperatureC),
@@ -205,8 +222,9 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
 
     try {
       const saved = await send(payload);
-      setDiedCount("");setDiedReason("");setCulledCount("");setLiveCount("");
-      setRevision(v=>v+1);setMessage("Flock check saved for "+date+"."+(saved?.liveBirdsNow!=null?" "+saved.liveBirdsNow+" live birds remaining"+(saved.lossesRecorded?" after "+saved.lossesRecorded+" lost today":"")+".":""));
+      try { if (waterSource.trim()) localStorage.setItem("flockence-water-source", waterSource.trim()); } catch { /* storage blocked */ }
+      setDiedCount("");setDiedReason("");setCulledCount("");setLiveCount("");setWaterReadingL("");setWaterAddedL("");
+      setRevision(v=>v+1);setMessage("Flock check saved for "+date+"."+(saved?.liveBirdsNow!=null?" "+saved.liveBirdsNow+" live birds remaining"+(saved.lossesRecorded?" after "+saved.lossesRecorded+" lost today":"")+".":"")+(saved?.waterBasis?" "+saved.waterBasis:""));
     } catch (error) {
       if (!navigator.onLine) {
         try {
@@ -235,12 +253,22 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       {batchId && <div className="span-2"><FlockInsightsPanel batchId={batchId} revision={revision}/></div>}
       <label>Birds that died (count these first)<input value={diedCount} onChange={event => setDiedCount(event.target.value)} type="number" min="0" step="1" placeholder="0" aria-describedby="died-birds-hint"/>
         <small id="died-birds-hint" className="muted">Count the dead birds you found today. They are saved as deaths for this day and taken off the flock first. Leave blank if none.</small></label>
+      {diedCount.trim() !== "" && Number(diedCount) > 0 && <label>How the dead birds were disposed of<select value={disposal} onChange={e => setDisposal(e.target.value)}><option value="">Not recorded</option><option value="BURIED">Buried</option><option value="BURNED">Burned</option><option value="COMPOSTED">Composted</option><option value="RENDERED">Rendered</option><option value="COLLECTED">Collected by a contractor</option></select></label>}
       <label>Cause, if known<select value={diedReason} onChange={event => setDiedReason(event.target.value)}><option value="">Not known</option><option>Found dead at the round</option><option>Sickness signs</option><option>Heat stress</option><option>Crushed or smothered</option><option>Culled (weak or injured)</option><option>Predator</option></select></label>
       <label>Birds culled (optional)<input value={culledCount} onChange={event => setCulledCount(event.target.value)} type="number" min="0" step="1" placeholder="0"/></label>
       <label>Live birds (only if you counted them)<input value={liveCount} onChange={event => setLiveCount(event.target.value)} type="number" min="0" max={selectedBatch?.initialChicks ?? undefined} step="1" placeholder={selectedBatch?.liveBirdCount != null ? String(selectedBatch.liveBirdCount) : "Worked out for you"} aria-describedby="live-birds-hint"/>
         <small id="live-birds-hint" className="muted">{selectedBatch?.liveBirdCount != null ? `Worked out from your records: ${selectedBatch.liveBirdCount} (starting birds minus deaths and birds sent). ` : "Worked out from your records. "}Leave blank unless you did a head count. If you do count, count after the dead birds are removed; the deaths above are taken off first.</small></label>
-      <label>Feed used kg<input value={feedKg} onChange={event => setFeedKg(event.target.value)} type="number" min="0" step="0.001"/></label>
-      <label>Water used litres<input value={waterLiters} onChange={event => setWaterLiters(event.target.value)} type="number" min="0" step="0.1"/></label>
+      <label>Feed put in the feeders kg<input value={feedKg} onChange={event => setFeedKg(event.target.value)} type="number" min="0" step="0.001"/></label>
+      {feedKg !== "" && <>
+        <label>Left in the feeders kg (if weighed)<input value={leftoverKg} onChange={event => setLeftoverKg(event.target.value)} type="number" min="0" step="0.001" placeholder="Not weighed"/></label>
+        <label>Spilt or spoiled kg<input value={spillageKg} onChange={event => setSpillageKg(event.target.value)} type="number" min="0" step="0.001" placeholder="0"/></label>
+        <label>Taken back to the store kg<input value={returnedKg} onChange={event => setReturnedKg(event.target.value)} type="number" min="0" step="0.001" placeholder="0"/></label>
+        <small className="muted span-2">How much was eaten is worked out from these. Weigh what is left in the feeders to get it; if you do not, it shows as "put out", not "eaten".</small>
+      </>}
+      <label>Water meter or tank<input value={waterSource} onChange={event => setWaterSource(event.target.value)} placeholder="For example: House 1 meter" maxLength={80}/></label>
+      <label>Reading litres<span className="inline-pair"><select value={waterKind} onChange={event => setWaterKind(event.target.value as "METER" | "TANK")} aria-label="Meter or tank"><option value="METER">Meter dial</option><option value="TANK">Tank level</option></select><input value={waterReadingL} onChange={event => setWaterReadingL(event.target.value)} type="number" min="0" step="0.1" aria-label="Reading in litres"/></span></label>
+      {waterKind === "TANK" && waterReadingL !== "" && <label>Refilled since the last reading litres<input value={waterAddedL} onChange={event => setWaterAddedL(event.target.value)} type="number" min="0" step="0.1" placeholder="0"/></label>}
+      <label>Water used litres{waterReadingL !== "" ? " (worked out from the reading)" : ""}<input value={waterLiters} onChange={event => setWaterLiters(event.target.value)} type="number" min="0" step="0.1" placeholder={waterReadingL !== "" ? "Leave blank" : ""}/></label>
       <label>Average weight kg<input value={avgWeightKg} onChange={event => setAvgWeightKg(event.target.value)} type="number" min="0" step="0.001"/></label>
       <label>Birds weighed<input value={weightSampleQuantity} onChange={event => setWeightSampleQuantity(event.target.value)} type="number" min="1" step="1"/></label>
       <label>House temperature °C<input value={temperatureC} onChange={event => setTemperatureC(event.target.value)} type="number" step="0.1"/></label>

@@ -11,6 +11,8 @@ class MortalityConflict extends Error {}
 
 // A loss is a death, a cull (removed on purpose) or a bird that went missing. All three take birds off the flock.
 const LOSS_KINDS = ["DIED", "CULLED", "MISSING"] as const;
+// How the dead birds were disposed of (biosecurity record). Optional.
+const DISPOSAL_METHODS = ["BURIED", "BURNED", "COMPOSTED", "RENDERED", "COLLECTED"] as const;
 
 export async function GET(request: Request) {
   const session = await currentUserOrResponse(request);
@@ -38,6 +40,7 @@ export async function POST(request: Request) {
     const reason = typeof input.reason === "string" && input.reason.trim() ? input.reason.trim() : null;
     const notes = typeof input.notes === "string" && input.notes.trim() ? input.notes.trim() : null;
     const kind = LOSS_KINDS.includes(String(input.kind) as never) ? String(input.kind) : "DIED";
+    const disposal = DISPOSAL_METHODS.includes(String(input.disposal) as never) ? String(input.disposal) : null;
     let offlineEventId: string | undefined;
     if (input.offline !== undefined) {
       isOffline = true;
@@ -144,6 +147,7 @@ export async function POST(request: Request) {
           quantity,
           ...(offlineEventId ? { id: offlineEventId } : {}),
           kind,
+          disposal,
           reason,
           notes,
         },

@@ -4,8 +4,13 @@ import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
-import { isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
+import { calendarDateInTimeZone, isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
+import { meterUsage, tankUsage } from "@/lib/farm-engine.mjs";
 import { closeIfEmpty, liveBirdsOn, loadFlockLedger } from "@/lib/flock-ledger";
+
+function invalidNumber(value: unknown, min = 0) {
+  return value !== "" && value != null && validNumber(value, min) === null;
+}
 
 function validNumber(value: unknown, min = 0) {
   if (value === "" || value == null) return null;
@@ -57,6 +62,7 @@ export async function POST(request: Request) {
     if (!Number.isSafeInteger(culledCount) || culledCount < 0) {
       return NextResponse.json({ error: "Birds culled must be a whole number of 0 or more." }, { status: 400 });
     }
+    const disposal = ["BURIED", "BURNED", "COMPOSTED", "RENDERED", "COLLECTED"].includes(String(input.disposal)) ? String(input.disposal) : null;
     const diedReason = typeof input.diedReason === "string" && input.diedReason.trim() ? input.diedReason.trim().slice(0, 120) : null;
     const submissionId = typeof input.submissionId === "string" && /^[A-Za-z0-9-]{8,64}$/.test(input.submissionId) ? input.submissionId : null;
     const dateText = String(input.date || "");
@@ -83,7 +89,27 @@ export async function POST(request: Request) {
     if (syncId && (feedKg == null || feedKg > 999999999 || Number(feedKg.toFixed(3)) !== feedKg)) {
       return NextResponse.json({ error: "Enter feed in kilograms with three decimal places or fewer." }, { status: 400 });
     }
-    const waterLiters = validNumber(input.waterLiters);
+    // What happened to the feed put out: still in the feeders at the end of the day, spilt or spoiled, or taken back to
+    // the store. Only what was weighed is recorded; eaten is worked out from these, never typed in.
+    const leftoverKg = validNumber(input.leftoverKg), spillageKg = validNumber(input.spillageKg), returnedKg = validNumber(input.returnedKg);
+    if ([input.leftoverKg, input.spillageKg, input.returnedKg].some(v => invalidNumber(v))) {
+      return NextResponse.json({ error: "Feed left, spilt and returned must be zero or more kilograms." }, { status: 400 });
+    }
+    if ((leftoverKg != null || spillageKg != null || returnedKg != null) && feedKg == null) {
+      return NextResponse.json({ error: "Enter the feed put out before what was left, spilt or returned." }, { status: 400 });
+    }
+    if (feedKg != null && (spillageKg ?? 0) + (returnedKg ?? 0) > feedKg) {
+      return NextResponse.json({ error: "Spilt and returned feed cannot be more than the feed put out." }, { status: 400 });
+    }
+    // A water meter or tank reading: the litres used are worked out from the reading before it, so they are not typed twice.
+    const waterReadingL = validNumber(input.waterReadingL);
+    const waterSource = typeof input.waterSource === "string" && input.waterSource.trim() ? input.waterSource.trim().slice(0, 80) : null;
+    const waterKind = input.waterKind === "TANK" ? "TANK" : "METER";
+    const waterAddedL = validNumber(input.waterAddedL);
+    if (invalidNumber(input.waterReadingL) || invalidNumber(input.waterAddedL)) return NextResponse.json({ error: "Water readings must be zero or more litres." }, { status: 400 });
+    if (waterReadingL != null && !waterSource) return NextResponse.json({ error: "Name the meter or tank the reading is from." }, { status: 400 });
+    let waterLiters = validNumber(input.waterLiters);
+    let waterBasis: string | null = null;
     const avgWeightKg = validNumber(input.avgWeightKg, 0.001);
     const weightSampleQuantity = input.weightSampleQuantity === "" || input.weightSampleQuantity == null ? null : Number(input.weightSampleQuantity);
     const temperatureC = validNumber(input.temperatureC, -100);
@@ -144,13 +170,29 @@ export async function POST(request: Request) {
         if (lossId && await tx.mortalityEvent.findUnique({ where: { id: lossId } })) continue;
         const available = await liveBirdsOn(tx, batchId, date);
         if (count > available) throw new Error(`${count} birds recorded as ${kind === "DIED" ? "dead" : "culled"}, but only ${available} were on the farm on that date.`);
-        await tx.mortalityEvent.create({ data: { ...(lossId ? { id: lossId } : {}), batchId, date, quantity: count, kind, reason, notes: "Counted at the daily flock check." } });
+        await tx.mortalityEvent.create({ data: { ...(lossId ? { id: lossId } : {}), batchId, date, quantity: count, kind, reason, disposal, notes: "Counted at the daily flock check." } });
         await tx.birdCount.create({ data: { batchId, date, liveCount: available - count, note: "Calculated after mortality entry" } });
       }
       if (diedCount > 0 || culledCount > 0) {
         const after = await loadFlockLedger(tx, batchId);
         if (!after?.balance.ok) throw new Error(after?.balance.error ?? "These losses do not fit the flock's later records.");
         await closeIfEmpty(tx, batchId);
+      }
+
+      // Water from a meter or tank reading, against the last reading of the same meter or tank.
+      if (waterReadingL != null && waterSource) {
+        const readAt = dateText === calendarDateInTimeZone(new Date()) ? new Date() : new Date(dateText + "T12:00:00.000Z");
+        const readingId = submissionId ? "water:" + submissionId : undefined;
+        const current = (readingId ? await tx.waterReading.findUnique({ where: { id: readingId } }) : null)
+          ?? await tx.waterReading.create({ data: { ...(readingId ? { id: readingId } : {}), farmId: currentFarmId(), batchId, source: waterSource, kind: waterKind, readingL: waterReadingL, addedL: waterKind === "TANK" ? waterAddedL : null, readAt, createdByUserId: session.user!.id } });
+        const prev = await tx.waterReading.findFirst({ where: { farmId: currentFarmId(), source: waterSource, kind: waterKind, readAt: { lt: current.readAt } }, orderBy: { readAt: "desc" } });
+        if (prev && waterLiters == null) {
+          const [interval] = waterKind === "METER"
+            ? meterUsage([{ at: prev.readAt, reading: Number(prev.readingL) }, { at: current.readAt, reading: Number(current.readingL) }])
+            : tankUsage([{ at: prev.readAt, levelL: Number(prev.readingL) }, { at: current.readAt, levelL: Number(current.readingL), addedL: current.addedL == null ? 0 : Number(current.addedL) }]);
+          if (interval?.litres != null) { waterLiters = interval.litres; waterBasis = `Measured: ${waterSource} reading ${Number(current.readingL)} L against ${Number(prev.readingL)} L on ${prev.readAt.toISOString().slice(0, 10)}.`; }
+          else waterBasis = interval?.note ?? null;
+        } else if (!prev) waterBasis = `First reading for ${waterSource}. Water used is worked out from the next reading.`;
       }
 
       // 2. Then the live count, which now already has those deaths taken off.
@@ -208,13 +250,10 @@ export async function POST(request: Request) {
 
       if (feedKg != null && latestFeedPurchase && Number(latestFeedPurchase.bagSizeKg) > 0) {
         const costPerKg = latestFeedPurchase.unitCostMinor / Number(latestFeedPurchase.bagSizeKg);
-        const costMinor = Math.max(0, Math.round(feedKg * costPerKg));
+        const values = {quantityKg:feedKg,costMinor:Math.round(feedKg * costPerKg),feedType:latestFeedPurchase.feedType,leftoverKg,spillageKg,returnedKg};
         const existingFeed = await tx.feedUsage.findFirst({ where: { batchId, date, feedType: latestFeedPurchase.feedType } });
-        if (existingFeed) {
-          await tx.feedUsage.update({ where: { id: existingFeed.id }, data: { quantityKg: feedKg, costMinor, note: "Updated from daily flock check." } });
-        } else {
-          await tx.feedUsage.create({ data: { batchId, date, feedType: latestFeedPurchase.feedType, quantityKg: feedKg, costMinor, note: "Created from daily flock check." } });
-        }
+        if (existingFeed) await tx.feedUsage.update({ where: { id: existingFeed.id }, data: { ...values, note: "Updated from daily flock check." } });
+        else await tx.feedUsage.create({ data: { batchId, date, ...values, note: "Created from daily flock check." } });
       }
 
       if (temperatureC != null || humidityPercent != null || ammoniaPpm != null || input.litterCondition || input.pantingObserved || input.wingSpreadingObserved) {
@@ -231,7 +270,7 @@ export async function POST(request: Request) {
       }
 
       const now = await loadFlockLedger(tx, batchId);
-      return { ...check, liveBirdsNow: now?.balance.live ?? null, lossesRecorded: diedCount + culledCount };
+      return { ...check, liveBirdsNow: now?.balance.live ?? null, lossesRecorded: diedCount + culledCount, waterBasis };
     });
 
     return NextResponse.json(row, { status: 201 });

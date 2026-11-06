@@ -35,9 +35,10 @@ export async function GET(request: Request) {
   const usedKgLast7 = usage.reduce((sum, row) => sum + Number(row.quantityKg), 0);
   const totalUsageAgg = await prisma.feedUsage.aggregate({
     where: { batch: { farmId: currentFarmId() } },
-    _sum: { quantityKg: true },
+    _sum: { quantityKg: true, returnedKg: true },
   });
-  const usedKgTotal = Number(totalUsageAgg._sum.quantityKg ?? 0);
+  // Feed taken back to the store adds back to stock.
+  const usedKgTotal = Number(totalUsageAgg._sum.quantityKg ?? 0) - Number(totalUsageAgg._sum.returnedKg ?? 0);
 
   const feedOnHandKg = Math.max(0, purchasedKg - usedKgTotal);
   const avgDailyFarmUsageKg = usedKgLast7 / 7;

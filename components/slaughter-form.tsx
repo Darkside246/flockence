@@ -24,7 +24,7 @@ export function SlaughterForm({ batches, onSaved }: { batches: Batch[]; onSaved?
   const [liveKg, setLiveKg] = useState(""), [dressedKg, setDressedKg] = useState(""), [definition, setDefinition] = useState("");
   const [costPerBird, setCost] = useState("2.00"), [chilling, setChilling] = useState(""), [notes, setNotes] = useState("");
   const [locations, setLocations] = useState<Location[]>([]), [locationId, setLocationId] = useState("");
-  const [plan, setPlan] = useState<Plan | null>(null), [override, setOverride] = useState("");
+  const [plan, setPlan] = useState<Plan | null>(null), [override, setOverride] = useState(""), [stockNow, setStockNow] = useState(true);
   const [busy, setBusy] = useState(false), [msg, setMsg] = useState("");
 
   useEffect(() => { fetch("/api/storage-locations").then(r => r.ok ? r.json() : []).then(rows => Array.isArray(rows) && setLocations(rows.filter((l: Location) => l.active !== false))).catch(() => {}); }, []);
@@ -54,11 +54,11 @@ export function SlaughterForm({ batches, onSaved }: { batches: Batch[]; onSaved?
         batchId, date, sentQuantity: Number(sent), slaughtered: Number(slaughtered || sent), condemned: Number(condemned || 0),
         slaughterCostMinor: Math.round(Number(costPerBird || 0) * birds * 100),
         liveWeightKg: liveKg ? Number(liveKg) : null, dressedWeightKg: dressedKg ? Number(dressedKg) : null, dressedDefinition: definition || null,
-        chillingCompletedAt: chilling || null, notes: notes || null, storageOverrideReason: noRoom ? override.trim() : null, submissionId: crypto.randomUUID(),
+        chillingCompletedAt: chilling || null, notes: notes || null, stockNow: Boolean(stockNow && locationId && dressedKg && definition), storageLocationId: locationId || null, storageOverrideReason: noRoom ? override.trim() : null, submissionId: crypto.randomUUID(),
       }) });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(d.error || "That did not save.");
-      const m = `Saved. ${sent} birds sent to slaughter${d.liveBirdsNow != null ? `; ${d.liveBirdsNow} live birds left in the flock` : ""}. Record the meat under Processing pack to put it in stock.`;
+      const m = `Saved. ${sent} birds sent to slaughter${d.liveBirdsNow != null ? `; ${d.liveBirdsNow} live birds left in the flock` : ""}. ${d.stocked ? `${d.stocked.quantity} whole birds (${d.stocked.weightKg} kg) are now in ${d.stocked.location}. Add giblets, feet or cuts under Processing pack.` : "Record the meat under Processing pack to put it in stock."}`;
       setMsg(m); onSaved?.(m);
       setSent(""); setSlaughtered(""); setCondemned("0"); setLiveKg(""); setDressedKg(""); setDefinition(""); setNotes(""); setOverride(""); setChilling("");
     } catch (err) { setMsg(err instanceof Error ? err.message : "That did not save."); } finally { setBusy(false); }
@@ -89,6 +89,7 @@ export function SlaughterForm({ batches, onSaved }: { batches: Batch[]; onSaved?
     <label>Total live weight kg (if weighed)<input type="number" min="0" step="0.001" value={liveKg} onChange={e => setLiveKg(e.target.value)} /></label>
     <label>Total dressed weight kg<input type="number" min="0" step="0.001" value={dressedKg} onChange={e => setDressedKg(e.target.value)} /></label>
     {dressedKg && <label>Does the dressed weight include the giblets?<select value={definition} onChange={e => setDefinition(e.target.value)} required><option value="">Choose</option><option value="CARCASS">No, carcass only</option><option value="CARCASS_WITH_GIBLETS">Yes, giblets packed inside</option></select></label>}
+    {dressedKg && locationId && <label className="check-line"><input type="checkbox" checked={stockNow} onChange={e => setStockNow(e.target.checked)} /> Put the whole dressed birds in {locations.find(l => l.id === locationId)?.name ?? "the store"} now</label>}
     <label>Slaughter cost / bird BBD<input type="number" min="0" step="0.01" value={costPerBird} onChange={e => setCost(e.target.value)} /></label>
     <label>Chilling completed<input type="datetime-local" value={chilling} onChange={e => setChilling(e.target.value)} /></label>
     <label>Notes<input value={notes} onChange={e => setNotes(e.target.value)} maxLength={400} /></label>

@@ -222,6 +222,7 @@ model Farm {
   eggPackRuns EggPackRun[]
   layerStageEvents LayerStageEvent[]
   thermometerReadings ThermometerReading[]
+  waterReadings WaterReading[]
 }
 
 model DailyFlockCheck {
@@ -279,6 +280,9 @@ model EggCollection {
   crackedEggs Int @default(0)
   floorEggs Int @default(0)
   rejectedEggs Int @default(0)
+  brokenEggs Int @default(0)
+  householdEggs Int @default(0)
+  hatchingEggs Int @default(0)
   withdrawalBlocked Boolean @default(false)
   withdrawalNotes String?
   averageEggWeightG Decimal? @db.Decimal(8,2)
@@ -405,6 +409,8 @@ model Batch {
   targetDressedWeightKg Decimal? @db.Decimal(10,3)
   actualSlaughter DateTime?
   initialChicks Int
+  /// House or pen the flock was placed in; transfers move birds from here.
+  placementHouse String?
   supplierId String?
   chickCostMinor Int
   createdAt DateTime @default(now())
@@ -414,6 +420,7 @@ model Batch {
   birdCounts BirdCount[]
   mortalityEvents MortalityEvent[]
   birdMovements BirdMovement[]
+  waterReadings WaterReading[]
   feedPurchases FeedPurchase[]
   feedUsage FeedUsage[]
   beddingPurchases BeddingPurchase[]
@@ -458,6 +465,8 @@ model MortalityEvent {
   quantity Int
   /// DIED (found dead), CULLED (removed on purpose) or MISSING (confirmed gone, cause unknown). All three leave the flock.
   kind String @default("DIED")
+  /// BURIED, BURNED, COMPOSTED, RENDERED or COLLECTED (taken away by a contractor). Empty when not recorded.
+  disposal String?
   reason String?
   notes String?
   /// Set when the quantity or kind was corrected; the before/after is in AuditLog.
@@ -488,7 +497,14 @@ model FeedUsage {
   batchId String
   date DateTime
   feedType String
+  /// Feed taken from the store and put in the feeders that day.
   quantityKg Decimal @db.Decimal(12,3)
+  /// Feed still in the feeders at the end of the day, when it was weighed. Carries into the next day.
+  leftoverKg Decimal? @db.Decimal(12,3)
+  /// Spilt, wet or spoiled feed: wasted, not eaten.
+  spillageKg Decimal? @db.Decimal(12,3)
+  /// Feed taken back to the store (adds back to stock).
+  returnedKg Decimal? @db.Decimal(12,3)
   costMinor Int
   note String?
   createdAt DateTime @default(now())
@@ -1162,4 +1178,27 @@ model BirdMovement {
   batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   @@index([batchId, date])
   @@index([farmId, date])
+}
+
+/// A water meter or tank reading. Meter: the cumulative litres on the dial. Tank: the litres in the tank now, with any
+/// refill since the last reading and any water known to be used for something other than the birds (cleaning, people).
+model WaterReading {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  /// The meter or tank's name, so readings of the same one are compared with each other.
+  source String
+  /// METER or TANK
+  kind String
+  readingL Decimal @db.Decimal(14,3)
+  addedL Decimal? @db.Decimal(14,3)
+  otherUseL Decimal? @db.Decimal(14,3)
+  readAt DateTime
+  notes String?
+  createdByUserId String?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  @@index([farmId, source, readAt])
+  @@index([batchId, readAt])
 }

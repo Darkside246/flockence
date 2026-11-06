@@ -51,6 +51,9 @@ export type EggCollectionInput = {
   crackedEggs: unknown;
   floorEggs: unknown;
   rejectedEggs: unknown;
+  brokenEggs?: unknown;
+  householdEggs?: unknown;
+  hatchingEggs?: unknown;
   grades: unknown;
   averageEggWeightG?: unknown;
   notes?: unknown;
@@ -63,6 +66,9 @@ export type ValidatedEggCollection = {
   crackedEggs: number;
   floorEggs: number;
   rejectedEggs: number;
+  brokenEggs: number;
+  householdEggs: number;
+  hatchingEggs: number;
   averageEggWeightG: number | null;
   notes: string | null;
   grades: { grade: EggGrade; quantity: number }[];

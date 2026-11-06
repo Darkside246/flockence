@@ -6,6 +6,7 @@ import { assertHarvestAllowed } from "@/lib/withdrawal";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 import { liveBirdsOn, loadFlockLedger } from "@/lib/flock-ledger";
+import { recordInventoryMovement } from "@/lib/inventory-ledger";
 
 export async function POST(request: Request) {
   const session = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
@@ -62,6 +63,13 @@ export async function POST(request: Request) {
     }
 
     const dressedDefinition = input.dressedDefinition === "CARCASS" || input.dressedDefinition === "CARCASS_WITH_GIBLETS" ? input.dressedDefinition : null;
+    // Put the dressed birds in stock now, in the chosen store, instead of typing them again in the processing pack.
+    const stockLocationId = input.stockNow === true && typeof input.storageLocationId === "string" && input.storageLocationId ? input.storageLocationId : null;
+    if (input.stockNow === true && (!stockLocationId || dressedWeightKg == null || !dressedDefinition)) {
+      return NextResponse.json({ error: "To put the birds in stock now, enter the total dressed weight, say whether it includes the giblets, and choose the store." }, { status: 400 });
+    }
+    const stockLocation = stockLocationId ? await prisma.storageLocation.findFirst({ where: { id: stockLocationId, farmId: currentFarmId(), active: true }, select: { id: true, name: true, type: true } }) : null;
+    if (stockLocationId && !stockLocation) return NextResponse.json({ error: "That store was not found." }, { status: 400 });
     const storageOverride = typeof input.storageOverrideReason === "string" && input.storageOverrideReason.trim() ? input.storageOverrideReason.trim().slice(0, 300) : null;
     const chillingCompletedAt = input.chillingCompletedAt
       ? new Date(input.chillingCompletedAt)
@@ -185,8 +193,20 @@ export async function POST(request: Request) {
       });
 
       // The store did not have room on the pre-slaughter check and someone chose to go ahead: keep who, when and why.
+      // The dressed birds become one stock lot, linked to this slaughter, exactly once (a retry returned earlier).
+      let stocked: { productName: string; quantity: number; weightKg: number; location: string } | null = null;
+      if (stockLocation && dressedWeightKg != null && slaughtered > 0) {
+        const productName = dressedDefinition === "CARCASS_WITH_GIBLETS" ? "Whole dressed chicken (giblets inside)" : "Whole dressed chicken";
+        const product = await tx.product.upsert({ where: { farmId_name: { farmId: currentFarmId(), name: productName } }, update: {}, create: { farmId: currentFarmId(), name: productName, unit: "each" } });
+        const lotCode = `${batch.name.replace(/[^A-Za-z0-9]+/g, "-")}-${date.toISOString().slice(0, 10)}-WHOLE`.slice(0, 120);
+        const frozen = /freez/i.test(stockLocation.type) || /freez/i.test(stockLocation.name);
+        const item = await tx.inventoryItem.create({ data: { productId: product.id, batchId: batch.id, quantity: slaughtered, weightKg: dressedWeightKg, storageLocationId: stockLocation.id, lotCode, packedAt: date, storageState: frozen ? "FROZEN" : "CHILLED" } });
+        const output = await tx.processingOutput.create({ data: { batchId: batch.id, slaughterEventId: created.id, productName, category: "CARCASS", quantity: slaughtered, unit: "each", weightKg: dressedWeightKg, storageLocationId: stockLocation.id, lotCode, packedAt: date, storageState: frozen ? "FROZEN" : "CHILLED", status: "AVAILABLE", inventoryItemId: item.id, notes: "Put in stock when the slaughter was recorded." } });
+        await recordInventoryMovement(tx, { farmId: currentFarmId(), inventoryItemId: item.id, productId: product.id, batchId: batch.id, date, movementType: "PRODUCTION", quantity: slaughtered, unit: "each", weightKg: dressedWeightKg, referenceType: "PROCESSING_OUTPUT", referenceId: output.id, toLocationId: stockLocation.id, notes: "Whole birds from slaughter" });
+        stocked = { productName, quantity: slaughtered, weightKg: dressedWeightKg, location: stockLocation.name };
+      }
       if (storageOverride) await tx.auditLog.create({ data: { farmId: currentFarmId(), userId: session.user!.id, action: "STORAGE_OVERRIDE", entity: "SlaughterEvent", entityId: created.id, afterJson: JSON.stringify({ reason: storageOverride, birds: sentQuantity }) } });
-      return { ...created, liveBirdsNow: after.balance.live };
+      return { ...created, liveBirdsNow: after.balance.live, stocked };
     });
 
     return NextResponse.json(event, { status: 201 });

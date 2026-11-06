@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 export type EditableFlock = {
   id: string; name: string; productionType?: string | null; species?: string; initialChicks: number;
   startDate: string; hatchDate?: string | null; purchaseDate?: string | null;
-  breed?: string | null; strain?: string | null; hatchery?: string | null; sourceLot?: string | null; placementNotes?: string | null;
+  breed?: string | null; strain?: string | null; hatchery?: string | null; sourceLot?: string | null; placementNotes?: string | null; placementHouse?: string | null;
   targetSlaughterAgeDays?: number | null; targetLiveWeightKg?: string | number | null; chickCostMinor?: number | null;
 };
 
@@ -25,7 +25,7 @@ export function FlockEditDialog({ flock, onClose, onSaved }: { flock: EditableFl
       setError("");
       setForm({
         name: flock.name, initialChicks: String(flock.initialChicks), startDate: day(flock.startDate), hatchDate: day(flock.hatchDate), purchaseDate: day(flock.purchaseDate),
-        breed: flock.breed ?? "", strain: flock.strain ?? "", hatchery: flock.hatchery ?? "", sourceLot: flock.sourceLot ?? "", placementNotes: flock.placementNotes ?? "",
+        breed: flock.breed ?? "", strain: flock.strain ?? "", hatchery: flock.hatchery ?? "", sourceLot: flock.sourceLot ?? "", placementNotes: flock.placementNotes ?? "", placementHouse: flock.placementHouse ?? "",
         targetSlaughterAgeDays: String(flock.targetSlaughterAgeDays ?? 42), targetLiveWeightKg: flock.targetLiveWeightKg != null ? String(Number(flock.targetLiveWeightKg)) : "",
         chickCost: flock.chickCostMinor != null ? (flock.chickCostMinor / 100).toFixed(2) : "",
       });
@@ -45,7 +45,7 @@ export function FlockEditDialog({ flock, onClose, onSaved }: { flock: EditableFl
         method: "PUT", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name, initialChicks: Number(form.initialChicks), startDate: form.startDate, hatchDate: form.hatchDate || null, purchaseDate: form.purchaseDate || null,
-          breed: form.breed, strain: form.strain, hatchery: form.hatchery, sourceLot: form.sourceLot, placementNotes: form.placementNotes,
+          breed: form.breed, strain: form.strain, hatchery: form.hatchery, sourceLot: form.sourceLot, placementNotes: form.placementNotes, placementHouse: form.placementHouse || null,
           chickCostMinor: form.chickCost === "" ? null : Math.round(Number(form.chickCost) * 100),
           ...(isLayer ? {} : { targetSlaughterAgeDays: Number(form.targetSlaughterAgeDays), targetLiveWeightKg: form.targetLiveWeightKg === "" ? null : Number(form.targetLiveWeightKg) }),
         }),
@@ -75,6 +75,7 @@ export function FlockEditDialog({ flock, onClose, onSaved }: { flock: EditableFl
           <label>Hatchery<input value={form.hatchery ?? ""} onChange={set("hatchery")} /></label>
           <label>Source lot<input value={form.sourceLot ?? ""} onChange={set("sourceLot")} /></label>
         </div>
+        <label>Placed in house<input value={form.placementHouse ?? ""} onChange={set("placementHouse")} maxLength={80} placeholder="House or pen name" /></label>
         <label>Placement notes<textarea value={form.placementNotes ?? ""} onChange={set("placementNotes")} /></label>
         {error && <p className="dialog-error" role="alert">{error}</p>}
         <div className="dialog-actions">

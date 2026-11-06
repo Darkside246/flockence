@@ -18,7 +18,7 @@ const KIND_TO_EVENT: Record<string, "MORTALITY" | "CULL" | "MISSING"> = { DIED: 
 export type FlockLedger = Awaited<ReturnType<typeof loadFlockLedger>>;
 
 export async function loadFlockLedger(tx: Tx, batchId: string, asOf?: Date) {
-  const batch = await tx.batch.findFirst({ where: { id: batchId }, select: { id: true, name: true, initialChicks: true, startDate: true, status: true } });
+  const batch = await tx.batch.findFirst({ where: { id: batchId }, select: { id: true, name: true, initialChicks: true, startDate: true, status: true, placementHouse: true } });
   if (!batch) return null;
   const until = asOf ? { lte: asOf } : undefined;
   const [deaths, sent, moves, counts] = await Promise.all([
@@ -38,7 +38,7 @@ export async function loadFlockLedger(tx: Tx, batchId: string, asOf?: Date) {
         ]),
   ];
   const headCounts = counts.filter(c => isObservation(c.note)).map(c => ({ count: c.liveCount, date: c.date, createdAt: c.createdAt }));
-  const balance = birdBalance({ initialBirds: batch.initialChicks, events, headCounts, asOf });
+  const balance = birdBalance({ initialBirds: batch.initialChicks, events, headCounts, asOf, placementHouse: batch.placementHouse });
   const added = moves.filter(m => m.type === "ADDITION").reduce((s, m) => s + m.quantity, 0);
   return { batch, balance, everInFlock: batch.initialChicks + added };
 }
