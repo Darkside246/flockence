@@ -10,7 +10,6 @@ import "./crystal-depth.css";
 import "./crystal-pages.css";
 import { PwaRegister } from "@/components/pwa-register";
 import { ThemeProvider } from "@/components/theme-provider";
-import { AppearanceControl } from "@/components/appearance-control";
 import { AuthGate } from "@/components/auth-gate";
 import { BannerPhoto } from "@/components/banner-photo";
 import "./crystal-photos.css";
@@ -29,5 +28,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" suppressHydrationWarning><body><ThemeProvider><PwaRegister /><BannerPhoto /><AppearanceControl /><AuthGate>{children}</AuthGate></ThemeProvider></body></html>;
+  return <html lang="en" suppressHydrationWarning><body><ThemeProvider><PwaRegister /><BannerPhoto /><AuthGate>{children}</AuthGate></ThemeProvider></body></html>;
 }
