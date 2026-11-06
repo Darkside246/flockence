@@ -16,7 +16,7 @@ import "./poultry.css";
 import "./theme-system.css";
 import "./theme-photography.css";
 import "./poultry-refinement.css";
-import "./health-cases.css";
+import "./farm-records.css";
 import { DEFAULT_THEME, themeIds } from "@/lib/theme-registry";
 
 export const metadata: Metadata = {

@@ -1,4 +1,4 @@
-/* Health cases: status tabs, case cards, history and the action dialogs (2026-11-07, ported onto the rebuilt theme tokens).
+/* Farm record dialogs and lists: health cases, flock edit and delete, type-to-confirm (ported 2026-11-26 onto the rebuilt theme tokens).
    Only theme tokens are used, so every appearance (Poultry Farm, Cyber Crystal and the rest) styles them. */
 
 .section-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
@@ -74,3 +74,10 @@ dialog.ui-dialog .check-line input { width: 18px; height: 18px; min-height: 0; f
 .case-timeline .tl-kind { font-size: 12px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: var(--accent-primary); }
 .case-timeline time { font-size: 11px; color: var(--text-muted); }
 .case-timeline p { margin: 2px 0 0; }
+
+/* A destructive action (delete a flock). Same shape as .button, in the theme's danger colour. */
+.button.button-danger, dialog.ui-dialog .button.button-danger {
+  background: var(--status-danger) !important; border-color: var(--status-danger) !important; color: #fff !important;
+}
+.button.button-danger:hover:enabled { filter: brightness(1.08); }
+.button:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
