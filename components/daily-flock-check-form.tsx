@@ -10,6 +10,11 @@ type DailyCheckPayload = {
   date: string;
   /** null: worked out from the starting birds, deaths and birds sent to slaughter. */
   liveCount: number | null;
+  /** Birds found dead at this check; saved as a mortality record for the same day. */
+  diedCount: number | null;
+  diedReason: string;
+  /** One id per press of Save, so a retry after a dropped connection never counts the same deaths twice. */
+  submissionId: string;
   feedKg: number | null;
   waterLiters: number | null;
   avgWeightKg: number | null;
@@ -66,6 +71,8 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   const [batchId, setBatchId] = useState("");
   const [date, setDate] = useState(today());
   const [liveCount, setLiveCount] = useState("");
+  const [diedCount, setDiedCount] = useState("");
+  const [diedReason, setDiedReason] = useState("");
   const [feedKg, setFeedKg] = useState("");
   const [waterLiters, setWaterLiters] = useState("");
   const [avgWeightKg, setAvgWeightKg] = useState("");
@@ -150,6 +157,10 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
     event.preventDefault();
     setMessage("");
     const counted = liveCount.trim() !== "";
+    if (diedCount.trim() !== "" && (!Number.isSafeInteger(Number(diedCount)) || Number(diedCount) < 0)) {
+      setMessage("Birds that died must be a whole number of 0 or more.");
+      return;
+    }
     if (!batchId || !date || (counted && (!Number.isSafeInteger(Number(liveCount)) || Number(liveCount) < 0))) {
       setMessage("Choose the batch and date. A counted live bird number must be a whole number.");
       return;
@@ -159,6 +170,9 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       batchId,
       date,
       liveCount: counted ? Number(liveCount) : null,
+      diedCount: diedCount.trim() === "" ? null : Number(diedCount),
+      diedReason,
+      submissionId: crypto.randomUUID(),
       feedKg: numberOrNull(feedKg),
       waterLiters: numberOrNull(waterLiters),
       avgWeightKg: numberOrNull(avgWeightKg),
@@ -175,6 +189,7 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
     if (!navigator.onLine) {
       try {
         enqueue(payload);
+        setDiedCount("");setDiedReason("");setLiveCount("");
         setMessage("No connection. This flock check is saved on this device for automatic sync.");
       } catch {
         setMessage("No connection, and the device could not save the offline record. Do not leave the page until the connection returns.");
@@ -184,7 +199,8 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
 
     try {
       await send(payload);
-      setMessage("Today's flock check saved.");
+      setDiedCount("");setDiedReason("");setLiveCount("");
+      setMessage("Flock check saved for "+date+".");
     } catch (error) {
       if (!navigator.onLine) {
         try {
@@ -209,8 +225,11 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
     <form className="form grid2" onSubmit={submit}>
       <label>Batch<select value={batchId} onChange={event => setBatchId(event.target.value)} required><option value="">Select batch</option>{batches.filter(batch => batch.status === "ACTIVE").map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label>
       <label>Date<input value={date} type="date" max={today()} onChange={event => setDate(event.target.value)} required/></label>
+      <label>Birds that died (count these first)<input value={diedCount} onChange={event => setDiedCount(event.target.value)} type="number" min="0" step="1" placeholder="0" aria-describedby="died-birds-hint"/>
+        <small id="died-birds-hint" className="muted">Count the dead birds you found today. They are saved as deaths for this day and taken off the flock first. Leave blank if none.</small></label>
+      <label>Cause, if known<select value={diedReason} onChange={event => setDiedReason(event.target.value)}><option value="">Not known</option><option>Found dead at the round</option><option>Sickness signs</option><option>Heat stress</option><option>Crushed or smothered</option><option>Culled (weak or injured)</option><option>Predator</option></select></label>
       <label>Live birds (only if you counted them)<input value={liveCount} onChange={event => setLiveCount(event.target.value)} type="number" min="0" max={selectedBatch?.initialChicks ?? undefined} step="1" placeholder={selectedBatch?.liveBirdCount != null ? String(selectedBatch.liveBirdCount) : "Worked out for you"} aria-describedby="live-birds-hint"/>
-        <small id="live-birds-hint" className="muted">{selectedBatch?.liveBirdCount != null ? `Worked out from your records: ${selectedBatch.liveBirdCount} (starting birds minus deaths and birds sent). ` : "Worked out from your records. "}Leave blank unless you did a head count; just record deaths as they happen.</small></label>
+        <small id="live-birds-hint" className="muted">{selectedBatch?.liveBirdCount != null ? `Worked out from your records: ${selectedBatch.liveBirdCount} (starting birds minus deaths and birds sent). ` : "Worked out from your records. "}Leave blank unless you did a head count. If you do count, count after the dead birds are removed; the deaths above are taken off first.</small></label>
       <label>Feed used kg<input value={feedKg} onChange={event => setFeedKg(event.target.value)} type="number" min="0" step="0.001"/></label>
       <label>Water used litres<input value={waterLiters} onChange={event => setWaterLiters(event.target.value)} type="number" min="0" step="0.1"/></label>
       <label>Average weight kg<input value={avgWeightKg} onChange={event => setAvgWeightKg(event.target.value)} type="number" min="0" step="0.001"/></label>

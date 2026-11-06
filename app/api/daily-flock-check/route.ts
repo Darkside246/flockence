@@ -44,6 +44,15 @@ export async function POST(request: Request) {
     // is a head count and becomes the new starting point.
     const counted = input.liveCount !== "" && input.liveCount != null;
     const countedLive = counted ? Number(input.liveCount) : null;
+    // Deaths are counted first, then the live count follows from them. Deaths typed here are saved as a mortality record
+    // for the same day, in the same step as the check, so the two can never disagree.
+    const diedText = input.diedCount === "" || input.diedCount == null ? "" : String(input.diedCount);
+    const diedCount = diedText === "" ? 0 : Number(diedText);
+    if (!Number.isSafeInteger(diedCount) || diedCount < 0) {
+      return NextResponse.json({ error: "Birds that died must be a whole number of 0 or more." }, { status: 400 });
+    }
+    const diedReason = typeof input.diedReason === "string" && input.diedReason.trim() ? input.diedReason.trim().slice(0, 120) : null;
+    const submissionId = typeof input.submissionId === "string" && /^[A-Za-z0-9-]{8,64}$/.test(input.submissionId) ? input.submissionId : null;
     const dateText = String(input.date || "");
     if (!batchId || !dateText || (counted && (!Number.isSafeInteger(countedLive) || countedLive! < 0))) {
       return NextResponse.json({ error: "Batch and date are required, and a counted live bird number must be a whole number of 0 or more." }, { status: 400 });
@@ -120,33 +129,41 @@ export async function POST(request: Request) {
         }
       }
 
-      const [latestSnapshot, deathsToDate, dispatchesToDate] = await Promise.all([
-        tx.birdCount.findFirst({
-          where: { batchId, date: { lte: date } },
-          orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-        }),
-        tx.mortalityEvent.findMany({
-          where: { batchId, date: { lte: date } },
-          select: { quantity: true, date: true, createdAt: true },
-        }),
-        tx.slaughterEvent.findMany({
-          where: { batchId, date: { lte: date } },
-          select: { sentQuantity: true, date: true, createdAt: true },
-        }),
-      ]);
-      const maximumOnFarmCount = calculateLiveBirdsAtDate(
-        batch.initialChicks,
-        latestSnapshot,
-        [
-          ...deathsToDate.map(event => ({
-            quantity: event.quantity, date: event.date, createdAt: event.createdAt,
-          })),
-          ...dispatchesToDate.map(event => ({
-            quantity: event.sentQuantity, date: event.date, createdAt: event.createdAt,
-          })),
-        ],
-        date,
-      );
+      const reconciledOnFarm = async () => {
+        const [latestSnapshot, deathsToDate, dispatchesToDate] = await Promise.all([
+          tx.birdCount.findFirst({ where: { batchId, date: { lte: date } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }] }),
+          tx.mortalityEvent.findMany({ where: { batchId, date: { lte: date } }, select: { quantity: true, date: true, createdAt: true } }),
+          tx.slaughterEvent.findMany({ where: { batchId, date: { lte: date } }, select: { sentQuantity: true, date: true, createdAt: true } }),
+        ]);
+        return calculateLiveBirdsAtDate(
+          batch.initialChicks,
+          latestSnapshot,
+          [
+            ...deathsToDate.map(event => ({ quantity: event.quantity, date: event.date, createdAt: event.createdAt })),
+            ...dispatchesToDate.map(event => ({ quantity: event.sentQuantity, date: event.date, createdAt: event.createdAt })),
+          ],
+          date,
+        );
+      };
+
+      // 1. Deaths first. A repeat of the same submission (a retry after a dropped connection) is recognised and not counted twice.
+      if (diedCount > 0) {
+        const deathId = submissionId ? "daily-died:" + submissionId : undefined;
+        const already = deathId ? await tx.mortalityEvent.findUnique({ where: { id: deathId } }) : null;
+        if (!already) {
+          const available = await reconciledOnFarm();
+          if (available == null) throw new Error("The live bird count for that date could not be worked out from the flock's records.");
+          if (diedCount > available) throw new Error("More birds are recorded as dead (" + diedCount + ") than are on the farm for that date (" + available + ").");
+          await tx.mortalityEvent.create({
+            data: { ...(deathId ? { id: deathId } : {}), batchId, date, quantity: diedCount, reason: diedReason, notes: "Counted at the daily flock check." },
+          });
+          await tx.birdCount.create({ data: { batchId, date, liveCount: available - diedCount, note: "Calculated after mortality entry" } });
+          if (available - diedCount <= 0) await tx.batch.update({ where: { id: batchId }, data: { status: "CLOSED", actualSlaughter: null } });
+        }
+      }
+
+      // 2. Then the live count, which now already has those deaths taken off.
+      const maximumOnFarmCount = await reconciledOnFarm();
       if (maximumOnFarmCount == null) throw new Error("The live bird count for that date could not be worked out from the flock's records.");
       if (countedLive != null && countedLive > maximumOnFarmCount) {
         throw new Error("Observed live bird count cannot exceed the reconciled on-farm count for that date.");
