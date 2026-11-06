@@ -203,6 +203,7 @@ model Farm {
   auditLogs AuditLog[]
   productionPlans ProductionPlan[]
   healthCases HealthCase[]
+  healthCaseEvents HealthCaseEvent[]
   treatments Treatment[]
   healthObservations HealthObservation[]
   diagnosticTests DiagnosticTest[]
@@ -372,6 +373,7 @@ model User {
   treatments Treatment[]
   farmTasks FarmTask[]
   @@index([farmId, role])
+  healthCaseEvents HealthCaseEvent[]
 }
 
 model Batch {
@@ -919,17 +921,48 @@ model HealthCase {
   isolationRecommended Boolean @default(false)
   movementRestricted Boolean @default(false)
   notes String?
+  // Lifecycle (OPEN -> MONITORING -> RESOLVED -> CLOSED, and back with a reason): see lib/health-case-lifecycle.ts
+  resolvedAt DateTime?
+  outcome String?
+  nextReviewAt DateTime?
+  reopenedCount Int @default(0)
+  lastActivityAt DateTime @default(now())
+  // Suspected notifiable disease (for example Newcastle disease or avian influenza): kept until it is reported
+  notifiable Boolean @default(false)
+  reportedToAuthorityAt DateTime?
+  authorityReference String?
   farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
   openedBy User? @relation(fields: [openedByUserId], references: [id], onDelete: SetNull)
   observations HealthObservation[]
   treatments Treatment[]
   diagnosticTests DiagnosticTest[]
+  events HealthCaseEvent[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([farmId, caseNumber])
+  @@index([farmId, status, nextReviewAt])
   @@index([farmId, status, severity])
   @@index([batchId, openedAt])
+}
+
+// One line in a health case's history: opened, a note, a status change, a review date set, reported to the authority.
+// Kept even after the case is closed, so the record of what was decided and when is never lost.
+model HealthCaseEvent {
+  id String @id @default(cuid())
+  farmId String
+  healthCaseId String
+  userId String?
+  type String
+  fromStatus String?
+  toStatus String?
+  note String?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  healthCase HealthCase @relation(fields: [healthCaseId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([healthCaseId, createdAt])
+  @@index([farmId, createdAt])
 }
 
 model HealthObservation {

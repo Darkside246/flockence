@@ -30,6 +30,7 @@ BEGIN
       ('FarmTask', 'farmId', NULL),
       ('FeedPurchase', 'farmId', NULL),
       ('HealthCase', 'farmId', NULL),
+      ('HealthCaseEvent', 'farmId', NULL),
       ('HealthObservation', 'farmId', NULL),
       ('InventoryMovement', 'farmId', NULL),
       ('LayerStageEvent', 'farmId', NULL),
