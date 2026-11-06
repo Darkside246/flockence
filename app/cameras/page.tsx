@@ -280,7 +280,7 @@ function Recordings({ cameras }: { cameras: Camera[] }) {
     {playing && <div style={{ marginBottom: 16 }}>
       <video src={playing.source === "blink" ? api(`media/clip?path=${enc(playing.media)}`) : api(playing.media)} controls autoPlay playsInline style={{ width: "100%", maxHeight: 520, background: "#000" }} />
       <p>{playing.camera} · {new Date(playing.createdAt).toLocaleString()}{playing.source === "import" ? " · imported" : ""}</p>
-      {playing.source === "import" && <button className="button" onClick={() => void removeImported(playing)}>Remove this imported clip</button>}</div>}
+      {playing.source === "import" && <button className="btn-danger" onClick={() => void removeImported(playing)}>Remove this imported clip</button>}</div>}
     <div className="grid2">{clips?.map((c) => <button key={c.id} className="button" onClick={() => setPlaying(c)} style={{ textAlign: "left" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {c.thumbnail ? <img src={api(`media/thumb?path=${enc(c.thumbnail)}`)} alt="" style={{ width: "100%" }} loading="lazy" /> : <div aria-hidden="true" style={{ aspectRatio: "16/9", background: "#000", opacity: 0.6 }} />}
@@ -305,7 +305,7 @@ function ManageCameras({ cameras, onChange }: { cameras: Camera[]; onChange: () 
     {rtspCams.map((c) => <div key={c.name} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
       <strong style={{ flex: 1 }}>{c.name}</strong>
       <button className="button" disabled={busy} onClick={() => call(`rtsp/cameras/${enc(c.name)}/record/${c.recording ? "stop" : "start"}`, { method: "POST" })}>{c.recording ? "Stop recording" : "Start recording"}</button>
-      <button className="button" disabled={busy} onClick={() => { if (confirm(`Remove ${c.name} and its recordings?`)) call(`rtsp/cameras/${enc(c.name)}`, { method: "DELETE" }); }}>Remove</button></div>)}
+      <button className="btn-danger" disabled={busy} onClick={() => { if (confirm(`Remove ${c.name} and its recordings?`)) call(`rtsp/cameras/${enc(c.name)}`, { method: "DELETE" }); }}>Remove</button></div>)}
     <form onSubmit={add}>
       <label>Camera name<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Brooder house" maxLength={40} /></label>
       <label>RTSP address<input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="rtsp://user:password@192.168.1.50:554/stream1" autoComplete="off" spellCheck={false} /></label>

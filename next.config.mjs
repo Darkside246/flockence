@@ -7,7 +7,11 @@ const nextConfig = {
   },
   async redirects() {
     // Pages that moved when the app was reorganised (see lib/nav-config.ts). Old links and bookmarks keep working.
-    return [{ source: "/operations", destination: "/daily-round", permanent: true }];
+    return [
+      { source: "/operations", destination: "/daily-round", permanent: true },
+      { source: "/health/tests", destination: "/health?tab=tests", permanent: true },
+      { source: "/health/treatments", destination: "/health?tab=treatments", permanent: true },
+    ];
   },
 };
 

@@ -23,7 +23,7 @@ html[data-theme] {
 }
 
 /* ───────────── Buttons: primary, secondary, tertiary, destructive ───────────── */
-html[data-theme] :is(.button, button.button, a.button, .primary, button.primary, .button-primary, .btn, .select-pill),
+html[data-theme] :is(.button, button.button, a.button, .primary, button.primary, .button-primary, .btn, .select-pill, .btn-primary, .btn-secondary, .btn-tertiary, .btn-danger, .danger, .button-danger, .link-button),
 html[data-theme] form button:not([type="button"]):not(.icon-button):not(.segmented button):not(.tab):not(.theme-option):not(.appearance-choice) {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   box-sizing: border-box; min-height: var(--ui-control-h); padding: 0 18px; margin: 0;

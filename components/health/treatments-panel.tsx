@@ -1,9 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { Nav } from "@/components/nav";
 
-export default function TreatmentsPage() {
+export function TreatmentsPanel({ onSaved }: { onSaved?: () => void }) {
   const [batches, setBatches] = useState<any[]>([]);
   const [msg, setMsg] = useState("");
   const [productName, setProductName] = useState("");
@@ -52,7 +51,7 @@ export default function TreatmentsPage() {
       const clearDate = data.withdrawalClearsAt
         ? new Date(data.withdrawalClearsAt).toLocaleDateString()
         : null;
-      setMsg(clearDate ? `Treatment recorded. Food withdrawal clears ${clearDate}.` : "Treatment recorded.");
+      setMsg(clearDate ? `Treatment recorded. Food withdrawal clears ${clearDate}.` : "Treatment recorded."); onSaved?.();
       setProductName("");
       setWithdrawalDays("");
       setReason("");
@@ -64,26 +63,8 @@ export default function TreatmentsPage() {
   }
 
   return (
-    <div className="shell">
-      <header className="topbar">
-        <div className="brand">
-          <div>
-            <h1>Record treatment</h1>
-            <p>Keep flock care and food-safety timing traceable.</p>
-          </div>
-          <span className="badge">HEALTH</span>
-        </div>
-      </header>
-      <Nav />
-      <main className="main">
-        <section className="hero">
-          <div className="hero-kicker">Flock care</div>
-          <h2>New treatment record.</h2>
-          <p>
-            Enter the product and instructions you are actually using. Do not use this screen to invent a dose or substitute for veterinary or product-label guidance.
-          </p>
-        </section>
-
+    <div className="health-panel">
+        <p className="muted">Enter the product and instructions you are actually using. Do not use this screen to invent a dose or substitute for veterinary or product-label guidance.</p>
         <form className="section card form" onSubmit={save}>
           <div className="grid2">
             <label>
@@ -127,7 +108,6 @@ export default function TreatmentsPage() {
             {msg && <span className="notice">{msg}</span>}
           </div>
         </form>
-      </main>
     </div>
   );
 }
