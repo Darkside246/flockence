@@ -91,7 +91,7 @@ export async function PATCH(request: Request) {
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${currentFarmId()}, 0))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${currentFarmId()}, 0))`;
       const target = await tx.user.findFirst({
         where: { id: userId, farmId: currentFarmId() },
         select: { id: true, name: true, email: true, role: true, createdAt: true },

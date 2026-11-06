@@ -53,7 +53,7 @@ async function signup(request: Request) {
     const passwordHash = await hashPassword(password);
     const user = await prisma.$transaction(async (tx) => {
       // Serialize first-owner claims and invitation checks for this farm.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${currentFarmId()}, 0))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${currentFarmId()}, 0))`;
 
       const existing = await tx.user.findUnique({ where: { email }, select: { id: true } });
       if (existing) throw new Error("ACCOUNT_ALREADY_EXISTS");

@@ -13,7 +13,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
  *     the sign-in routes.
  */
 
-interface FarmHolder { farmId: string | null; system?: boolean }
+interface FarmHolder { farmId: string | null; system?: boolean; created?: Set<string> }
 const storage = new AsyncLocalStorage<FarmHolder>();
 
 export class FarmScopeError extends Error {
@@ -50,6 +50,21 @@ export function currentFarmId(): string {
   const farmId = currentFarmIdOrNull();
   if (!farmId) throw new FarmScopeError();
   return farmId;
+}
+
+/**
+ * Rows this request has created through the scoped client. A write inside a transaction that points at a row created
+ * earlier in the same transaction cannot find it from another connection yet, so the link check accepts these ids:
+ * they were written by this request after the farm checks, and a rolled-back row would fail the database foreign key.
+ */
+export function rememberCreated(id: unknown) {
+  const holder = storage.getStore();
+  if (!holder || typeof id !== "string") return;
+  (holder.created ??= new Set()).add(id);
+}
+
+export function wasCreatedInRequest(id: string): boolean {
+  return storage.getStore()?.created?.has(id) === true;
 }
 
 export function isUnscoped(): boolean {
