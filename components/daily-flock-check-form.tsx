@@ -247,8 +247,10 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       <label>House humidity %<input value={humidityPercent} onChange={event => setHumidityPercent(event.target.value)} type="number" min="0" max="100" step="0.1"/></label>
       <label>Ammonia ppm<input value={ammoniaPpm} onChange={event => setAmmoniaPpm(event.target.value)} type="number" min="0" step="0.1"/></label>
       <label>Litter condition<select value={litterCondition} onChange={event => setLitterCondition(event.target.value)}><option value="">Not recorded</option><option>DRY</option><option>ACCEPTABLE</option><option>WET</option><option>VERY_WET</option></select></label>
-      <label><input checked={pantingObserved} onChange={event => setPantingObserved(event.target.checked)} type="checkbox"/> Panting observed</label>
-      <label><input checked={wingSpreadingObserved} onChange={event => setWingSpreadingObserved(event.target.checked)} type="checkbox"/> Wing spreading observed</label>
+      <fieldset className="check-pair"><legend>Heat signs seen</legend>
+        <label><input checked={pantingObserved} onChange={event => setPantingObserved(event.target.checked)} type="checkbox"/> Panting observed</label>
+        <label><input checked={wingSpreadingObserved} onChange={event => setWingSpreadingObserved(event.target.checked)} type="checkbox"/> Wing spreading observed</label>
+      </fieldset>
       <label style={{ gridColumn: "1/-1" }}>Notes<textarea value={notes} onChange={event => setNotes(event.target.value)} placeholder="Anything unusual in the house today"/></label>
       <button className="button button-primary" type="submit">Save today's flock check</button>
     </form>
