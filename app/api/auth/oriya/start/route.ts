@@ -16,7 +16,13 @@ const SIGN_IN_COOKIE = "flockence_oriya_sso";
 export async function GET(request: Request) {
   const base = oriyaBaseUrl();
   const auth = process.env.AUTH_SECRET ?? "";
-  if (!base || !platformSecret() || auth.length < 32) return NextResponse.json({ error: "Sign in with Oriya is not set up on this server." }, { status: 503 });
+  if (!base || !platformSecret() || auth.length < 32) {
+    // a readable page, not raw JSON: the person clicked a button
+    const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Flockence</title>` +
+      `<body style="font-family:system-ui;max-width:32rem;margin:15vh auto;padding:0 1rem;color:#1d2b1f"><h1 style="font-size:1.25rem">Sign in with Oriya is not available here</h1>` +
+      `<p>This Flockence has not been linked to Oriya yet. Sign in with your email and password instead, or ask the farm owner to link it.</p><p><a href="/login">Back to sign in</a></p></body></html>`;
+    return new NextResponse(html, { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  }
   const ip = accountClientIp(request) || "unknown";
   const limit = await checkRateLimit("oriya-sso:start:" + ip, 30, 10 * 60_000);
   if (!limit.allowed) return NextResponse.json({ error: "Too many sign-in attempts. Please wait a few minutes." }, { status: 429 });
