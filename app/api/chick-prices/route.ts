@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   await ensureFarm();
   const [setting, suppliers, batches] = await Promise.all([
     prisma.setting.findUnique({ where: { farmId_key: { farmId: currentFarmId(), key: DEFAULT_KEY } }, select: { value: true } }),
-    prisma.supplier.findMany({ where: { farmId: currentFarmId() }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.supplier.findMany({ where: { farmId: currentFarmId(), active: true }, orderBy: [{ category: "asc" }, { name: "asc" }], select: { id: true, name: true, category: true } }),
     prisma.batch.findMany({
       where: { farmId: currentFarmId(), supplierId: { not: null } }, orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
       select: { supplierId: true, chickCostMinor: true, startDate: true }, take: 500,

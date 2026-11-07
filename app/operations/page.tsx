@@ -1,6 +1,7 @@
 "use client";
 import { FormEvent,useEffect,useState } from "react";
 import { SlaughterForm } from "@/components/slaughter-form";
+import { FeedUsed } from "@/components/feed-used";
 import { ChangeBirdNumbers, FeedAndWater, WasteSummary } from "@/components/flock-numbers";
 import { Nav } from "@/components/nav";
 import { ProcessingPack } from "@/components/processing-pack";
@@ -32,6 +33,7 @@ export default function Operations(){
  <form className="card form" onSubmit={e=>submit(e,"/api/weights",f=>({batchId:f.get("batchId"),date:f.get("date"),quantity:Number(f.get("quantity")),avgWeightKg:Number(f.get("avgWeightKg")),scope:f.get("scope"),liveOrDressed:f.get("liveOrDressed")}))}><h3>Record weight</h3><label>Batch<select name="batchId" value={weightBatchId} onChange={e=>setWeightBatchId(e.target.value)} required><option value="">Select batch</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label><label>Date<input name="date" type="date" defaultValue={today()}/></label><label>Birds weighed<input name="quantity" type="number" min="1" required/></label><label>Average weight kg<input name="avgWeightKg" type="number" min="0.01" step="0.001" required/></label><label>Scope<select name="scope"><option>SAMPLE</option><option>INDIVIDUAL</option><option>BATCH_AVERAGE</option></select></label><label>Weight type<select name="liveOrDressed" value={weightType} onChange={e=>setWeightType(e.target.value)}><option value="LIVE">Live weight</option>{!isLayerWeightBatch&&<option value="DRESSED">Dressed weight</option>}</select></label><button className="button">Record weight</button></form>
  <form className="card form" onSubmit={e=>submit(e,"/api/mortality",f=>({batchId:f.get("batchId"),date:f.get("date"),quantity:Number(f.get("quantity")),kind:f.get("kind")||"DIED",disposal:f.get("disposal")||null,reason:f.get("reason"),notes:f.get("notes"),submissionId:crypto.randomUUID()}))}><h3>Birds died</h3><p className="muted">Only the number lost. The live count is worked out for you.</p><label>What happened<select name="kind" defaultValue="DIED"><option value="DIED">Found dead</option><option value="CULLED">Culled</option><option value="MISSING">Missing</option></select></label><label>How disposed of<select name="disposal" defaultValue=""><option value="">Not recorded</option><option value="BURIED">Buried</option><option value="BURNED">Burned</option><option value="COMPOSTED">Composted</option><option value="RENDERED">Rendered</option><option value="COLLECTED">Collected by a contractor</option></select></label><label>Batch<select name="batchId" required><option value="">Select batch</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label><label>Date<input name="date" type="date" defaultValue={today()}/></label><label>Number<input name="quantity" type="number" min="1" required/></label><label>Reason<input name="reason" placeholder="Optional"/></label><button className="button">Record mortality</button></form>
  <ChangeBirdNumbers batches={batches}/>
+ <FeedUsed batches={batches}/>
  <FeedAndWater batches={batches}/>
  </div></section>
  <FoodSafetyChecklist/>

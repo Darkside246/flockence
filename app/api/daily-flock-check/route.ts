@@ -6,6 +6,7 @@ import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { calendarDateInTimeZone, isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 import { meterUsage, tankUsage } from "@/lib/farm-engine.mjs";
+import { convertFeed } from "@/lib/feed-entry";
 import { closeIfEmpty, liveBirdsOn, loadFlockLedger } from "@/lib/flock-ledger";
 
 function invalidNumber(value: unknown, min = 0) {
@@ -85,8 +86,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "A flock check cannot be dated before the flock start date." }, { status: 400 });
     }
 
-    const feedKg = validNumber(input.feedKg);
-    if (syncId && (feedKg == null || feedKg > 999999999 || Number(feedKg.toFixed(3)) !== feedKg)) {
+    // Feed can be entered the way the farm counts it (bags, kg, g, lb or its own scoop or pan); it is stored as kg.
+    let feedKg = validNumber(input.feedKg);
+    let feedEntry: { enteredQuantity: number; enteredUnit: string; basis: string } | null = null;
+    const feedProductId = typeof input.feedProductId === "string" && input.feedProductId ? input.feedProductId : null;
+    if (input.feedAmount !== undefined && input.feedAmount !== null && input.feedAmount !== "") {
+      const conv = await prisma.$transaction(tx => convertFeed(tx, currentFarmId(), { amount: input.feedAmount, unit: input.feedUnit, feedProductId, measureId: typeof input.feedMeasureId === "string" ? input.feedMeasureId : null }));
+      if (!conv.ok) return NextResponse.json({ error: conv.error }, { status: 400 });
+      feedKg = conv.kg;
+      feedEntry = { enteredQuantity: conv.enteredQuantity, enteredUnit: conv.enteredUnit, basis: conv.basis };
+    }
+    // Offline checks carry kilograms; a converted entry (bags, pounds, a scoop) is checked by its own conversion above.
+    if (syncId && !feedEntry && (feedKg == null || feedKg > 999999999 || Number(feedKg.toFixed(3)) !== feedKg)) {
       return NextResponse.json({ error: "Enter feed in kilograms with three decimal places or fewer." }, { status: 400 });
     }
     // What happened to the feed put out: still in the feeders at the end of the day, spilt or spoiled, or taken back to
@@ -250,7 +261,7 @@ export async function POST(request: Request) {
 
       if (feedKg != null && latestFeedPurchase && Number(latestFeedPurchase.bagSizeKg) > 0) {
         const costPerKg = latestFeedPurchase.unitCostMinor / Number(latestFeedPurchase.bagSizeKg);
-        const values = {quantityKg:feedKg,costMinor:Math.round(feedKg * costPerKg),feedType:latestFeedPurchase.feedType,leftoverKg,spillageKg,returnedKg};
+        const values = {quantityKg:feedKg,costMinor:Math.round(feedKg * costPerKg),feedType:latestFeedPurchase.feedType,leftoverKg,spillageKg,returnedKg,feedProductId:feedProductId ?? latestFeedPurchase.feedProductId ?? null,enteredQuantity:feedEntry?.enteredQuantity ?? null,enteredUnit:feedEntry?.enteredUnit ?? null};
         const existingFeed = await tx.feedUsage.findFirst({ where: { batchId, date, feedType: latestFeedPurchase.feedType } });
         if (existingFeed) await tx.feedUsage.update({ where: { id: existingFeed.id }, data: { ...values, note: "Updated from daily flock check." } });
         else await tx.feedUsage.create({ data: { batchId, date, ...values, note: "Created from daily flock check." } });
@@ -270,7 +281,7 @@ export async function POST(request: Request) {
       }
 
       const now = await loadFlockLedger(tx, batchId);
-      return { ...check, liveBirdsNow: now?.balance.live ?? null, lossesRecorded: diedCount + culledCount, waterBasis };
+      return { ...check, liveBirdsNow: now?.balance.live ?? null, lossesRecorded: diedCount + culledCount, waterBasis, feedBasis: feedEntry?.basis ?? null };
     });
 
     return NextResponse.json(row, { status: 201 });

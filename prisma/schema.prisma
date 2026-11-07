@@ -223,6 +223,9 @@ model Farm {
   layerStageEvents LayerStageEvent[]
   thermometerReadings ThermometerReading[]
   waterReadings WaterReading[]
+  feedProducts FeedProduct[]
+  feedProductSuppliers FeedProductSupplier[]
+  feedMeasures FeedMeasure[]
 }
 
 model DailyFlockCheck {
@@ -482,6 +485,7 @@ model FeedPurchase {
   batchId String?
   date DateTime
   feedType String
+  feedProductId String?
   bagSizeKg Decimal @db.Decimal(10,3)
   quantityBags Decimal @db.Decimal(10,3)
   unitCostMinor Int
@@ -490,6 +494,7 @@ model FeedPurchase {
   supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   @@index([batchId, date])
+  @@index([farmId, date])
 }
 
 model FeedUsage {
@@ -505,6 +510,12 @@ model FeedUsage {
   spillageKg Decimal? @db.Decimal(12,3)
   /// Feed taken back to the store (adds back to stock).
   returnedKg Decimal? @db.Decimal(12,3)
+  feedProductId String?
+  /// How the farmer entered it, e.g. 1.5 BAG, 3 MEASURE:<id>, 2 LB. quantityKg is always the converted kilograms.
+  enteredQuantity Decimal? @db.Decimal(12,3)
+  enteredUnit String?
+  /// Pen the feed went to (pen ids live in farm settings).
+  penId String?
   costMinor Int
   note String?
   createdAt DateTime @default(now())
@@ -543,6 +554,8 @@ model Expense {
   id String @id @default(cuid())
   farmId String
   batchId String?
+  supplierId String?
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   date DateTime
   category String
   description String
@@ -716,6 +729,7 @@ model InventoryItem {
   updatedAt DateTime @updatedAt
   @@index([productId, status])
   @@index([batchId, status])
+  @@index([storageLocationId, status])
 }
 
 model StorageLocation {
@@ -860,6 +874,7 @@ model WeightRecord {
   liveOrDressed String
   batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  @@index([batchId, date])
 }
 
 model Setting {
@@ -878,6 +893,20 @@ model Supplier {
   name String
   phone String?
   notes String?
+  /// CHICKS, FEED, MEDICINE, BEDDING, EQUIPMENT, PROCESSING, TRANSPORT, OTHER, or a category the farm typed itself.
+  category String @default("OTHER")
+  businessName String?
+  contactPerson String?
+  whatsapp String?
+  email String?
+  location String?
+  productsSupplied String?
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  feedProducts FeedProductSupplier[]
+  preferredFor FeedProduct[]
+  expenses Expense[]
   farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   batches Batch[]
   feedPurchases FeedPurchase[]
@@ -1201,4 +1230,56 @@ model WaterReading {
   batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
   @@index([farmId, source, readAt])
   @@index([batchId, readAt])
+}
+
+/// The farm's feed catalogue. Started from the built-in Barbados list the first time it is opened, then the farm's own:
+/// names can be edited, products added or switched off, and several suppliers linked to one product.
+model FeedProduct {
+  id String @id @default(cuid())
+  farmId String
+  /// Maker or brand, e.g. "Super Feeds". Empty for the farm's own mix.
+  brand String @default("")
+  name String
+  description String?
+  /// Usual bag size in kg (the farm can still enter any size on a purchase).
+  defaultBagKg Decimal? @db.Decimal(10,3)
+  preferredSupplierId String?
+  active Boolean @default(true)
+  sortOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  preferredSupplier Supplier? @relation(fields: [preferredSupplierId], references: [id], onDelete: SetNull)
+  suppliers FeedProductSupplier[]
+  @@unique([farmId, brand, name])
+  @@index([farmId, active])
+}
+
+/// Which suppliers sell a feed product, with their bag size and last price if known.
+model FeedProductSupplier {
+  id String @id @default(cuid())
+  farmId String
+  feedProductId String
+  supplierId String
+  bagSizeKg Decimal? @db.Decimal(10,3)
+  unitCostMinor Int?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  feedProduct FeedProduct @relation(fields: [feedProductId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  @@unique([feedProductId, supplierId])
+}
+
+/// A farm's own way of measuring feed out: a scoop, a pan, a bucket. Converted to kg only when the farm has said how
+/// much one holds; Flockence never assumes a weight.
+model FeedMeasure {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  /// SCOOP, PAN, FEEDER, BUCKET or OTHER
+  kind String @default("OTHER")
+  kgPerUnit Decimal? @db.Decimal(10,4)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  @@unique([farmId, name])
 }

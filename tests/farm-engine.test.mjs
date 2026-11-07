@@ -282,3 +282,30 @@ test("growth forecast: needs 3 weighing days, gives a range from the fit, never 
   assert.equal(line.model, "straight line");
   assert.equal(line.atAge.kg, 1.257);  // least squares through days 7, 14, 21
 });
+
+import { feedToKg, kgToBags } from "../lib/farm-engine.mjs";
+
+test("feed by the bag: 1 × 30 kg = 30, 2 = 60, half = 15, one and a half = 45", () => {
+  assert.equal(feedToKg(1, "BAG", { bagKg: 30 }).kg, 30);
+  assert.equal(feedToKg(2, "BAG", { bagKg: 30 }).kg, 60);
+  assert.equal(feedToKg(0.5, "BAG", { bagKg: 30 }).kg, 15);
+  assert.equal(feedToKg(1.5, "BAG", { bagKg: 30 }).kg, 45);
+  assert.equal(feedToKg(1, "BAG", { bagKg: 25 }).kg, 25);
+  assert.equal(feedToKg(1, "BAG").ok, false);          // no bag size: not assumed
+});
+
+test("feed by weight: kg, grams and pounds", () => {
+  assert.equal(feedToKg(12.5, "KG").kg, 12.5);
+  assert.equal(feedToKg(750, "G").kg, 0.75);
+  assert.equal(feedToKg(10, "LB").kg, 4.536);            // 10 × 0.45359237, to the gram
+  assert.equal(feedToKg(-1, "KG").ok, false);
+});
+
+test("feed by a farm measure only when the farm has said what one holds", () => {
+  assert.equal(feedToKg(4, "MEASURE", { measureKg: 1.25, measureName: "scoop" }).kg, 5);
+  const none = feedToKg(4, "MEASURE", { measureName: "pan" });
+  assert.equal(none.ok, false);
+  assert.match(none.error, /how much one pan holds/);
+  assert.equal(kgToBags(360, 30), 12);
+  assert.equal(kgToBags(360, null), null);
+});

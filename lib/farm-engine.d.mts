@@ -47,3 +47,6 @@ export function broilerTargetTemp(ageDays: number): { targetC: number; source: s
 export type GrowthForecast = { ok: boolean; status: ValueStatus; note?: string | null; model?: string; weighings?: number; weighingDays?: number; lastWeighedAgeDays?: number; residualSdKg?: number | null; atAge?: { ageDays: number; kg: number; rangeKg: [number, number] | null } | null; reachesTargetAtAge?: number | null; basis?: string };
 export function growthForecast(samples: { ageDays: number; kg: number }[], opts?: { atAgeDays?: number | null; targetKg?: number | null; maxAheadDays?: number }): GrowthForecast;
 export const OUTPUT_KIND: Readonly<Record<string, "EDIBLE" | "BYPRODUCT" | "WASTE">>;
+export const POUND_KG: number;
+export function feedToKg(quantity: number | string | null, unit: string, opts?: { bagKg?: number | null; measureKg?: number | null; measureName?: string }): { ok: boolean; kg?: number; basis?: string; error?: string };
+export function kgToBags(kg: number | null, bagKg: number | null): number | null;

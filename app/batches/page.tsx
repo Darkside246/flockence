@@ -11,6 +11,7 @@ async function readJson(r:Response){const t=await r.text();if(!r.ok)throw new Er
 export default function Batches(){
  const [batches,setBatches]=useState<Batch[]>([]); const [error,setError]=useState("");
  const [houses,setHouses]=useState<string[]>([]);
+ useEffect(()=>{fetch("/api/settings").then(r=>r.ok?r.json():null).then(d=>{const breed=(d?.settings??[]).find((x:{key:string})=>x.key==="default_breed")?.value;if(breed)setForm(f=>f.breed?f:{...f,breed})}).catch(()=>{})},[]);
  useEffect(()=>{fetch("/api/pens").then(r=>r.ok?r.json():[]).then(rows=>Array.isArray(rows)&&setHouses(rows.filter((p:{active?:boolean})=>p.active!==false).map((p:{name:string})=>p.name))).catch(()=>{})},[]);
  const [form,setForm]=useState({name:"",productionType:"BROILER",layerStage:"CHICK",species:"CHICKEN",breed:"",strain:"",sex:"MIXED",hatchery:"",sourceLot:"",placementQuality:"GOOD",placementNotes:"",placementHouse:"",hatchDate:"",purchaseDate:"",initialChicks:"",chickCost:"290",dealer:"",newDealer:"",targetAge:"42",mode:"AGE_OR_WEIGHT",targetWeight:""});
  // Chick prices (owner, 2026-11-02): the usual price, or the price last paid to the chosen dealer; always editable.

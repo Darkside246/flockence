@@ -47,7 +47,8 @@ export async function POST(request: Request) {
       return NextResponse.json(expense, { status: 201 });
     }
     if (!input.date || !input.category || !input.description || input.amountMinor == null) return NextResponse.json({ error: "Date, category, description and amount are required." }, { status: 400 });
-    const row = await prisma.expense.create({ data: { farmId: currentFarmId(), batchId: (input.batchId as string) || null, date: new Date(input.date as string), category: input.category as string, description: input.description as string, amountMinor: input.amountMinor as number, economicCost: input.economicCost !== false, allocationMethod: (input.allocationMethod as "FARM_WIDE") || "FARM_WIDE", recordStatus: "ACTUAL" } });
+    if (input.supplierId && !(await prisma.supplier.findFirst({ where: { id: String(input.supplierId), farmId: currentFarmId() }, select: { id: true } }))) return NextResponse.json({ error: "Supplier not found." }, { status: 404 });
+    const row = await prisma.expense.create({ data: { farmId: currentFarmId(), batchId: (input.batchId as string) || null, supplierId: (input.supplierId as string) || null, date: new Date(input.date as string), category: input.category as string, description: input.description as string, amountMinor: input.amountMinor as number, economicCost: input.economicCost !== false, allocationMethod: (input.allocationMethod as "FARM_WIDE") || "FARM_WIDE", recordStatus: "ACTUAL" } });
     return NextResponse.json(row, { status: 201 });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid expense" }, { status: 400 }); }
 }

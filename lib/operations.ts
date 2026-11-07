@@ -25,27 +25,52 @@ export async function ensureFarm() {
 
 export async function dashboardData() {
   await ensureFarm();
-  const [batches, sales, expenses, transport, inventory, household] = await Promise.all([
-    prisma.batch.findMany({ where: { farmId: currentFarmId() }, include: { birdCounts: { where: { date: { lte: new Date() } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 1 }, mortalityEvents: true, feedPurchases: true, feedUsage: true, beddingPurchases: true, expenses: true, slaughterEvents: true } }),
-    prisma.sale.findMany({ where: { farmId: currentFarmId(), recordStatus: "ACTUAL" }, select: { totalMinor: true, amountPaidMinor: true } }),
-    prisma.expense.findMany({ where: { farmId: currentFarmId(), recordStatus: "ACTUAL" } }),
-    prisma.transportationExpense.findMany({ where: { farmId: currentFarmId() } }),
-    prisma.inventoryItem.findMany({ where: { product: { farmId: currentFarmId() }, status: { in: ["AVAILABLE", "RESERVED"] } }, include: { product: true } }),
-    prisma.householdConsumption.aggregate({ where: { batch: { farmId: currentFarmId() } }, _sum: { estimatedValueMinor: true } })
+  const farmId = currentFarmId();
+  // Totals are summed by the database instead of loading every feed entry, death and purchase of every flock ever kept
+  // (that grew with each year of records). Same figures as before.
+  const [batches, mortalityByBatch, feedUseByBatch, feedBought, bedding, slaughterByBatch, batchExpenseByBatch, farmExpenses, salesSum, transport, inventory, household] = await Promise.all([
+    prisma.batch.findMany({ where: { farmId }, select: { id: true, name: true, status: true, productionType: true, species: true, initialChicks: true, chickCostMinor: true, expectedSlaughter: true } }),
+    prisma.mortalityEvent.groupBy({ by: ["batchId"], where: { batch: { farmId } }, _sum: { quantity: true } }),
+    prisma.feedUsage.groupBy({ by: ["batchId"], where: { batch: { farmId } }, _sum: { costMinor: true }, _count: { _all: true } }),
+    prisma.feedPurchase.findMany({ where: { farmId, batchId: { not: null } }, select: { batchId: true, quantityBags: true, unitCostMinor: true } }),
+    prisma.beddingPurchase.findMany({ where: { batch: { farmId } }, select: { batchId: true, quantity: true, unitCostMinor: true } }),
+    prisma.slaughterEvent.groupBy({ by: ["batchId"], where: { batch: { farmId } }, _sum: { slaughterCostMinor: true } }),
+    prisma.expense.groupBy({ by: ["batchId"], where: { farmId, batchId: { not: null } }, _sum: { amountMinor: true } }),
+    prisma.expense.aggregate({ where: { farmId, recordStatus: "ACTUAL", batchId: null }, _sum: { amountMinor: true } }),
+    prisma.sale.aggregate({ where: { farmId, recordStatus: "ACTUAL" }, _sum: { totalMinor: true, amountPaidMinor: true } }),
+    prisma.transportationExpense.findMany({ where: { farmId }, select: { actualCashMinor: true, economicMinor: true } }),
+    prisma.inventoryItem.findMany({ where: { product: { farmId }, status: { in: ["AVAILABLE", "RESERVED"] } }, select: { sellingPriceMinor: true, quantity: true, costBasisMinor: true } }),
+    prisma.householdConsumption.aggregate({ where: { batch: { farmId } }, _sum: { estimatedValueMinor: true } }),
   ]);
+  const by = <T extends { batchId: string | null }>(rows: T[], pick: (r: T) => number) => {
+    const m = new Map<string, number>();
+    for (const r of rows) if (r.batchId) m.set(r.batchId, (m.get(r.batchId) ?? 0) + pick(r));
+    return m;
+  };
+  const deaths = by(mortalityByBatch, r => r._sum.quantity ?? 0);
+  const feedUseCost = by(feedUseByBatch, r => r._sum.costMinor ?? 0);
+  const feedUseCount = by(feedUseByBatch, r => r._count._all);
+  const feedBoughtCost = by(feedBought, r => Number(r.quantityBags) * r.unitCostMinor);
+  const beddingCost = by(bedding, r => Number(r.quantity) * r.unitCostMinor);
+  const slaughterCost = by(slaughterByBatch, r => r._sum.slaughterCostMinor ?? 0);
+  const batchExpenses = by(batchExpenseByBatch, r => r._sum.amountMinor ?? 0);
+
+  const active = batches.filter(batch => batch.status === "ACTIVE");
+  const activeIds = active.map(b => b.id);
+  // live birds only for the flocks still on the farm
+  const [snapshots, activeDeaths, activeSent] = activeIds.length ? await Promise.all([
+    prisma.birdCount.findMany({ where: { batchId: { in: activeIds }, date: { lte: new Date() } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], distinct: ["batchId"] }),
+    prisma.mortalityEvent.findMany({ where: { batchId: { in: activeIds } }, select: { batchId: true, quantity: true, date: true, createdAt: true } }),
+    prisma.slaughterEvent.findMany({ where: { batchId: { in: activeIds } }, select: { batchId: true, sentQuantity: true, date: true, createdAt: true } }),
+  ]) : [[], [], []];
   const liveCount = (batch: typeof batches[number]) => reconcileLiveBirdsFromSnapshot(
     batch.initialChicks,
-    batch.birdCounts[0] ?? null,
+    snapshots.find(s => s.batchId === batch.id) ?? null,
     [
-      ...batch.mortalityEvents.map(event => ({
-        quantity: event.quantity, date: event.date, createdAt: event.createdAt,
-      })),
-      ...batch.slaughterEvents.map(event => ({
-        quantity: event.sentQuantity, date: event.date, createdAt: event.createdAt,
-      })),
+      ...activeDeaths.filter(e => e.batchId === batch.id).map(event => ({ quantity: event.quantity, date: event.date, createdAt: event.createdAt })),
+      ...activeSent.filter(e => e.batchId === batch.id).map(event => ({ quantity: event.sentQuantity, date: event.date, createdAt: event.createdAt })),
     ],
   ) ?? 0;
-  const active = batches.filter(batch => batch.status === "ACTIVE");
   const isLayer = (batch: typeof batches[number]) =>
     batch.productionType === "LAYER" || (batch.productionType == null && batch.species.toUpperCase() === "LAYER");
   const liveBroilerBirds = active.filter(batch => !isLayer(batch)).reduce((sum, batch) => sum + liveCount(batch), 0);
@@ -53,27 +78,24 @@ export async function dashboardData() {
   const activeBroilerFlocks = active.filter(batch => !isLayer(batch)).length;
   const activeLayerFlocks = active.filter(isLayer).length;
   const liveBirds = liveBroilerBirds + liveLayerBirds;
-  const totalMortality = batches.reduce((sum, b) => sum + b.mortalityEvents.reduce((x, m) => x + m.quantity, 0), 0);
+  const totalMortality = batches.reduce((sum, b) => sum + (deaths.get(b.id) ?? 0), 0);
   const initial = batches.reduce((sum, b) => sum + b.initialChicks, 0);
-  const salesTotal = sales.reduce((sum, s) => sum + s.totalMinor, 0);
-  const cashCollected = sales.reduce((sum, s) => sum + s.amountPaidMinor, 0);
+  const salesTotal = salesSum._sum.totalMinor ?? 0;
+  const cashCollected = salesSum._sum.amountPaidMinor ?? 0;
   const batchCosts = batches.reduce((sum, b) => {
-    const feed = b.feedUsage.length ? b.feedUsage.reduce((x, f) => x + f.costMinor, 0) : b.feedPurchases.reduce((x, f) => x + Number(f.quantityBags) * f.unitCostMinor, 0);
-    const bedding = b.beddingPurchases.reduce((x, p) => x + Number(p.quantity) * p.unitCostMinor, 0);
-    const slaughter = b.slaughterEvents.reduce((x, s) => x + s.slaughterCostMinor, 0);
-    const batchExpenses = b.expenses.reduce((x, e) => x + e.amountMinor, 0);
-    return sum + b.initialChicks * b.chickCostMinor + feed + bedding + slaughter + batchExpenses;
+    const feed = (feedUseCount.get(b.id) ?? 0) > 0 ? (feedUseCost.get(b.id) ?? 0) : (feedBoughtCost.get(b.id) ?? 0);
+    return sum + b.initialChicks * b.chickCostMinor + feed + (beddingCost.get(b.id) ?? 0) + (slaughterCost.get(b.id) ?? 0) + (batchExpenses.get(b.id) ?? 0);
   }, 0);
-  const farmExpenses = expenses.filter(e => !e.batchId).reduce((sum, e) => sum + e.amountMinor, 0);
+  const farmExpenseTotal = farmExpenses._sum.amountMinor ?? 0;
   const transportTotal = transport.reduce((sum, t) => sum + Math.max(t.actualCashMinor, t.economicMinor), 0);
   const inventoryValue = inventory.reduce((sum, i) => sum + (i.sellingPriceMinor != null ? Math.round(i.sellingPriceMinor * Number(i.quantity)) : i.costBasisMinor), 0);
   const householdValue = household._sum.estimatedValueMinor ?? 0;
-  const economicCosts = batchCosts + farmExpenses + transportTotal;
+  const economicCosts = batchCosts + farmExpenseTotal + transportTotal;
   const economicProfit = salesTotal + inventoryValue + householdValue - economicCosts;
   const margin = salesTotal + inventoryValue + householdValue ? economicProfit / (salesTotal + inventoryValue + householdValue) : null;
   const mortalityRate = initial ? totalMortality / initial : 0;
   const score = farmScore({ mortalityRate, margin, inventoryTurnover: salesTotal ? Math.min(1, salesTotal / Math.max(1, inventoryValue + salesTotal)) : 0, expenseControl: economicCosts ? Math.max(0, Math.min(1, salesTotal / economicCosts)) : 0, consistency: batches.length ? Math.min(1, batches.filter(b => b.status !== "PLANNED").length / batches.length) : 0 });
-  const alertRows = batches.map(b => ({ name: b.name, status: b.status, expectedSlaughter: b.expectedSlaughter, initialChicks: b.initialChicks, mortality: b.mortalityEvents.reduce((x,m)=>x+m.quantity,0) }));
+  const alertRows = batches.map(b => ({ name: b.name, status: b.status, expectedSlaughter: b.expectedSlaughter, initialChicks: b.initialChicks, mortality: deaths.get(b.id) ?? 0 }));
   return { liveBirds, liveBroilerBirds, liveLayerBirds, activeBroilerFlocks, activeLayerFlocks, activeBatches: active.length, mortalityCount: totalMortality, mortalityRate: initial ? mortalityRate : null, salesTotal, cashCollected, expenseTotal: economicCosts, inventoryValue, householdValue, economicProfit, farmScore: score, alerts: alerts(alertRows) };
 }
 

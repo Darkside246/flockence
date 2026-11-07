@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     const batch = await prisma.$transaction(async (tx) => {
       if (newDealerName) {
         const existing = await tx.supplier.findFirst({ where: { farmId: currentFarmId(), name: { equals: newDealerName, mode: "insensitive" } }, select: { id: true } });
-        supplierId = existing?.id ?? (await tx.supplier.create({ data: { farmId: currentFarmId(), name: newDealerName, notes: "Chick dealer" }, select: { id: true } })).id;
+        supplierId = existing?.id ?? (await tx.supplier.create({ data: { farmId: currentFarmId(), name: newDealerName, category: "CHICKS", notes: "Chick dealer" }, select: { id: true } })).id;
       }
       const created = await tx.batch.create({ data: {
         farmId: currentFarmId(), name: input.name, startDate, hatchDate, purchaseDate,

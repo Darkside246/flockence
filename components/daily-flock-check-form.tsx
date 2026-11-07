@@ -18,6 +18,10 @@ type DailyCheckPayload = {
   /** One id per press of Save, so a retry after a dropped connection never counts the same deaths twice. */
   submissionId: string;
   feedKg: number | null;
+  /** When feed was counted in bags, pounds, grams or a farm measure: the server converts it to kg. */
+  feedAmount?: number | null;
+  feedUnit?: string;
+  feedMeasureId?: string | null;
   leftoverKg: number | null;
   spillageKg: number | null;
   returnedKg: number | null;
@@ -85,6 +89,12 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
   const [diedReason, setDiedReason] = useState("");
   const [culledCount, setCulledCount] = useState("");
   const [feedKg, setFeedKg] = useState("");
+  const [feedUnit, setFeedUnit] = useState("KG"), [feedMeasureId, setFeedMeasureId] = useState("");
+  const [measures, setMeasures] = useState<{ id: string; name: string; kgPerUnit: number | null; active: boolean }[]>([]);
+  useEffect(() => {
+    fetch("/api/feed-measures").then(r => r.ok ? r.json() : []).then(m => Array.isArray(m) && setMeasures(m.filter((x: { active: boolean }) => x.active))).catch(() => {});
+    try { const u = localStorage.getItem("flockence-feed-unit"); if (u) setFeedUnit(u); } catch { /* storage blocked */ }
+  }, []);
   const [leftoverKg, setLeftoverKg] = useState(""), [spillageKg, setSpillageKg] = useState(""), [returnedKg, setReturnedKg] = useState("");
   const [waterLiters, setWaterLiters] = useState("");
   const [waterReadingL, setWaterReadingL] = useState(""), [waterAddedL, setWaterAddedL] = useState("");
@@ -193,7 +203,8 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       diedReason,
       culledCount: culledCount.trim() === "" ? null : Number(culledCount),
       submissionId: crypto.randomUUID(),
-      feedKg: numberOrNull(feedKg),
+      feedKg: feedUnit === "KG" ? numberOrNull(feedKg) : null,
+      ...(feedUnit !== "KG" && feedKg !== "" ? { feedAmount: Number(feedKg), feedUnit, feedMeasureId: feedUnit === "MEASURE" ? feedMeasureId : null } : {}),
       leftoverKg: numberOrNull(leftoverKg), spillageKg: numberOrNull(spillageKg), returnedKg: numberOrNull(returnedKg),
       waterLiters: numberOrNull(waterLiters),
       waterReadingL: numberOrNull(waterReadingL), waterSource: waterSource.trim(), waterKind, waterAddedL: numberOrNull(waterAddedL),
@@ -224,7 +235,7 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       const saved = await send(payload);
       try { if (waterSource.trim()) localStorage.setItem("flockence-water-source", waterSource.trim()); } catch { /* storage blocked */ }
       setDiedCount("");setDiedReason("");setCulledCount("");setLiveCount("");setWaterReadingL("");setWaterAddedL("");
-      setRevision(v=>v+1);setMessage("Flock check saved for "+date+"."+(saved?.liveBirdsNow!=null?" "+saved.liveBirdsNow+" live birds remaining"+(saved.lossesRecorded?" after "+saved.lossesRecorded+" lost today":"")+".":"")+(saved?.waterBasis?" "+saved.waterBasis:""));
+      setRevision(v=>v+1);setMessage("Flock check saved for "+date+"."+(saved?.liveBirdsNow!=null?" "+saved.liveBirdsNow+" live birds remaining"+(saved.lossesRecorded?" after "+saved.lossesRecorded+" lost today":"")+".":"")+(saved?.feedBasis?" Feed: "+saved.feedBasis+".":"")+(saved?.waterBasis?" "+saved.waterBasis:""));
     } catch (error) {
       if (!navigator.onLine) {
         try {
@@ -258,7 +269,8 @@ export function DailyFlockCheckForm({ batches }: { batches: Batch[] }) {
       <label>Birds culled (optional)<input value={culledCount} onChange={event => setCulledCount(event.target.value)} type="number" min="0" step="1" placeholder="0"/></label>
       <label>Live birds (only if you counted them)<input value={liveCount} onChange={event => setLiveCount(event.target.value)} type="number" min="0" max={selectedBatch?.initialChicks ?? undefined} step="1" placeholder={selectedBatch?.liveBirdCount != null ? String(selectedBatch.liveBirdCount) : "Worked out for you"} aria-describedby="live-birds-hint"/>
         <small id="live-birds-hint" className="muted">{selectedBatch?.liveBirdCount != null ? `Worked out from your records: ${selectedBatch.liveBirdCount} (starting birds minus deaths and birds sent). ` : "Worked out from your records. "}Leave blank unless you did a head count. If you do count, count after the dead birds are removed; the deaths above are taken off first.</small></label>
-      <label>Feed put in the feeders kg<input value={feedKg} onChange={event => setFeedKg(event.target.value)} type="number" min="0" step="0.001"/></label>
+      <label>Feed put in the feeders<span className="inline-pair"><input value={feedKg} onChange={event => setFeedKg(event.target.value)} type="number" min="0" step="any" aria-label="Amount of feed"/><select value={feedUnit} onChange={event => { setFeedUnit(event.target.value); try { localStorage.setItem("flockence-feed-unit", event.target.value); } catch { /* storage blocked */ } }} aria-label="Counted in"><option value="KG">kg</option><option value="BAG">bags</option><option value="LB">lb</option><option value="G">g</option>{measures.length > 0 && <option value="MEASURE">my measure</option>}</select></span></label>
+      {feedUnit === "MEASURE" && <label>Which measure<select value={feedMeasureId} onChange={event => setFeedMeasureId(event.target.value)} required><option value="">Choose</option>{measures.map(m => <option key={m.id} value={m.id}>{m.name}{m.kgPerUnit ? ` (${m.kgPerUnit} kg)` : " (weight not set)"}</option>)}</select></label>}
       {feedKg !== "" && <>
         <label>Left in the feeders kg (if weighed)<input value={leftoverKg} onChange={event => setLeftoverKg(event.target.value)} type="number" min="0" step="0.001" placeholder="Not weighed"/></label>
         <label>Spilt or spoiled kg<input value={spillageKg} onChange={event => setSpillageKg(event.target.value)} type="number" min="0" step="0.001" placeholder="0"/></label>

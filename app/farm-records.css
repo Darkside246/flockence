@@ -108,3 +108,29 @@ dialog.ui-dialog .check-line input { width: 18px; height: 18px; min-height: 0; f
 .shell .check-line { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 .shell .check-line input { width: 18px; height: 18px; min-height: 0; flex: none; }
 .waste-list { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13px; line-height: 1.5; }
+
+/* Farm briefing, supplier picker, feed catalogue lists, dashboard choices. */
+.briefing-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.briefing-list li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--border-default); font-size: 14px; line-height: 1.45; }
+.briefing-list li:last-child { border-bottom: 0; }
+.briefing-mark { text-align: center; font-size: 12px; }
+.briefing-urgent .briefing-mark { color: var(--status-danger); }
+.briefing-attention .briefing-mark { color: var(--status-warning); }
+.briefing-urgent .briefing-text { font-weight: 650; }
+.briefing-text small { display: inline; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.supplier-picker { position: relative; display: grid; gap: 6px; }
+.supplier-picker > label { margin: 0; }
+.supplier-options { position: absolute; z-index: 40; top: 100%; left: 0; right: 0; margin: 4px 0 0; padding: 4px; list-style: none; max-height: 280px; overflow-y: auto; border-radius: 10px; border: 1px solid var(--border-default); background: var(--bg-surface-elevated); box-shadow: var(--shadow-elevated); }
+.supplier-options button { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; width: 100%; min-height: 40px; padding: 6px 10px; text-align: left; border: 0; border-radius: 8px; background: transparent; color: var(--text-primary); font: inherit; cursor: pointer; }
+.supplier-options button:hover, .supplier-options button:focus-visible { background: var(--accent-soft); }
+.supplier-options small { font-size: 11px; color: var(--text-secondary); }
+.supplier-options .muted { padding: 8px 10px; }
+.feed-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
+.feed-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-default); font-size: 13px; }
+.feed-group summary { cursor: pointer; padding: 8px 0; font-weight: 650; }
+.row-inactive { opacity: .62; }
+.toolbar-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 12px; }
+.toolbar-row > label { flex: 1 1 200px; }
+.quick-amounts { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-choices { display: grid; gap: 4px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }

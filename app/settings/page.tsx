@@ -1,6 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import { FeedSettings } from "@/components/feed-settings";
+import { DashboardSettings } from "@/components/dashboard-settings";
 import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { SettingsCameraProviders } from "@/components/settings-camera-providers";
@@ -23,6 +25,7 @@ type Section = typeof sections[number][0];
 const defaults = {
   default_feed_bag_price: "56", default_chick_cost: "2.90", default_slaughter_cost: "2.00",
   weather_location_name: "", weather_latitude: "", weather_longitude: "",
+  default_bag_kg: "", feed_record_method: "BAG", feed_low_days: "7", default_breed: "",
 };
 type Preferences = typeof defaults;
 type PreferenceKey = keyof Preferences;
@@ -139,7 +142,7 @@ export default function SettingsPage() {
         </form>
       </>}
 
-      {section === "operations" && <form className="section card form" onSubmit={(event) => save(event, costFields.map(({ key }) => key))}>
+      {section === "operations" && <><form className="section card form" onSubmit={(event) => save(event, costFields.map(({ key }) => key))}>
         <h2>Default operating costs</h2>
         <fieldset className="grid2" disabled={!editable || saving || !loaded}>
           {costFields.map(({ key, label }) => <label key={key}>{label} {farm?.currency ?? "BBD"}
@@ -148,7 +151,19 @@ export default function SettingsPage() {
         </fieldset>
         {editable && <button className="button button-primary" type="submit" disabled={saving || !loaded}>{saving ? "Saving…" : "Save operating costs"}</button>}
         <p><Link className="action" href="/pens">Pen records and configuration</Link></p>
-      </form>}
+      </form>
+      <form className="section card form" onSubmit={(event) => save(event, ["default_bag_kg", "feed_record_method", "feed_low_days", "default_breed"])}>
+        <h2>Feed defaults</h2>
+        <fieldset className="grid2" disabled={!editable || saving || !loaded}>
+          <label>Usual feed bag size kg<input type="number" min="0" max="1000" step="0.1" value={preferences.default_bag_kg} onChange={(e) => update("default_bag_kg", e.target.value)} placeholder="e.g. 30" /></label>
+          <label>How you usually count feed out<select value={preferences.feed_record_method} onChange={(e) => update("feed_record_method", e.target.value)}><option value="BAG">By the bag</option><option value="KG">Kilograms</option><option value="LB">Pounds</option><option value="MEASURE">Scoop, pan or feeder fill</option></select></label>
+          <label>Warn when feed in store is below (days)<input type="number" min="1" max="60" step="1" value={preferences.feed_low_days} onChange={(e) => update("feed_low_days", e.target.value)} /></label>
+          <label>Usual breed<input value={preferences.default_breed} maxLength={80} onChange={(e) => update("default_breed", e.target.value)} placeholder="e.g. Cobb 500" /></label>
+        </fieldset>
+        {editable && <button className="button button-primary" type="submit" disabled={saving || !loaded}>{saving ? "Saving…" : "Save feed defaults"}</button>}
+      </form>
+      <FeedSettings />
+      <DashboardSettings /></>}
 
       {section === "team" && <section className="section card">
         <h2>Team &amp; permissions</h2>
