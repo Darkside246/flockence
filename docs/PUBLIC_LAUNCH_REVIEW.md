@@ -22,3 +22,5 @@
 ## This branch
 
 The signup lock fix already in the parent draft has been applied to the team role and flock-operation lock calls. The CI database job runs the farm-isolation regression suite against a disposable PostgreSQL database. No production migration or environment change is part of this branch.
+
+Latest Oriya source check: build/property-operations-os at 54aa129b is 47 commits ahead of the consolidation branch and contains the same Flockence SSO router, account service, integration URL policy and entitlement migration. The deployed Oriya revision is unverified.
