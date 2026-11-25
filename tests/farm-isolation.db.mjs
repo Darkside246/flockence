@@ -109,3 +109,28 @@ test("public farm preferences exclude server-owned settings and unknown keys", a
     assert.equal(isFarmPreferenceKey(key), false);
   }
 });
+
+test("verified Free signup provisions independent farms and rolls back duplicate email", async () => {
+  const { provisionFreeFarm } = await import("../lib/free-registration.ts");
+  const { sessionFromToken, getPasswordHash, verifyPassword } = await import("../lib/auth.ts");
+  const { randomUUID } = await import("node:crypto");
+  const name = "Registration test " + randomUUID();
+  const registration = { farmName: name, ownerName: "Farm owner", password: "Registration-test!23" };
+  const email = randomUUID() + "@example.test";
+  try {
+    const first = await provisionFreeFarm({ ...registration, verifiedEmail: email });
+    const second = await provisionFreeFarm({ ...registration, verifiedEmail: randomUUID() + "@example.test" });
+    assert.notEqual(first.owner.farmId, second.owner.farmId);
+    assert.equal(first.owner.role, "OWNER");
+    assert.deepEqual(await sessionFromToken(first.session.token), { userId: first.owner.id, farmId: first.owner.farmId });
+    assert.equal(await runAsFarm(second.owner.farmId, () => prisma.user.findUnique({ where: { id: first.owner.id } })), null);
+    const hash = await runAsFarm(first.owner.farmId, () => getPasswordHash(first.owner.id));
+    assert.ok(hash && await verifyPassword(registration.password, hash));
+    const membership = await runAsFarm(first.owner.farmId, () => prisma.setting.findFirst({ where: { key: "MEMBERSHIP_V1" } }));
+    assert.equal(membership?.value, "FREE");
+    await assert.rejects(() => provisionFreeFarm({ ...registration, verifiedEmail: email.toUpperCase() }), { code: "P2002" });
+    assert.equal(await runUnscoped(() => prisma.farm.count({ where: { name } })), 2);
+  } finally {
+    await runUnscoped(() => prisma.farm.deleteMany({ where: { name } }));
+  }
+});

@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { createHash, createHmac, randomBytes, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { prisma } from "@/lib/prisma";
@@ -53,11 +54,11 @@ function secureCookieOptions(maxAge: number) {
 }
 
 /** maxAgeSeconds: shorter for Oriya sign-ins, so a removal or downgrade in Oriya takes effect within hours. */
-export async function createSession(userId: string, maxAgeSeconds = SESSION_DAYS * 86400) {
+export async function createSession(userId: string, maxAgeSeconds = SESSION_DAYS * 86400, client: Prisma.TransactionClient = prisma) {
   await ensureFarm();
   const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000);
   const token = signedSessionToken(userId, expiresAt.getTime());
-  await prisma.setting.create({ data: { farmId: currentFarmId(), key: `${SESSION_PREFIX}${digest(token)}`, value: JSON.stringify({ userId, expiresAt: expiresAt.toISOString() }) } });
+  await client.setting.create({ data: { farmId: currentFarmId(), key: `${SESSION_PREFIX}${digest(token)}`, value: JSON.stringify({ userId, expiresAt: expiresAt.toISOString() }) } });
   return { token, expiresAt };
 }
 
