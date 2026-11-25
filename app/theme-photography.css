@@ -143,3 +143,15 @@ html[data-theme] :is(.nav-brand-mark, .brand-mark) {
   .theme-photo-housing { --photo-crop: 64% 37%; }
   .theme-photo-housing::after { background: linear-gradient(180deg, var(--photo-base), transparent 42%); }
 }
+
+@media (max-width: 760px) {
+  html[data-theme] .mobile-nav-toggle {
+    background: var(--bg-surface-elevated) !important;
+    color: var(--text-link) !important;
+    border: 1px solid var(--border-default) !important;
+    box-shadow: var(--shadow-card) !important;
+  }
+  html[data-theme]:not([data-theme="crystal"]) .setup-banner > div:first-child {
+    padding-block-start: 56px;
+  }
+}
