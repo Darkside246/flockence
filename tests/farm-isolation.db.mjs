@@ -5,10 +5,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-if (!/test/.test(process.env.DATABASE_URL ?? "")) { console.error("Refusing: DATABASE_URL must name a test database."); process.exit(2); }
+const databaseUrl = new URL(process.env.DATABASE_URL ?? "postgresql://localhost");
+if (!/^\/[A-Za-z0-9_]+_test$/.test(databaseUrl.pathname)) {
+  console.error("Refusing: DATABASE_URL must name a disposable database ending in _test.");
+  process.exit(2);
+}
 process.env.AUTH_SECRET ??= "t".repeat(40);
 
 const { prisma } = await import("../lib/prisma.ts");
+const { lockFlockOperations } = await import("../lib/poultry-lock.ts");
 const { runAsFarm, runUnscoped, FarmScopeError } = await import("../lib/farm-scope.ts");
 const { saveFarmLink, farmLinkConfig } = await import("../lib/oriya-farm-link.ts");
 
@@ -70,6 +75,12 @@ test("transactions are kept to the farm too", async () => {
   assert.equal(count, 1);
 });
 
+test("flock transaction locks work through Prisma and release at commit", async () => {
+  const batch = await runAsFarm(A, () => prisma.batch.findFirstOrThrow());
+  await runAsFarm(A, () => prisma.$transaction((tx) => lockFlockOperations(tx, [batch.id, batch.id])));
+  await runAsFarm(A, () => prisma.$transaction((tx) => lockFlockOperations(tx, [batch.id])));
+});
+
 test("each farm's Oriya link is its own, encrypted", async () => {
   process.env.ORIYA_URL = "https://oriya.si";
   await runAsFarm(A, () => saveFarmLink({ keyId: "cop_" + "a".repeat(24), secret: "x".repeat(43) }));
@@ -88,4 +99,66 @@ test("requests running at the same time each keep their own farm", async () => {
     return (await prisma.batch.findMany()).map((b) => b.farmId);
   })));
   assert.deepEqual(results.map((ids) => [...new Set(ids)]), [[A], [B], [A], [B]]);
+});
+
+test("public farm preferences exclude server-owned settings and unknown keys", async () => {
+  const { farmPreferenceKeys, isFarmPreferenceKey } = await import("../lib/farm-preferences.ts");
+  assert.equal(farmPreferenceKeys.length, 6);
+  for (const key of farmPreferenceKeys) assert.equal(isFarmPreferenceKey(key), true);
+  for (const key of ["ORIYA_LINK", "ORIYA_SEEN::event", "AUTH_SESSION::session", "FARM_INVITE::code", "membership", null, {}]) {
+    assert.equal(isFarmPreferenceKey(key), false);
+  }
+});
+
+test("verified Free signup provisions independent farms and rolls back duplicate email", async () => {
+  const { provisionFreeFarm } = await import("../lib/free-registration.ts");
+  const { sessionFromToken, getPasswordHash, verifyPassword } = await import("../lib/auth.ts");
+  const { randomUUID } = await import("node:crypto");
+  const name = "Registration test " + randomUUID();
+  const registration = { farmName: name, ownerName: "Farm owner", password: "Registration-test!23" };
+  const email = randomUUID() + "@example.test";
+  try {
+    const first = await provisionFreeFarm({ ...registration, verifiedEmail: email });
+    const second = await provisionFreeFarm({ ...registration, verifiedEmail: randomUUID() + "@example.test" });
+    assert.notEqual(first.owner.farmId, second.owner.farmId);
+    assert.equal(first.owner.role, "OWNER");
+    assert.deepEqual(await sessionFromToken(first.session.token), { userId: first.owner.id, farmId: first.owner.farmId });
+    assert.equal(await runAsFarm(second.owner.farmId, () => prisma.user.findUnique({ where: { id: first.owner.id } })), null);
+    const hash = await runAsFarm(first.owner.farmId, () => getPasswordHash(first.owner.id));
+    assert.ok(hash && await verifyPassword(registration.password, hash));
+    const membership = await runAsFarm(first.owner.farmId, () => prisma.setting.findFirst({ where: { key: "MEMBERSHIP_V1" } }));
+    assert.equal(membership?.value, "FREE");
+    await assert.rejects(() => provisionFreeFarm({ ...registration, verifiedEmail: email.toUpperCase() }), { code: "P2002" });
+    assert.equal(await runUnscoped(() => prisma.farm.count({ where: { name } })), 2);
+  } finally {
+    await runUnscoped(() => prisma.farm.deleteMany({ where: { name } }));
+  }
+});
+
+test("farm setup accepts every Barbados parish and keeps location optional", async () => {
+  const { barbadosParishes, farmSetupSchema } = await import("../lib/farm-setup.ts");
+  const profile = { name: "Example farm", operation: "BOTH", country: "Barbados", parish: "", community: "", unit: "ft" };
+  assert.equal(new Set(barbadosParishes).size, 11);
+  for (const parish of barbadosParishes) {
+    assert.ok(farmSetupSchema.safeParse({ ...profile, parish }).success);
+  }
+  assert.ok(farmSetupSchema.safeParse({ ...profile, country: "", unit: "m" }).success);
+  assert.ok(farmSetupSchema.safeParse({ ...profile, country: "Saint Lucia", parish: "Anse la Raye" }).success);
+  assert.equal(farmSetupSchema.safeParse({ ...profile, parish: "Invalid" }).success, false);
+  assert.equal(farmSetupSchema.safeParse({ ...profile, farmId: "other-farm" }).success, false);
+});
+
+test("housing setup accepts feet and metres and rejects duplicate or invalid pens", async () => {
+  const { farmSetupSchema, metres } = await import("../lib/farm-setup.ts");
+  const { randomUUID } = await import("node:crypto");
+  const pen = { id: randomUUID(), name: "Pen A", housingMode: "OPEN_SIDED_HOT",
+    length: 20, width: 30, unit: "ft", status: "ACTIVE", capacity: 100, occupants: 30, notes: "" };
+  const profile = { name: "Example farm", operation: "BROILER", country: "", parish: "", community: "", unit: "ft" };
+  assert.ok(farmSetupSchema.safeParse({ ...profile, pens: [pen, { ...pen, id: randomUUID(), name: "Pen B", unit: "m" }] }).success);
+  assert.ok(farmSetupSchema.safeParse({ ...profile, pens: [] }).success);
+  assert.equal(pen.length * pen.width, 600);
+  assert.ok(Math.abs(metres(20, "ft") - 6.096) < 0.000001);
+  assert.equal(metres(5, "m"), 5);
+  assert.equal(farmSetupSchema.safeParse({ ...profile, pens: [pen, { ...pen, id: randomUUID(), name: "pen a" }] }).success, false);
+  assert.equal(farmSetupSchema.safeParse({ ...profile, pens: [{ ...pen, width: 0 }] }).success, false);
 });

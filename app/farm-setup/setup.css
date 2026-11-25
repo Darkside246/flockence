@@ -1,0 +1,37 @@
+.farm-setup { max-width: 1000px; }
+.setup-banner { display: grid; grid-template-columns: 1fr 34%; border: 1px solid var(--line); border-radius: 22px; overflow: hidden; background: var(--surface-solid); box-shadow: var(--shadow); }
+.setup-banner > div:first-child { padding: clamp(20px, 5vw, 48px); }
+.setup-banner a { color: var(--primary); font-weight: 700; }
+.setup-banner h1 { font-size: clamp(2rem, 6vw, 3.5rem); letter-spacing: -.045em; line-height: 1.1; margin: .45em 0 .28em; }
+.setup-banner p, .setup-panel p { color: var(--muted); line-height: 1.55; }
+.setup-photo { background: var(--primary-soft) url("/brand/hen-chicks.jpg") center / cover; min-height: 140px; }
+.setup-panel { margin-top: 20px; padding: clamp(18px, 4vw, 38px); }
+.setup-panel h2 { margin: 0 0 16px; font-size: clamp(1.45rem, 4vw, 2rem); }
+.setup-panel fieldset { min-width: 0; margin: 0; border: 0; padding: 0; display: grid; gap: 16px; }
+.setup-panel :is(label, legend) { color: var(--ink); font-size: .95rem; font-weight: 650; }
+.setup-panel input:not([type="radio"]), .setup-panel select { min-height: 44px; }
+.setup-stages { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0 0 24px; }
+.setup-stages li { border: 1px solid var(--line); color: var(--muted); border-radius: 20px; padding: 6px 12px; }
+.setup-stages li[aria-current] { color: var(--primary); background: var(--primary-soft); border-color: var(--primary); font-weight: 700; }
+.setup-panel .setup-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.setup-choices legend { margin-bottom: 8px; }
+.setup-panel .setup-choice { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 10px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-soft); }
+.setup-choice input { width: 18px; height: 18px; accent-color: var(--primary); }
+.setup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 22px; }
+.setup-actions a { text-decoration: none; }
+.setup-text-button { width: fit-content; border: 0; background: transparent; color: var(--primary); padding: 8px 4px; text-decoration: underline; }
+.setup-panel :is(button, a, input, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.setup-panel .setup-error { color: var(--danger); }
+.setup-summary { display: grid; gap: 12px; }
+.setup-summary div { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.setup-summary dt { color: var(--muted); }
+.setup-summary dd { margin: 3px 0 0; color: var(--ink); font-weight: 650; }
+@media (max-width: 620px) {
+  .setup-banner, .setup-panel .setup-choices { grid-template-columns: 1fr; }
+}
+
+.setup-panel .setup-pen { padding: 16px; border: 1px solid var(--line); border-radius: 14px; }
+.setup-pen legend { padding: 0 6px; }
+.setup-pen-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.setup-area { color: var(--primary); background: var(--primary-soft); padding: 10px 14px; border-radius: 10px; font-weight: 700; }
+@media (max-width: 620px) { .setup-pen-grid { grid-template-columns: 1fr; } }
