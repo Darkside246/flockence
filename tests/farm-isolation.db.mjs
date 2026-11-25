@@ -147,3 +147,18 @@ test("farm setup accepts every Barbados parish and keeps location optional", asy
   assert.equal(farmSetupSchema.safeParse({ ...profile, parish: "Invalid" }).success, false);
   assert.equal(farmSetupSchema.safeParse({ ...profile, farmId: "other-farm" }).success, false);
 });
+
+test("housing setup accepts feet and metres and rejects duplicate or invalid pens", async () => {
+  const { farmSetupSchema, metres } = await import("../lib/farm-setup.ts");
+  const { randomUUID } = await import("node:crypto");
+  const pen = { id: randomUUID(), name: "Pen A", housingMode: "OPEN_SIDED_HOT",
+    length: 20, width: 30, unit: "ft", status: "ACTIVE", capacity: 100, occupants: 30, notes: "" };
+  const profile = { name: "Example farm", operation: "BROILER", country: "", parish: "", community: "", unit: "ft" };
+  assert.ok(farmSetupSchema.safeParse({ ...profile, pens: [pen, { ...pen, id: randomUUID(), name: "Pen B", unit: "m" }] }).success);
+  assert.ok(farmSetupSchema.safeParse({ ...profile, pens: [] }).success);
+  assert.equal(pen.length * pen.width, 600);
+  assert.ok(Math.abs(metres(20, "ft") - 6.096) < 0.000001);
+  assert.equal(metres(5, "m"), 5);
+  assert.equal(farmSetupSchema.safeParse({ ...profile, pens: [pen, { ...pen, id: randomUUID(), name: "pen a" }] }).success, false);
+  assert.equal(farmSetupSchema.safeParse({ ...profile, pens: [{ ...pen, width: 0 }] }).success, false);
+});

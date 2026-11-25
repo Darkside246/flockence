@@ -29,3 +29,9 @@
 @media (max-width: 620px) {
   .setup-banner, .setup-panel .setup-choices { grid-template-columns: 1fr; }
 }
+
+.setup-panel .setup-pen { padding: 16px; border: 1px solid var(--line); border-radius: 14px; }
+.setup-pen legend { padding: 0 6px; }
+.setup-pen-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.setup-area { color: var(--primary); background: var(--primary-soft); padding: 10px 14px; border-radius: 10px; font-weight: 700; }
+@media (max-width: 620px) { .setup-pen-grid { grid-template-columns: 1fr; } }

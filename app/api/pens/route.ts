@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   try {
     const user = await requireCurrentUser(request);
     const rows = await prisma.setting.findMany({
-      where: { farmId: user.farmId, key: { startsWith: `${PREFIX}${user.id}::` } },
+      where: { farmId: user.farmId, key: { startsWith: keyFor(user.id, ""), not: { startsWith: keyFor(user.id, "name::") } } },
       orderBy: { updatedAt: "desc" },
     });
     return NextResponse.json(rows.map((row) => ({ id: row.key.slice(keyFor(user.id, "").length), ...parseSetting(row.value) })));
