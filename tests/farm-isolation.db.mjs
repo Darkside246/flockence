@@ -100,3 +100,12 @@ test("requests running at the same time each keep their own farm", async () => {
   })));
   assert.deepEqual(results.map((ids) => [...new Set(ids)]), [[A], [B], [A], [B]]);
 });
+
+test("public farm preferences exclude server-owned settings and unknown keys", async () => {
+  const { farmPreferenceKeys, isFarmPreferenceKey } = await import("../lib/farm-preferences.ts");
+  assert.equal(farmPreferenceKeys.length, 6);
+  for (const key of farmPreferenceKeys) assert.equal(isFarmPreferenceKey(key), true);
+  for (const key of ["ORIYA_LINK", "ORIYA_SEEN::event", "AUTH_SESSION::session", "FARM_INVITE::code", "membership", null, {}]) {
+    assert.equal(isFarmPreferenceKey(key), false);
+  }
+});
