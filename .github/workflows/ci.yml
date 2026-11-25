@@ -122,7 +122,6 @@ jobs:
       AUTH_COOKIE_SECURE: "true"
       FARM_OWNER_SETUP_CODE: disposable-visual-ci-owner-setup
       APP_URL: http://localhost:3000
-      VISUAL_DEPS: ${{ runner.temp }}/flockence-visual
       VISUAL_OUTPUT: ${{ github.workspace }}/theme-screenshots
     steps:
       - uses: actions/checkout@v4
@@ -143,6 +142,7 @@ jobs:
           npm run build
       - name: Install browser tooling
         run: |
+          export VISUAL_DEPS="$RUNNER_TEMP/flockence-visual"
           npm install --prefix "$VISUAL_DEPS" playwright@1.56.1
           "$VISUAL_DEPS/node_modules/.bin/playwright" install --with-deps chromium
       - name: Capture themes and run browser smoke checks
@@ -151,7 +151,7 @@ jobs:
           npm run start -- -H 127.0.0.1 -p 3000 > "$RUNNER_TEMP/flockence-visual.log" 2>&1 &
           trap 'kill $! 2>/dev/null || true' EXIT
           curl --retry 20 --retry-connrefused --retry-delay 1 --fail --silent http://localhost:3000/login > /dev/null
-          node ../harness/tests/theme-visual.mjs
+          VISUAL_DEPS="$RUNNER_TEMP/flockence-visual" node ../harness/tests/theme-visual.mjs
       - name: Upload review evidence
         uses: actions/upload-artifact@v4
         if: always()
