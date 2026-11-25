@@ -134,3 +134,16 @@ test("verified Free signup provisions independent farms and rolls back duplicate
     await runUnscoped(() => prisma.farm.deleteMany({ where: { name } }));
   }
 });
+
+test("farm setup accepts every Barbados parish and keeps location optional", async () => {
+  const { barbadosParishes, farmSetupSchema } = await import("../lib/farm-setup.ts");
+  const profile = { name: "Example farm", operation: "BOTH", country: "Barbados", parish: "", community: "", unit: "ft" };
+  assert.equal(new Set(barbadosParishes).size, 11);
+  for (const parish of barbadosParishes) {
+    assert.ok(farmSetupSchema.safeParse({ ...profile, parish }).success);
+  }
+  assert.ok(farmSetupSchema.safeParse({ ...profile, country: "", unit: "m" }).success);
+  assert.ok(farmSetupSchema.safeParse({ ...profile, country: "Saint Lucia", parish: "Anse la Raye" }).success);
+  assert.equal(farmSetupSchema.safeParse({ ...profile, parish: "Invalid" }).success, false);
+  assert.equal(farmSetupSchema.safeParse({ ...profile, farmId: "other-farm" }).success, false);
+});
