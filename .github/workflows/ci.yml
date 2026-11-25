@@ -100,7 +100,7 @@ jobs:
   screenshots:
     if: github.event_name == 'pull_request' && github.head_ref == 'feature/design-system-rebuild'
     name: Theme visual review (${{ matrix.revision }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 18
     strategy:
       fail-fast: false
