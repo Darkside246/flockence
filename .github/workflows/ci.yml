@@ -122,6 +122,7 @@ jobs:
       AUTH_COOKIE_SECURE: "true"
       FARM_OWNER_SETUP_CODE: disposable-visual-ci-owner-setup
       APP_URL: http://localhost:3000
+      VISUAL_REVISION: ${{ matrix.revision }}
       VISUAL_OUTPUT: ${{ github.workspace }}/theme-screenshots
     steps:
       - uses: actions/checkout@v4

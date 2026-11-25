@@ -10,7 +10,7 @@ const output = process.env.VISUAL_OUTPUT;
 const themes = ["poultry", "crystal", "aero", "heritage", "workhorse", "sol", "terra"];
 const pages = [
   ["/", "dashboard"], ["/pens", "housing"], ["/batches", "flocks"],
-  ["/layers", "eggs"], ["/inventory", "inventory-feed"], ["/reports", "reports"],
+  ["/layers", "eggs"], ["/layers/performance", "layer-performance"], ["/inventory", "inventory-feed"], ["/reports", "reports"],
   ["/settings", "appearance"], ["/farm-setup", "farm-setup"],
 ];
 const devices = { desktop: { width: 1440, height: 1000 }, mobile: { width: 390, height: 844 } };
@@ -52,7 +52,21 @@ try {
           documentWidth: document.documentElement.scrollWidth,
           viewportWidth: document.documentElement.clientWidth,
           theme: document.documentElement.dataset.theme,
+          photography: [...document.querySelectorAll(".theme-photo")].map((photo) => ({
+            source: getComputedStyle(photo, "::before").backgroundImage,
+            grade: getComputedStyle(photo, "::before").filter,
+            width: Math.round(photo.getBoundingClientRect().width),
+          })),
         }));
+        if (process.env.VISUAL_REVISION === "after" && (route === "/" || route === "/farm-setup")) {
+          assert.equal(metrics.photography.length, 1, "Missing theme photograph on " + route);
+          assert.ok(metrics.photography[0].width > 100, "Photo panel collapsed on " + route);
+          const expectedAsset = route === "/farm-setup" ? "poultry-housing.webp" : theme === "crystal" ? "chick-eggs.jpg" : "hen-chicks.jpg";
+          assert.ok(metrics.photography[0].source.includes(expectedAsset), "Unexpected photo on " + route);
+          assert.notEqual(metrics.photography[0].grade, "none");
+          const asset = await context.request.get(origin + "/brand/" + expectedAsset);
+          assert.ok(asset.ok(), "Missing image asset: " + expectedAsset);
+        }
         report.push({ device, theme, route, ...metrics, overflow: metrics.documentWidth > metrics.viewportWidth + 2 });
         await snapshot(page, device + "-" + theme + "-" + name);
       }

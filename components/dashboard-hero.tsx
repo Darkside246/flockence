@@ -26,7 +26,7 @@ export function DashboardHero({ chips, actions }: { chips: HeroChip[]; actions: 
   const first = session?.name?.trim().split(/\s+/)[0];
 
   return <section className="cx-hero" aria-labelledby="cx-hero-title">
-    <div className="cx-hero-photo" aria-hidden="true" />
+    <div className="cx-hero-photo theme-photo theme-photo-dashboard" aria-hidden="true" />
     <div className="cx-hero-art" aria-hidden="true"><i /><i /><i /></div>
     <div className="cx-hero-body">
       <div className="cx-hero-kicker"><CxIcon name="leaf" size={14} /> Intelligent Poultry Management</div>

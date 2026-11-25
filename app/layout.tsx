@@ -14,6 +14,7 @@ import { BannerPhoto } from "@/components/banner-photo";
 import "./crystal-photos.css";
 import "./poultry.css";
 import "./theme-system.css";
+import "./theme-photography.css";
 import { DEFAULT_THEME, themeIds } from "@/lib/theme-registry";
 
 export const metadata: Metadata = {
