@@ -96,3 +96,67 @@ jobs:
           path: ci-*.log
           if-no-files-found: warn
           retention-days: 7
+
+  screenshots:
+    if: github.event_name == 'pull_request' && github.head_ref == 'feature/design-system-rebuild'
+    name: Theme visual review (${{ matrix.revision }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: flockence_visual_test
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready -U ci -d flockence_visual_test" --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/flockence_visual_test
+      AUTH_SECRET: disposable-visual-ci-auth-secret-0123456789
+      AUTH_COOKIE_SECURE: "true"
+      FARM_OWNER_SETUP_CODE: disposable-visual-ci-owner-setup
+      APP_URL: http://localhost:3000
+      VISUAL_DEPS: ${{ runner.temp }}/flockence-visual
+      VISUAL_OUTPUT: ${{ github.workspace }}/theme-screenshots
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.revision == 'before' && github.event.pull_request.base.sha || github.event.pull_request.head.sha }}
+          path: app-source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the app with a disposable database
+        working-directory: app-source
+        run: |
+          npm ci
+          npx prisma db push
+          npm run build
+      - name: Install browser tooling
+        run: |
+          npm install --prefix "$VISUAL_DEPS" playwright@1.56.1
+          "$VISUAL_DEPS/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Capture themes and run browser smoke checks
+        working-directory: app-source
+        run: |
+          npm run start -- -H 127.0.0.1 -p 3000 > "$RUNNER_TEMP/flockence-visual.log" 2>&1 &
+          trap 'kill $! 2>/dev/null || true' EXIT
+          curl --retry 20 --retry-connrefused --retry-delay 1 --fail --silent http://localhost:3000/login > /dev/null
+          node ../harness/tests/theme-visual.mjs
+      - name: Upload review evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: themes-${{ matrix.revision }}
+          path: |
+            theme-screenshots
+            ${{ runner.temp }}/flockence-visual.log
