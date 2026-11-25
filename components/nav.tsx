@@ -82,7 +82,7 @@ export function Nav() {
   useEffect(() => { setCommandOpen(false); setQuery(""); }, [pathname]);
 
   const links = (items: NavItem[], mobile = false) => items.map(([label, href, icon]) =>
-    <Link key={href} href={href} onClick={() => mobile && setOpen(false)} className={isActive(href) ? "active" : ""} title={label}>
+    <Link key={href} href={href} onClick={() => mobile && setOpen(false)} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined} title={label}>
       <span aria-hidden="true" className="nav-glyph"><NavIcon name={icon}/></span><span>{label}</span>
     </Link>
   );

@@ -58,11 +58,14 @@ try {
       }
 
       if (device === "mobile") {
-        const menu = page.getByRole("button", { name: "Open menu" }).first();
+        const menu = page.getByRole("button", { name: /Open menu|More destinations/ }).filter({ visible: true }).first();
         if (await menu.isVisible()) {
           await menu.click();
           await snapshot(page, device + "-" + theme + "-navigation");
-          await page.getByRole("button", { name: "Close menu" }).click();
+          await page.getByRole("button", { name: /Find anything/ }).filter({ visible: true }).click();
+          await page.getByRole("dialog", { name: "Flockence search" }).waitFor();
+          await snapshot(page, device + "-" + theme + "-search");
+          await page.keyboard.press("Escape");
         } else report.push({ device, theme, finding: "Mobile drawer trigger not visible on farm setup" });
       }
       const search = page.getByRole("button", { name: "Search Flockence" });
