@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useLayoutEffect, useMemo, useState } from "react";
 
 export type ThemeName = "poultry" | "crystal" | "aero" | "heritage" | "workhorse" | "sol" | "terra";
 type Density = "comfortable" | "compact";
@@ -18,6 +18,7 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 const STORAGE_KEY = "flockence-appearance-v3";
+const ACTIVE_KEY = "flockence-active-appearance";
 const themes: ThemeName[] = ["poultry", "crystal", "aero", "heritage", "workhorse", "sol", "terra"];
 const densities: Density[] = ["comfortable", "compact"];
 const radii: Radius[] = ["soft", "sharp"];
@@ -34,24 +35,28 @@ export function ThemeProvider({ children, freeAppearance = false, accountId }: {
   const [density, setDensity] = useState<Density>("comfortable");
   const [radius, setRadius] = useState<Radius>("soft");
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) ?? localStorage.getItem(STORAGE_KEY) ?? "null") as { theme?: unknown; density?: unknown; radius?: unknown } | null;
+      const saved = JSON.parse(((accountId ? localStorage.getItem(storageKey) : localStorage.getItem(ACTIVE_KEY)) ?? localStorage.getItem(STORAGE_KEY) ?? "null")) as { theme?: unknown; density?: unknown; radius?: unknown } | null;
       if (isTheme(saved?.theme)) setPreferredTheme(saved.theme);
       if (isDensity(saved?.density)) setDensity(saved.density);
       if (isRadius(saved?.radius)) setRadius(saved.radius);
     } catch {
-      localStorage.removeItem(storageKey);
+      // Use defaults when storage is unavailable or the preference is invalid.
     }
     setLoaded(true);
-  }, [storageKey]);
+  }, [accountId, storageKey]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!loaded) return;
     const root = document.documentElement;
     root.dataset.theme = theme;
     root.dataset.density = density;
     root.dataset.radius = radius;
-    if (loaded) localStorage.setItem(storageKey, JSON.stringify({ theme: preferredTheme, density, radius }));
+    try {
+      localStorage.setItem(storageKey, JSON.stringify({ theme: preferredTheme, density, radius }));
+      localStorage.setItem(ACTIVE_KEY, JSON.stringify({ theme, density, radius }));
+    } catch { /* Appearance still works when browser storage is disabled. */ }
   }, [theme, preferredTheme, density, radius, loaded, storageKey]);
 
   const value = useMemo(() => ({ theme, freeAppearance, density, radius, setTheme: (value: ThemeName) => { if (!freeAppearance || value === "poultry") setPreferredTheme(value); }, setDensity, setRadius }), [theme, freeAppearance, density, radius]);

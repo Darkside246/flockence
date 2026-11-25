@@ -26,6 +26,17 @@ export const viewport: Viewport = {
   initialScale: 1
 };
 
+// Restore only visual preferences while the authenticated account loads.
+const appearanceBootstrap = `try {
+  var saved = JSON.parse(localStorage.getItem("flockence-active-appearance") || localStorage.getItem("flockence-appearance-v3") || "null");
+  if (saved && ["poultry","crystal","aero","heritage","workhorse","sol","terra"].includes(saved.theme)) {
+    var root = document.documentElement;
+    root.dataset.theme = saved.theme;
+    if (["comfortable","compact"].includes(saved.density)) root.dataset.density = saved.density;
+    if (["soft","sharp"].includes(saved.radius)) root.dataset.radius = saved.radius;
+  }
+} catch {}`;
+
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" suppressHydrationWarning><body><PwaRegister /><BannerPhoto /><AuthGate>{children}</AuthGate></body></html>;
+  return <html lang="en" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: appearanceBootstrap }} /></head><body><PwaRegister /><BannerPhoto /><AuthGate>{children}</AuthGate></body></html>;
 }
