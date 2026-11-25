@@ -3,9 +3,11 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
+import { ThemeProvider } from "@/components/theme-provider";
+
 const PUBLIC_PATHS = new Set(["/login", "/signup", "/forgot-password", "/reset-password"]);
 
-export type SessionUser = { id: string; farmId: string; name: string; email: string; role: "OWNER" | "MANAGER" | "WORKER" | "READ_ONLY" };
+export type SessionUser = { id: string; farmId: string; freeAppearance?: boolean; name: string; email: string; role: "OWNER" | "MANAGER" | "WORKER" | "READ_ONLY" };
 const LOCAL_DEV_BYPASS = process.env.NODE_ENV === "development";
 const LOCAL_DEV_USER: SessionUser = { id: "local-development-owner", farmId: "default-farm", name: "Local Development Owner", email: "dev@flockence.local", role: "OWNER" };
 const SessionContext = createContext<SessionUser | null>(null);
@@ -60,11 +62,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (LOCAL_DEV_BYPASS) {
     if (isPublicPath) return null;
-    return <SessionContext.Provider value={LOCAL_DEV_USER}>{children}</SessionContext.Provider>;
+    return <SessionContext.Provider value={LOCAL_DEV_USER}><ThemeProvider>{children}</ThemeProvider></SessionContext.Provider>;
   }
 
-  if (isPublicPath) return <>{children}</>;
-  if (state === "ready") return <SessionContext.Provider value={user}>{children}</SessionContext.Provider>;
+  if (isPublicPath) return <ThemeProvider>{children}</ThemeProvider>;
+  if (state === "ready") return <SessionContext.Provider value={user}><ThemeProvider key={user?.id} accountId={user?.id} freeAppearance={user?.freeAppearance}>{children}</ThemeProvider></SessionContext.Provider>;
 
   return <main className="auth-shell">
     <section className="auth-card" aria-live="polite">
