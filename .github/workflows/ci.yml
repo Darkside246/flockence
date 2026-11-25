@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         run: |
           set -o pipefail
-          npm install --no-audit --no-fund 2>&1 | tee ci-npm-install.log
+          npm ci --no-audit --no-fund 2>&1 | tee ci-npm-install.log
 
       - name: Validate Prisma
         run: |
