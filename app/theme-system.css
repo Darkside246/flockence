@@ -383,3 +383,42 @@ html[data-theme]:not([data-theme="crystal"]):not([data-theme="poultry"]) .cx-act
   text-decoration: none;
 }
 html[data-theme]:not([data-theme="crystal"]) .cx-hero-chips { margin-top: 8px; }
+
+html[data-theme]:not([data-theme="crystal"]) .cx-hero-art { display: none; }
+html[data-theme]:not([data-theme="crystal"]) .cx-hero-title { color: var(--text-heading); font-family: inherit; text-shadow: none; }
+html[data-theme]:not([data-theme="crystal"]) .cx-hero-title em { color: var(--text-link); text-shadow: none; }
+html[data-theme]:not([data-theme="crystal"]) .cx-hero-sub { color: var(--text-secondary); }
+html[data-theme]:not([data-theme="crystal"]) :is(.cx-hero-kicker, .cx-action-icon) { color: var(--text-link); }
+html[data-theme]:not([data-theme="crystal"]) .cx-action-icon { flex: none; background: var(--accent-soft); border: 0; }
+html[data-theme] .cx-action > span:not(.cx-action-icon) { color: inherit !important; }
+html[data-theme]:not([data-theme="crystal"]) .cx-action { color: var(--text-primary) !important; box-shadow: none; }
+html[data-theme]:not([data-theme="crystal"]):not([data-theme="poultry"]) .cx-action:first-child {
+  background: var(--accent-primary);
+  color: var(--accent-contrast) !important;
+}
+html[data-theme]:not([data-theme="crystal"]):not([data-theme="poultry"]) .cx-action:first-child .cx-action-icon {
+  background: none;
+  color: inherit;
+}
+html[data-theme="poultry"] .cx-hero-photo { position: relative; width: auto; height: auto; }
+html[data-theme="poultry"] .cx-hero { padding: 0; }
+html[data-theme="poultry"] .cx-hero-chips { grid-row: 2; }
+html[data-theme="poultry"] .cx-kpi-icon { position: static; box-shadow: none; }
+html[data-theme] .main > .appearance-intro {
+  background: var(--bg-surface-elevated) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-default) !important;
+}
+html[data-theme] .appearance-intro p { color: var(--text-secondary) !important; }
+html[data-theme] .shell :is(.panel-grid > *, .pipe-col, .cx-section-head > div, .cx-kpi) { min-width: 0; }
+html[data-theme] .pipeline { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+html[data-theme] .pipe-col > * { max-width: 100%; overflow-wrap: anywhere; }
+html[data-theme] .donut { --donut-track: var(--bg-surface-secondary); }
+@media (max-width: 760px) {
+  html[data-theme] .shell .main { min-width: 0; max-width: calc(100% - 28px); margin-inline: auto; }
+  html[data-theme] .shell .panel-grid { grid-template-columns: minmax(0, 1fr); }
+  html[data-theme] .cx-section-head { flex-wrap: wrap; }
+}
+@media (max-width: 680px) {
+  html[data-theme="poultry"] .cx-hero-chips { grid-row: 3; }
+}
