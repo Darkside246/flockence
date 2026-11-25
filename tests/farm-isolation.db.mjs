@@ -5,10 +5,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-if (!/test/.test(process.env.DATABASE_URL ?? "")) { console.error("Refusing: DATABASE_URL must name a test database."); process.exit(2); }
+const databaseUrl = new URL(process.env.DATABASE_URL ?? "postgresql://localhost");
+if (!/^\/[A-Za-z0-9_]+_test$/.test(databaseUrl.pathname)) {
+  console.error("Refusing: DATABASE_URL must name a disposable database ending in _test.");
+  process.exit(2);
+}
 process.env.AUTH_SECRET ??= "t".repeat(40);
 
 const { prisma } = await import("../lib/prisma.ts");
+const { lockFlockOperations } = await import("../lib/poultry-lock.ts");
 const { runAsFarm, runUnscoped, FarmScopeError } = await import("../lib/farm-scope.ts");
 const { saveFarmLink, farmLinkConfig } = await import("../lib/oriya-farm-link.ts");
 
@@ -68,6 +73,12 @@ test("a sale cannot use another farm's customer", async () => {
 test("transactions are kept to the farm too", async () => {
   const count = await runAsFarm(B, () => prisma.$transaction(async (tx) => tx.batch.count()));
   assert.equal(count, 1);
+});
+
+test("flock transaction locks work through Prisma and release at commit", async () => {
+  const batch = await runAsFarm(A, () => prisma.batch.findFirstOrThrow());
+  await runAsFarm(A, () => prisma.$transaction((tx) => lockFlockOperations(tx, [batch.id, batch.id])));
+  await runAsFarm(A, () => prisma.$transaction((tx) => lockFlockOperations(tx, [batch.id])));
 });
 
 test("each farm's Oriya link is its own, encrypted", async () => {
