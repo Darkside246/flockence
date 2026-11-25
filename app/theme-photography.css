@@ -1,0 +1,157 @@
+/* The surface behind the image also provides the loading and missing-image fallback. */
+html:root,
+html[data-theme="poultry"] {
+  --photo-tint: #ceb166;
+  --photo-tint-strength: 9%;
+  --photo-grade: saturate(.93) brightness(1.04);
+}
+html[data-theme="crystal"] {
+  --photo-tint: #315b74;
+  --photo-tint-strength: 15%;
+  --photo-grade: saturate(.88) brightness(.94);
+}
+html[data-theme="aero"] {
+  --photo-tint: #516f9b;
+  --photo-tint-strength: 22%;
+  --photo-grade: saturate(.84) brightness(.97);
+}
+html[data-theme="heritage"] {
+  --photo-tint: #9a8052;
+  --photo-tint-strength: 14%;
+  --photo-grade: saturate(.88) contrast(1.03);
+}
+html[data-theme="workhorse"] {
+  --photo-tint: #333a43;
+  --photo-tint-strength: 7%;
+  --photo-grade: saturate(.94) contrast(1.07);
+}
+html[data-theme="sol"] {
+  --photo-tint: #2b261c;
+  --photo-tint-strength: 13%;
+  --photo-grade: saturate(.69) contrast(1.12);
+}
+html[data-theme="terra"] {
+  --photo-tint: #996851;
+  --photo-tint-strength: 14%;
+  --photo-grade: saturate(.95) brightness(.98);
+}
+
+.theme-photo {
+  --photo-base: var(--bg-surface-elevated);
+  --photo-crop: 65% 44%;
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  pointer-events: none;
+  background-color: var(--photo-base);
+}
+.theme-photo::before,
+.theme-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.theme-photo::before {
+  background-image: var(--photo-image);
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: var(--photo-crop);
+  filter: var(--photo-grade);
+}
+.theme-photo::after {
+  background:
+    linear-gradient(90deg, var(--photo-base), color-mix(in srgb, var(--photo-base) 58%, transparent) 22%, transparent 61%),
+    linear-gradient(0deg, color-mix(in srgb, var(--photo-base) 28%, transparent), transparent 57%),
+    linear-gradient(
+      color-mix(in srgb, var(--photo-tint) var(--photo-tint-strength), transparent),
+      color-mix(in srgb, var(--photo-tint) var(--photo-tint-strength), transparent)
+    );
+}
+.theme-photo-dashboard {
+  --photo-image: url("/brand/hen-chicks.jpg");
+  --photo-crop: 60% 49%;
+}
+.theme-photo-housing {
+  --photo-image: url("/brand/poultry-housing.webp");
+  --photo-crop: 67% 47%;
+  --photo-base: var(--bg-surface);
+}
+html[data-theme="poultry"] .theme-photo-dashboard { --photo-base: #fffdf6; }
+
+html[data-theme]:not([data-theme="poultry"]):not([data-theme="crystal"]) .cx-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 34%);
+  padding: 0;
+}
+html[data-theme]:not([data-theme="poultry"]):not([data-theme="crystal"]) .cx-hero-body {
+  grid-column: 1;
+  padding: clamp(18px, 4vw, 36px) clamp(18px, 4vw, 36px) 12px;
+}
+html[data-theme]:not([data-theme="poultry"]):not([data-theme="crystal"]) .cx-hero-chips {
+  grid-column: 1;
+  padding: 0 clamp(18px, 4vw, 36px) clamp(18px, 4vw, 36px);
+}
+html[data-theme]:not([data-theme="poultry"]):not([data-theme="crystal"]) .theme-photo-dashboard {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+html[data-theme="crystal"] .theme-photo-dashboard {
+  --photo-image: url("/brand/hen-dusk.jpg"), url("/brand/chick-eggs.jpg");
+  --photo-base: #0a1d2f;
+  --photo-crop: 53% 40%;
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 43%;
+  z-index: 0;
+  background-color: transparent;
+}
+
+html[data-theme] :is(.nav-brand-mark, .brand-mark) {
+  background: var(--accent-soft) !important;
+  color: var(--text-link) !important;
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 38%, var(--border-default)) !important;
+  box-shadow: none !important;
+}
+
+@media (max-width: 760px) {
+  html[data-theme="crystal"] .theme-photo-dashboard {
+    inset: 0 0 auto;
+    height: 206px;
+    width: auto;
+    --photo-crop: 54% 35%;
+  }
+  html[data-theme="crystal"] .cx-hero { padding-top: 172px; }
+  html[data-theme="crystal"] .theme-photo-dashboard::after {
+    background: linear-gradient(0deg, var(--photo-base), transparent 76%);
+  }
+}
+@media (max-width: 680px) {
+  html[data-theme]:not([data-theme="poultry"]):not([data-theme="crystal"]) .cx-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html[data-theme]:not([data-theme="poultry"]):not([data-theme="crystal"]) .theme-photo-dashboard {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 146px;
+  }
+  .theme-photo-dashboard { --photo-crop: 55% 39%; }
+  html[data-theme]:not([data-theme="crystal"]) .theme-photo-dashboard::after {
+    background: linear-gradient(0deg, var(--photo-base), transparent 41%);
+  }
+}
+@media (max-width: 620px) {
+  .theme-photo-housing { --photo-crop: 64% 37%; }
+  .theme-photo-housing::after { background: linear-gradient(180deg, var(--photo-base), transparent 42%); }
+}
+
+@media (max-width: 760px) {
+  html[data-theme] .mobile-nav-toggle {
+    background: var(--bg-surface-elevated) !important;
+    color: var(--text-link) !important;
+    border: 1px solid var(--border-default) !important;
+    box-shadow: var(--shadow-card) !important;
+  }
+  html[data-theme]:not([data-theme="crystal"]) .setup-banner > div:first-child {
+    padding-block-start: 56px;
+  }
+}

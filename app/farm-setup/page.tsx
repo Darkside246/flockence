@@ -95,7 +95,7 @@ export default function FarmSetupPage() {
       <header className="setup-banner">
         <div><Link href="/settings">Back to Settings</Link><h1>Set up your farm</h1>
           <p>Choose how you raise poultry and how you prefer to measure.</p></div>
-        <div className="setup-photo" aria-hidden="true" />
+        <div className="setup-photo theme-photo theme-photo-housing" aria-hidden="true" />
       </header>
       {loading ? <section className="card setup-panel" aria-busy="true"><p>Loading farm profile…</p></section>
         : loadError ? <section className="card setup-panel"><p role="alert">{session?.role === "OWNER" || session?.role === "MANAGER" ? "We couldn’t load your farm profile." : "A farm owner or manager can set up this farm."}</p><button type="button" className="button" onClick={() => { setLoadError(false); setLoading(true); setRetry(retry + 1); }}>Try again</button></section>

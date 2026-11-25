@@ -60,7 +60,6 @@ html[data-theme="poultry"] .cx-hero-photo {
   grid-column: 2;
   grid-row: 1 / 3;
   min-height: 240px;
-  background: #dae6cb url("/brand/hen-chicks.jpg") center / cover no-repeat;
 }
 html[data-theme="poultry"] .cx-hero-art { display: none; }
 html[data-theme="poultry"] .cx-hero-body { grid-column: 1; grid-row: 1; padding: clamp(18px, 3vw, 36px); }
