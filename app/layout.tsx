@@ -13,6 +13,8 @@ import { AuthGate } from "@/components/auth-gate";
 import { BannerPhoto } from "@/components/banner-photo";
 import "./crystal-photos.css";
 import "./poultry.css";
+import "./theme-system.css";
+import { DEFAULT_THEME, themeIds } from "@/lib/theme-registry";
 
 export const metadata: Metadata = {
   title: "Flockence | Intelligent Poultry Management",
@@ -21,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#050A12",
+  themeColor: "#F7F8F4",
   width: "device-width",
   initialScale: 1
 };
@@ -29,7 +31,7 @@ export const viewport: Viewport = {
 // Restore only visual preferences while the authenticated account loads.
 const appearanceBootstrap = `try {
   var saved = JSON.parse(localStorage.getItem("flockence-active-appearance") || localStorage.getItem("flockence-appearance-v3") || "null");
-  if (saved && ["poultry","crystal","aero","heritage","workhorse","sol","terra"].includes(saved.theme)) {
+  if (saved && ${JSON.stringify(themeIds)}.includes(saved.theme)) {
     var root = document.documentElement;
     root.dataset.theme = saved.theme;
     if (["comfortable","compact"].includes(saved.density)) root.dataset.density = saved.density;
@@ -38,5 +40,5 @@ const appearanceBootstrap = `try {
 } catch {}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: appearanceBootstrap }} /></head><body><PwaRegister /><BannerPhoto /><AuthGate>{children}</AuthGate></body></html>;
+  return <html lang="en" data-theme={DEFAULT_THEME} suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: appearanceBootstrap }} /></head><body><PwaRegister /><BannerPhoto /><AuthGate>{children}</AuthGate></body></html>;
 }

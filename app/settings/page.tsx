@@ -2,17 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
-import { useTheme, type ThemeName } from "@/components/theme-provider";
-
-const themes: { id: ThemeName; name: string; desc: string; bg: string; accent: string }[] = [
-  { id: "poultry", name: "Poultry Farm", desc: "Bright surfaces, forest green and warm gold", bg: "linear-gradient(135deg,#f9faf3,#dde9d1)", accent: "#285332" },
-  { id: "crystal", name: "Cyber Crystal", desc: "Obsidian glass with cyber-teal light", bg: "linear-gradient(135deg,#050a12,#10283a)", accent: "#35e0d0" },
-  { id: "aero", name: "Aero Glass", desc: "Dark glass with cyan highlights", bg: "linear-gradient(135deg,#070b12,#0f172a)", accent: "#00f2fe" },
-  { id: "heritage", name: "Heritage Sovereign", desc: "Deep green with brass accents", bg: "linear-gradient(135deg,#0e1210,#1c2821)", accent: "#e5c378" },
-  { id: "workhorse", name: "Field Workhorse", desc: "High-contrast industrial amber", bg: "linear-gradient(135deg,#141618,#303438)", accent: "#ffb703" },
-  { id: "sol", name: "Sol Tactical", desc: "Maximum-contrast black and yellow", bg: "linear-gradient(135deg,#000000,#1a1a1a)", accent: "#ffe500" },
-  { id: "terra", name: "Terra Flora", desc: "Warm earth with soft green", bg: "linear-gradient(135deg,#171412,#2c2723)", accent: "#86efac" }
-];
+import { useTheme } from "@/components/theme-provider";
+import { themes } from "@/lib/theme-registry";
 
 export default function SettingsPage(){
   const [farmName,setFarmName]=useState("Alchemy Farms");
@@ -34,7 +25,7 @@ export default function SettingsPage(){
     <main className="main">
       <section className="section card"><div className="section-head"><div><h3>Farm profile</h3><p>Update your production type, general location and measurement preferences.</p></div><a href="/farm-setup" className="button button-primary">Farm setup</a></div></section>
       <section className="hero"><div className="hero-kicker">Appearance</div><h2>Your operation. Your interface.</h2><p>Switch the visual style, information density, and shape without changing production data.</p></section>
-      <section className="section card"><div className="section-head"><div><h3>Visual style</h3><p>{freeAppearance ? "Poultry Farm is included with Free membership." : "Choose the look for your workspace."}</p></div></div><div className="theme-grid">{themes.filter(t => !freeAppearance || t.id === "poultry").map(t=><button type="button" key={t.id} className={`theme-option ${theme===t.id?"selected":""}`} onClick={()=>setTheme(t.id)} aria-pressed={theme===t.id}><div className="theme-swatch" style={{background:t.bg}}><div style={{width:20,height:20,borderRadius:7,background:t.accent,margin:12}}/></div><span className="theme-name">{t.name}</span><span className="theme-desc">{t.desc}</span></button>)}</div></section>
+      <section className="section card"><div className="section-head"><div><h3>Visual style</h3><p>{freeAppearance ? "Poultry Farm is included with Free membership." : "Choose the look for your workspace."}</p></div></div><div className="theme-grid">{themes.filter(t => !freeAppearance || t.id === "poultry").map(t=><button type="button" key={t.id} className={`theme-option ${theme===t.id?"selected":""}`} onClick={()=>setTheme(t.id)} aria-pressed={theme===t.id}><span className="theme-preview" data-theme={t.id} aria-hidden="true"><span className="theme-preview-rail" /><span className="theme-preview-content" /></span><span className="theme-name">{t.name}</span><span className="theme-desc">{t.description}</span>{t.premium && <span className="theme-tier">Premium</span>}</button>)}</div></section>
       <section className="section card"><div className="section-head"><div><h3>Interface feel</h3><p>Adjust how much information fits on screen.</p></div></div><div className="grid2"><div><label>Information density</label><div className="segmented"><button className={density==="comfortable"?"selected":""} type="button" onClick={()=>setDensity("comfortable")}>Comfortable</button><button className={density==="compact"?"selected":""} type="button" onClick={()=>setDensity("compact")}>Compact</button></div></div><div><label>Card shape</label><div className="segmented"><button className={radius==="soft"?"selected":""} type="button" onClick={()=>setRadius("soft")}>Soft</button><button className={radius==="sharp"?"selected":""} type="button" onClick={()=>setRadius("sharp")}>Sharp</button></div></div></div></section>
       <form className="section card form grid2" onSubmit={save}><div className="section-head" style={{gridColumn:"1/-1"}}><div><h3>Farm configuration</h3><p>Defaults only. Flockence is currently scoped to the Farmer business type.</p></div><span className="badge">CONFIGURATION</span></div><label>Business type<input value="Farmer" readOnly/></label>
 <label>Farm name<input value={farmName} onChange={e=>setFarmName(e.target.value)}/></label><label>Default feed bag price BBD<input type="number" step="0.01" value={feedPrice} onChange={e=>setFeedPrice(e.target.value)}/></label><label>Default chick cost BBD<input type="number" step="0.01" value={chickCost} onChange={e=>setChickCost(e.target.value)}/></label><label>Default slaughter cost BBD<input type="number" step="0.01" value={slaughter} onChange={e=>setSlaughter(e.target.value)}/></label><div><button className="button button-primary" type="submit">Save farm settings</button>{message&&<span className="notice">{message}</span>}</div></form>
