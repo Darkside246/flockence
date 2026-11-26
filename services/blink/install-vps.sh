@@ -158,6 +158,7 @@ systemctl start "$camera"
 
 # Confirm that the private endpoint answers using the shared token.
 # Read the token from its file so it stays out of process arguments.
+check_camera() {
 /usr/bin/python3 - "$token_file" <<'PY'
 import json
 import pathlib
@@ -181,6 +182,8 @@ for _ in range(20):
 else:
     sys.exit("Camera service did not answer the authenticated status check.")
 PY
+}
+check_camera
 
 cat > "$dropin" <<EOF
 [Unit]
@@ -196,5 +199,7 @@ restarting_app=1
 systemctl restart "$service"
 curl -fsSL --retry 6 --retry-all-errors --retry-delay 1 --max-time 10 \
   -o /dev/null -w 'Flockence login HTTP %{http_code}\n' https://flockence.com/login
-systemctl is-active "$service" "$camera"
+check_camera
+systemctl is-active "$service"
+systemctl is-active "$camera"
 printf 'Camera source revision: %s\n' "$revision"
