@@ -179,6 +179,11 @@ test("ordinary farm clients cannot read another farm through unfiltered raw SQL"
 
 test("portable farm export retains the operation records for the selected farm only", async () => {
   const { farmExport } = await import("../lib/farm-export.ts");
+  await runAsFarm(A, () => prisma.setting.createMany({ data: [
+    { key: "PEN::test-owner::pen-a", value: JSON.stringify({ name: "Pen A", lengthM: 3, providerSecret: "must not export" }) },
+    { key: "PEN::test-owner::name::pen a", value: "pen-a" },
+    { key: "default_feed_bag_price", value: "42.00" },
+  ] }));
   const [a, b] = await Promise.all([A, B].map(async (id) => new Response(farmExport(id)).json()));
   assert.equal(a.version, 1);
   assert.equal(a.farm.id, A);
@@ -189,4 +194,7 @@ test("portable farm export retains the operation records for the selected farm o
   assert.ok(b.records.batch.every((row) => row.farmId === B));
   assert.equal(a.records.setting, undefined);
   assert.equal(a.records.user, undefined);
+  assert.deepEqual(a.configuration.pens, [{ id: "pen-a", ownerId: "test-owner", kind: "PEN", name: "Pen A", lengthM: 3 }]);
+  assert.deepEqual(b.configuration.pens, []);
+  assert.equal(a.configuration.preferences.default_feed_bag_price, "42.00");
 });

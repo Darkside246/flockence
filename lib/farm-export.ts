@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { farmPreferenceKeys } from "@/lib/farm-preferences";
+import { farmSetupSchema } from "@/lib/farm-setup";
 import { runAsFarm } from "@/lib/farm-scope";
 
 const recordTables = [
@@ -18,13 +20,55 @@ type PagedRecords = {
   findMany(args: { where: { id: { gt: string } }; orderBy: { id: "asc" }; take: number }): Promise<FarmRow[]>;
 };
 
+const penFields = [
+  "name", "housingMode", "lengthM", "widthM", "status", "active", "capacity", "occupants", "notes",
+  "orientation", "feederPans", "feederPanDiameterCm", "chainFeederMeters", "nipples", "bellDrinkers",
+  "fans", "fanCapacityM3H", "heatSources", "waterTankLitres",
+];
+
+function parseObject(value: string | undefined): Record<string, unknown> | null {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+async function farmConfiguration(farmId: string) {
+  const rows = await runAsFarm(farmId, () => prisma.setting.findMany({
+    where: { OR: [{ key: { in: [...farmPreferenceKeys, "FARM_PROFILE_V1"] } },
+      { key: { startsWith: "PEN::" } }, { key: { startsWith: "PENCFG::" } }] },
+    select: { key: true, value: true }, orderBy: { key: "asc" },
+  }));
+  const settings = new Map(rows.map(({ key, value }) => [key, value]));
+  const profile = farmSetupSchema.safeParse(parseObject(settings.get("FARM_PROFILE_V1")));
+  const preferences = Object.fromEntries(farmPreferenceKeys.flatMap((key) =>
+    settings.has(key) ? [[key, settings.get(key)]] : [],
+  ));
+  const pens = rows.flatMap(({ key, value }) => {
+    const [kind, ownerId, id, extra] = key.split("::");
+    if (!["PEN", "PENCFG"].includes(kind) || !ownerId || !id || extra !== undefined) return [];
+    const data = parseObject(value);
+    if (!data) return [];
+    const fields = Object.fromEntries(penFields.flatMap((field) => {
+      const item = data[field];
+      return typeof item === "string" || typeof item === "number" || typeof item === "boolean" ? [[field, item]] : [];
+    }));
+    return [{ id, ownerId, kind, ...fields }];
+  });
+  return { profile: profile.success ? profile.data : null, preferences, pens };
+}
+
 async function* farmJson(farmId: string) {
   const farm = await runAsFarm(farmId, () => prisma.farm.findUniqueOrThrow({
     where: { id: farmId },
     select: { id: true, name: true, businessType: true, currency: true, createdAt: true, updatedAt: true },
   }));
   yield '{\n  "format": "flockence.farm-export",\n  "version": 1,\n';
-  yield `  "exportedAt": ${JSON.stringify(new Date())},\n  "farm": ${JSON.stringify(farm)},\n  "records": {\n`;
+  yield `  "exportedAt": ${JSON.stringify(new Date())},\n  "farm": ${JSON.stringify(farm)},\n`;
+  yield `  "configuration": ${JSON.stringify(await farmConfiguration(farmId))},\n  "records": {\n`;
   for (const [tableIndex, table] of recordTables.entries()) {
     if (tableIndex) yield ",\n";
     yield `    "${table}": [`;

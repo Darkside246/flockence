@@ -51,7 +51,8 @@ their sources.
 ## Portable farm download
 
 Reports → Download all farm records exports an owner-only versioned JSON
-file containing the farm and operational tables. Record IDs and foreign
+file containing the farm, farm profile, approved preferences, pen records
+and operational tables. Record IDs and foreign
 keys are preserved. Timestamps are ISO 8601, decimals use strings to retain
 precision, and monetary integer fields keep the units encoded by their
 names. Existing spreadsheet exports remain available. Use these downloads
