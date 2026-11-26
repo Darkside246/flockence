@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
+import { boundedBody, gatewayResponse } from "@/lib/camera-gateway-http";
+import { isTrustedAppOrigin } from "@/lib/request-origin";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { blinkFetch, cameraWorker } from "@/lib/blink-sidecar";
 import { auditCameraAction, cameraRequestAllowed, cameraViewRoles, hardenCameraHeaders } from "@/lib/camera-guard";
@@ -7,7 +9,7 @@ import { auditCameraAction, cameraRequestAllowed, cameraViewRoles, hardenCameraH
 // Allow-listed pass-through to the camera sidecar. Anything not matched here is a 404,
 // so the sidecar's surface is never exposed wholesale.
 const VIEW_GET = [
-  /^status$/, /^cameras$/, /^cameras\/[^/]+\/snapshot$/, /^clips$/,
+  /^status$/, /^blink\/settings$/, /^cameras$/, /^cameras\/[^/]+\/snapshot$/, /^clips$/,
   /^media\/(clip|thumb)$/, /^live\/[A-Za-z0-9_]+\/[A-Za-z0-9_.-]+$/,
   /^recordings\/[A-Za-z0-9_]+\/[0-9]{8}-[0-9]{6}\.mp4$/,
   /^imports\/[A-Za-z0-9_]+\/[0-9]{8}-[0-9]{6}-[0-9a-f]{6}\.mp4$/,
@@ -50,6 +52,13 @@ export async function GET(request: Request, ctx: Ctx) {
       });
     }
     return notConfigured();
+  }
+  const url = new URL(request.url);
+  if (path === "blink/settings" && url.searchParams.has("camera")) {
+    if (session.user.role !== "OWNER") return gatewayResponse({ error: "Only a farm owner can check camera controls." }, 403);
+    const limit = await checkRateLimit("blink-settings:probe:" + session.user.farmId, 12, 60_000).catch(() => null);
+    if (!limit) return gatewayResponse({ error: "Camera settings are temporarily unavailable." }, 503);
+    if (!limit.allowed) return tooMany();
   }
   const range = request.headers.get("range");
   try {
@@ -118,5 +127,30 @@ async function mutate(request: Request, ctx: Ctx, method: "POST" | "DELETE", own
   }
 }
 
-export const POST = (request: Request, ctx: Ctx) => mutate(request, ctx, "POST", OWNER_POST, MANAGE_POST);
+export async function POST(request: Request, ctx: Ctx) {
+  if ((await ctx.params).path.join("/") !== "blink/settings") return mutate(request, ctx, "POST", OWNER_POST, MANAGE_POST);
+  const session = await currentUserOrRoleResponse(request, ["OWNER"]);
+  if (session.response) return session.response;
+  if (!isTrustedAppOrigin(request)) return gatewayResponse({ error: "Open Cameras in Flockence to change settings." }, 403);
+  if (!cameraWorker()) return notConfigured();
+  if (request.headers.get("content-type") !== "application/json") return gatewayResponse({ error: "Use a JSON camera setting." }, 415);
+  try {
+    const body = await boundedBody(request, 1024);
+    if (!body) return gatewayResponse({ error: "Camera setting is too large." }, 413);
+    const input = JSON.parse(body.toString("utf8"));
+    if (!input || typeof input.name !== "string" || !input.name || input.name.length > 128 ||
+        !["motion", "system", "nightVision"].includes(input.kind)) {
+      return gatewayResponse({ error: "Invalid Blink camera setting." }, 400);
+    }
+    const limit = await checkRateLimit("blink-settings:change:" + session.user.farmId, 6, 60_000);
+    if (!limit.allowed) return tooMany();
+    await auditCameraAction(session.user.id, "BLINK_SETTING_REQUESTED", input.name);
+    return relay(await blinkFetch("/blink/settings", {
+      method: "POST", body: body.toString("utf8"), headers: { "Content-Type": "application/json" },
+    }));
+  } catch (error) {
+    if (error instanceof SyntaxError) return gatewayResponse({ error: "Invalid Blink camera setting." }, 400);
+    return notRunning();
+  }
+}
 export const DELETE = (request: Request, ctx: Ctx) => mutate(request, ctx, "DELETE", OWNER_DELETE, []);

@@ -103,11 +103,16 @@ jobs:
           CAMERA_GATEWAY_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
           DEVICE_GATEWAY_DATABASE_URL: postgresql://flockence_device_gateway:device-ci-only@localhost:5432/flockence_ci_test
           DEVICE_GATEWAY_KEY: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBE
+          CUSTOMER_RLS_DATABASE_URL: postgresql://flockence_customer_runtime:customer-ci-only@localhost:5432/flockence_ci_test
+          ORIYA_RLS_DATABASE_URL: postgresql://flockence_oriya_reader:oriya-ci-only@localhost:5432/flockence_ci_test
         run: |
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_camera_gateway LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'gateway-ci-only'"
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/camera-gateway-role.sql
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_device_gateway LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'device-ci-only'"
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/device-gateway-role.sql
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_customer_runtime LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'customer-ci-only'"
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_oriya_reader LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'oriya-ci-only'"
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/farm-runtime-rls.sql
           node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-gateway.http.mjs
           python3 -m py_compile scripts/push-camera-frame.py scripts/push-device-gateway.py
           python3 tests/device_gateway_edge.py

@@ -24,7 +24,12 @@ async function worker(label, token) {
       res.writeHead(401).end("{}");
       return;
     }
-    if (req.url === "/cameras") {
+    if (req.url === "/blink/settings" && req.method === "GET") {
+      res.end(JSON.stringify({ systems: [], cameras: [{ name: label, temperatureC: 26 }] }));
+    } else if (req.url === "/blink/settings" && req.method === "POST") {
+      req.resume();
+      res.end(JSON.stringify({ updated: true, worker: label }));
+    } else if (req.url === "/cameras") {
       res.end(JSON.stringify([{ name: label }]));
     } else if (req.method === "POST" && req.url === "/auth/login") {
       req.resume();
@@ -79,6 +84,17 @@ try {
   const challenge = await login(origin);
   assert.equal(challenge.status, 200);
   assert.equal((await challenge.json()).pending2fa, true);
+  const settings = origin + "/api/cameras/blink/settings";
+  const state = await fetch(settings, { headers: { Cookie: cookies[0] } });
+  assert.deepEqual((await state.json()).cameras, [{ name: "Farm A camera", temperatureC: 26 }]);
+  const command = (requestOrigin) => fetch(settings, {
+    method: "POST", headers: { Cookie: cookies[0], Origin: requestOrigin, "Content-Type": "application/json", "X-Flockence-Farm": ids[1] },
+    body: JSON.stringify({ kind: "motion", name: "Farm A camera", enabled: true }),
+  });
+  assert.equal((await command("https://other.example")).status, 403);
+  const change = await command(origin);
+  assert.equal(change.status, 200);
+  assert.equal((await change.json()).worker, "Farm A camera");
   console.log("Camera HTTP checks passed for two private workers and an unconfigured farm.");
 } finally {
   app?.kill();
