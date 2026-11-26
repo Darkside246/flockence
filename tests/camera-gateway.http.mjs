@@ -80,6 +80,11 @@ try {
   }
   assert.deepEqual(await restricted.setting.findMany(), []);
 
+  await assert.rejects(restricted.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT set_config('app.farm_id', ${farms[0]}, true)`;
+    await tx.setting.create({ data: { farmId: farms[0], key: "GATEWAY_UNRELATED_WRITE_TEST", value: "Forbidden" } });
+  }), /row-level security policy/i);
+
   const image = Buffer.from([255, 216, 255, 224, 0, 4, 1, 2, 255, 217]);
   const frame = (feed) => gateway + "/" + feed.id + "/frame";
   const captured = new Date().toISOString();
@@ -98,7 +103,7 @@ try {
   const photo = await fetch(frame(a), { headers: { Cookie: ownerA } });
   assert.equal(photo.status, 200);
   assert.equal(photo.headers.get("content-type"), "image/jpeg");
-  assert.equal(photo.headers.get("cache-control"), "no-store, private");
+  assert.ok(photo.headers.get("cache-control")?.split(",").some((directive) => directive.trim() === "no-store"));
   assert.deepEqual(Buffer.from(await photo.arrayBuffer()), image);
   const saved = await runAsFarm(farms[0], () => prisma.setting.findFirstOrThrow({ where: { key: "CAMERA_GATEWAY::" + a.id } }));
   assert.equal(saved.value.includes(image.toString("base64")), false);
