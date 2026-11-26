@@ -1,3 +1,4 @@
+import { assignedCameraPen } from "@/lib/vision-camera-pens";
 import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
@@ -104,6 +105,13 @@ export async function POST(request: Request) {
     }
 
     const capture = typeof cameraName === "string" ? await captureVisionCamera(cameraName).catch(() => null) : null;
+    if (capture) {
+      const assigned = await assignedCameraPen(capture.camera);
+      if (assigned && pen && assigned.id !== pen.id) {
+        return NextResponse.json({ error: "The camera is assigned to a different pen. Update the assignment before inspecting." }, { status: 409 });
+      }
+      pen = assigned ?? pen;
+    }
     const bytes = capture?.bytes ?? (file instanceof File ? Buffer.from(await file.arrayBuffer()) : null);
     if (!bytes) return NextResponse.json({ error: "The camera could not deliver a usable image." }, { status: 502 });
     const dataUrl = `data:${mimeType};base64,${bytes.toString("base64")}`;

@@ -6,6 +6,7 @@ Next.js app calls this behind its own login; it must never be exposed publicly.
 Run:  .venv/Scripts/python -m uvicorn app:app --host 127.0.0.1 --port 8765
 Env:  BLINK_SIDECAR_TOKEN (required), BLINK_IMPERSONATE (optional), FFMPEG_PATH (optional), BLINK_DATA_DIR (optional)
 """
+import hashlib
 import asyncio
 import csv
 from datetime import datetime, timedelta, timezone
@@ -310,6 +311,7 @@ async def cameras():
         out.append({
             "name": name,
             "source": "blink",
+            "deviceKey": hashlib.sha256(str(cam.camera_id).encode()).hexdigest() if getattr(cam, "camera_id", None) is not None else None,
             "type": a.get("type"),
             "battery": a.get("battery"),
             "temperature": a.get("temperature"),

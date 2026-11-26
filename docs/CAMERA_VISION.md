@@ -51,3 +51,16 @@ research farm ID, and `CHICKENVERSE_RESEARCH_REPORT` to the private JSON file.
 The configured research farm owner can view the aggregate report in Farm
 Vision. This report path is separate from camera capture and never reads
 customer camera footage, camera tokens, or production records.
+
+## Assign a farm camera to a pen
+
+In Farm Vision, an authorized owner or manager can choose a connected camera,
+select a pen and save the camera assignment. Future inspections use the
+assignment even when the request omits the pen. Remove or change the mapping
+when a camera moves. Prior inspections retain the pen recorded at the time.
+
+Updated Blink workers supply a device fingerprint that survives a camera
+rename. Older workers and locally configured network sources use the
+configured camera name. Check and reassign those mappings after a rename or
+replacement. Farm identity comes from the session, and assignment changes
+are recorded in the farm audit log.

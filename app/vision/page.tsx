@@ -25,7 +25,7 @@ type ResearchReport = {
   behavior?: { clips: number; accuracy: number; macroF1: number };
 };
 const score = (ratio: number) => (ratio * 100).toFixed(1) + "%";
-type VisionCamera = { name: string; source: "blink" | "rtsp" };
+type VisionCamera = { name: string; source: "blink" | "rtsp"; pen: { id: string; name: string } | null };
 type Batch = { id: string; name: string };
 type VisionResult = { summary?: string; confidence?: string; severity?: string; observations?: { title?: string; detail?: string; confidence?: string }[]; concerns?: { title?: string; whyItMatters?: string }[]; checks?: string[]; escalate?: boolean; escalationReason?: string; medicalDisclaimer?: string };
 type Assessment = { source: { kind: "UPLOAD" | "CAMERA"; name?: string }; status: string; pen?: { id: string; name: string } };
@@ -46,6 +46,9 @@ export default function VisionPage() {
   const [research, setResearch] = useState<{ report: ResearchReport | null } | null>(null);
   const [cameras, setCameras] = useState<VisionCamera[]>([]);
   const [cameraName, setCameraName] = useState("");
+  const [savingAssignment, setSavingAssignment] = useState(false);
+  const [assignmentMessage, setAssignmentMessage] = useState("");
+  const selectedCamera = cameras.find(camera => camera.name === cameraName);
   const [shareCamera, setShareCamera] = useState(false);
   const [result, setResult] = useState<VisionResult | null>(null);
   const [message, setMessage] = useState("");
@@ -79,11 +82,34 @@ export default function VisionPage() {
     const next = event.target.files?.[0] ?? null;
     setFile(next);
     setCameraName("");
+    if (cameraName) setPenId("");
+    setAssignmentMessage("");
     setShareCamera(false);
     setResult(null);
     setMessage("");
     if (next) setPreview(URL.createObjectURL(next));
     else setPreview("");
+  }
+
+  async function saveAssignment(nextPen: string | null) {
+    if (!cameraName || savingAssignment) return;
+    setSavingAssignment(true);
+    setAssignmentMessage("");
+    try {
+      const response = await fetch("/api/vision/cameras", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ camera: cameraName, penId: nextPen }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not save the camera assignment.");
+      setCameras(previous => previous.map(camera => camera.name === cameraName ? { ...camera, pen: data.pen } : camera));
+      setAssignmentMessage(data.pen ? "Camera assigned to " + data.pen.name + "." : "Camera assignment removed.");
+      if (!data.pen) setPenId("");
+    } catch (error) {
+      setAssignmentMessage(error instanceof Error ? error.message : "Could not save the camera assignment.");
+    } finally {
+      setSavingAssignment(false);
+    }
   }
 
   async function analyze(event: FormEvent) {
@@ -147,8 +173,10 @@ export default function VisionPage() {
         <div className="section-head" style={{ marginTop: 24 }}><div><h3>2. Add the photo</h3><p>On a phone, this can open the camera. Maximum image size: 8 MB.</p></div></div>
         <label className="upload-zone"><input type="file" accept="image/*" capture="environment" onChange={pickFile} /><span className="upload-icon">+</span><strong>{file ? file.name : "Take photo or choose image"}</strong><small>{file ? "Ready for inspection" : "Use a clear photo with good lighting"}</small></label>
         {cameras.length > 0 && <div className="grid2" style={{ marginTop: 18 }}>
-          <label>Farm camera<select value={cameraName} onChange={(event) => {
+          <label>Farm camera<select value={cameraName} disabled={savingAssignment} onChange={(event) => {
             setCameraName(event.target.value);
+            setPenId(cameras.find(camera => camera.name === event.target.value)?.pen?.id ?? "");
+            setAssignmentMessage("");
             setShareCamera(false);
             setResult(null);
             setMessage("");
@@ -167,11 +195,17 @@ export default function VisionPage() {
 
         <div className="grid2" style={{ marginTop: 18 }}><label>Batch<select value={batchId} onChange={e => setBatchId(e.target.value)}><option value="">Farm-wide</option>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label><label>What should the AI know?<input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Example: birds are 24 days old and feed intake dropped" /></label></div>
 
-        {pens.length > 0 && <label>Pen<select value={penId} onChange={(event) => setPenId(event.target.value)}>
+        {pens.length > 0 && <label>Pen<select value={penId} disabled={savingAssignment} onChange={(event) => setPenId(event.target.value)}>
           <option value="">No pen assigned</option>
           {pens.map((pen) => <option key={pen.id} value={pen.id}>{pen.name}</option>)}
         </select></label>}
-        <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy}>{busy ? "Analyzing photo…" : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
+        {selectedCamera && <div className="actions">
+          <button className="button" type="button" disabled={savingAssignment || busy || !penId || selectedCamera.pen?.id === penId} onClick={() => void saveAssignment(penId)}>Save camera assignment</button>
+          {selectedCamera.pen && <button className="button" type="button" disabled={savingAssignment || busy} onClick={() => void saveAssignment(null)}>Remove camera assignment</button>}
+          {selectedCamera.pen && <span>Assigned to {selectedCamera.pen.name}</span>}
+          {assignmentMessage && <span role="status">{assignmentMessage}</span>}
+        </div>}
+        <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? "Analyzing photo…" : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
       </form>
 
       {result && <section className="section"><div className="section-head"><div><h3>Inspection result</h3><p>Visible findings only. Review the checks before taking action.</p></div><span className={`pill ${String(result.severity || "LOW").toLowerCase()}`}>{result.severity || "LOW"}</span></div>

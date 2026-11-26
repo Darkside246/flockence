@@ -168,7 +168,19 @@ try {
   assert.equal((await inspect(true, "https://other.example")).status, 403);
   assert.equal((await inspect(true, origin)).status, 502);
   assert.equal((await inspect(true, origin, "Farm A camera", penB.id)).status, 404);
-  const inspection = await inspect(true, origin, "Farm A camera", penA.id);
+  const assignCamera = (account, camera, penId, requestOrigin = origin) => fetch(origin + "/api/vision/cameras", {
+    method: "PUT", headers: { Cookie: cookies[account], Origin: requestOrigin, "Content-Type": "application/json" },
+    body: JSON.stringify({ camera, penId }),
+  });
+  assert.equal((await assignCamera(0, "Farm A camera", penA.id, "https://cross-origin.example")).status, 403);
+  assert.equal((await assignCamera(0, "Farm A camera", penB.id)).status, 404);
+  assert.equal((await assignCamera(1, "Farm A camera", penB.id)).status, 404);
+  const assigned = await assignCamera(0, "Farm A camera", penA.id);
+  assert.equal(assigned.status, 200);
+  assert.equal((await assigned.json()).pen.id, penA.id);
+  const listed = await fetch(origin + "/api/vision/cameras", { headers: { Cookie: cookies[0] } });
+  assert.equal((await listed.json())[0].pen.id, penA.id);
+  const inspection = await inspect(true, origin, "Farm A camera");
   assert.equal(inspection.status, 201);
   const saved = await inspection.json();
   assert.equal(saved.analysis.summary, "Inspection test result.");
@@ -209,6 +221,7 @@ try {
   assert.equal(report.inspections.length, 2);
   assert.equal(report.inspections[0].status, "WARNING");
   assert.equal(report.farmContext, null);
+  assert.equal((await assignCamera(0, "Farm A camera", null)).status, 200);
   assert.equal("imageUrl" in report.inspections[0], false);
   assert.equal((await signedRequest(ids[0], validBody)).status, 409);
   assert.equal((await signedRequest(ids[1], validBody)).status, 400);
@@ -251,6 +264,19 @@ try {
   assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 1);
   assert.equal(await runAsFarm(ids[0], () => prisma.birdCount.count({ where: { batchId: flock.id } })), 1);
 
+  const weight = { batchId: flock.id, date: workspace.today, quantity: 5, avgWeightKg: 1.3,
+    scope: "INDIVIDUAL", offline: { ...workspace.scope, id: randomUUID() } };
+  const submitWeight = (index, data) => fetch(origin + "/api/weights", {
+    method: "POST", headers: headerFor(index), body: JSON.stringify(data),
+  });
+  assert.equal((await submitWeight(1, weight)).status, 403);
+  const weightReceipts = await Promise.all([submitWeight(0, weight), submitWeight(0, weight)]);
+  assert.deepEqual(weightReceipts.map(response => response.status), [201, 201]);
+  const [weightA, weightB] = await Promise.all(weightReceipts.map(response => response.json()));
+  assert.equal(weightA.id, weightB.id);
+  assert.equal((await submitWeight(0, { ...weight, avgWeightKg: 1.6 })).status, 409);
+  assert.equal((await submitWeight(0, { ...weight, offline: { ...weight.offline, id: randomUUID() } })).status, 409);
+
   if (process.env.FLOCKENCE_BROWSER_MODULE) {
     const { chromium } = createRequire(import.meta.url)(process.env.FLOCKENCE_BROWSER_MODULE);
     const browser = await chromium.launch();
@@ -269,13 +295,21 @@ try {
       await page.locator("#notes").fill("private offline fixture");
       await page.locator("#save").click();
       await page.getByText("Saved on this device. Waiting to sync.").waitFor();
+      await page.selectOption("#record-kind", "weight");
+      await page.selectOption("#flock", flock.id);
+      await page.locator("#quantity").fill("3");
+      await page.locator("#average-weight").fill("1.2");
+      await page.locator("#save").click();
+      await page.getByText(/Live weight.*Waiting to sync/).waitFor();
       await page.reload();
       await page.locator("#passphrase").fill("test-device-research-only-123");
       await page.locator("#unlock-button").click();
-      await page.getByText(/Offline test flock.*Waiting to sync/).waitFor();
+      await page.getByText(/Mortality.*Waiting to sync/).waitFor();
+      await page.getByText(/Live weight.*Waiting to sync/).waitFor();
       await context.setOffline(false);
       await page.getByText("No entries waiting to sync.").waitFor();
       assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
+      assert.equal(await runAsFarm(ids[0], () => prisma.weightRecord.count({ where: { batchId: flock.id } })), 2);
 
       let blink = "disconnected";
       await page.route("**/api/cameras/status", (route) => route.fulfill({ json: {
