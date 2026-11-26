@@ -1,25 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Script from "next/script";
+import { useAccountCaptcha } from "@/components/account-captcha";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
-
-type Recaptcha = {
-  ready?: (callback: () => void) => void;
-  render: (element: HTMLElement, options: {
-    sitekey: string;
-    size: "compact";
-    callback: (token: string) => void;
-    "expired-callback": () => void;
-    "error-callback": () => void;
-  }) => number;
-  reset: (id: number) => void;
-};
-
-function recaptcha() {
-  return (window as Window & { grecaptcha?: Recaptcha }).grecaptcha;
-}
+import { useEffect, useState, type FormEvent } from "react";
 
 export function FreeSignupForm({ captchaSiteKey }: { captchaSiteKey: string }) {
   const router = useRouter();
@@ -32,47 +16,7 @@ export function FreeSignupForm({ captchaSiteKey }: { captchaSiteKey: string }) {
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState("");
-  const [captchaError, setCaptchaError] = useState("");
-  const captchaElement = useRef<HTMLDivElement>(null);
-  const captchaWidget = useRef<number | null>(null);
-
-  function captchaUnavailable() {
-    setCaptchaToken("");
-    setCaptchaError("The security check could not load. Check your connection and refresh this page.");
-  }
-
-  function renderCaptcha() {
-    const widget = recaptcha();
-    if (!captchaElement.current || captchaWidget.current !== null) return;
-    if (!widget || typeof widget.render !== "function") {
-      captchaUnavailable();
-      return;
-    }
-    try {
-      captchaWidget.current = widget.render(captchaElement.current, {
-        sitekey: captchaSiteKey,
-        size: "compact",
-        callback: (response) => { setCaptchaToken(response); setCaptchaError(""); },
-        "expired-callback": () => setCaptchaToken(""),
-        "error-callback": captchaUnavailable,
-      });
-    } catch {
-      captchaUnavailable();
-    }
-  }
-
-  function waitForCaptcha() {
-    const widget = recaptcha();
-    if (typeof widget?.render === "function") renderCaptcha();
-    else if (typeof widget?.ready === "function") widget.ready(renderCaptcha);
-    else captchaUnavailable();
-  }
-
-  function resetCaptcha() {
-    if (captchaWidget.current !== null) recaptcha()?.reset(captchaWidget.current);
-    setCaptchaToken("");
-  }
+  const captcha = useAccountCaptcha(captchaSiteKey);
 
   useEffect(() => {
     const proof = new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
@@ -85,24 +29,24 @@ export function FreeSignupForm({ captchaSiteKey }: { captchaSiteKey: string }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || (!token && !captchaToken)) return;
+    if (busy || (!token && !captcha.ready)) return;
     setBusy(true);
     setError("");
     try {
       const response = await fetch("/api/auth/free-signup", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(token ? { action: "finish", token, ownerName, farmName, password } : { action: "send", email, captchaToken }),
+        body: JSON.stringify(token ? { action: "finish", token, ownerName, farmName, password } : { action: "send", email, captchaToken: captcha.token }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.error || "Signup is temporarily unavailable.");
       if (token) router.replace("/farm-setup");
       else {
-        resetCaptcha();
-        captchaWidget.current = null;
+        captcha.reset();
+        captcha.clearWidget();
         setSent(true);
       }
     } catch (failure) {
-      if (!token) resetCaptcha();
+      if (!token) captcha.reset();
       setError(failure instanceof Error ? failure.message : "Could not complete signup.");
     } finally {
       setBusy(false);
@@ -122,14 +66,10 @@ export function FreeSignupForm({ captchaSiteKey }: { captchaSiteKey: string }) {
         <label>Password<input type="password" autoComplete="new-password" required minLength={8} maxLength={128} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
       </> : <>
         <label>Email address<input type="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-        {captchaSiteKey && <>
-          <div ref={captchaElement} />
-          <Script src="https://www.google.com/recaptcha/api.js?render=explicit" onReady={waitForCaptcha} onError={captchaUnavailable} />
-        </>}
-        {(!captchaSiteKey || captchaError) && <p className="auth-message auth-error" role="alert">{captchaError || "Public signup is temporarily unavailable."}</p>}
+        {captcha.widget}
       </>}
       {error && <p className="auth-message auth-error" role="alert">{error}</p>}
-      <button type="submit" className="button button-primary" disabled={busy || (!token && !captchaToken)}>{busy ? "Please wait…" : token ? "Create my account" : "Send verification link"}</button>
+      <button type="submit" className="button button-primary" disabled={busy || (!token && !captcha.ready)}>{busy ? "Please wait…" : token ? "Create my account" : "Send verification link"}</button>
     </form>}
     <p className="auth-links"><Link href="/login">Sign in</Link>{(token || sent) && <> · <button type="button" onClick={() => { setToken(""); setSent(false); setError(""); setPassword(""); }}>Request another link</button></>}</p>
   </section></main>;

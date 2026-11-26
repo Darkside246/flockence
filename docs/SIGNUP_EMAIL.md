@@ -10,3 +10,9 @@
 Edit the subject and message bodies in `lib/mail.ts`. Set `FLOCKENCE_WELCOME_EMAIL="on"` to send welcome mail after password signup. The invitation and verified-Free welcome paths use `sendWelcomeEmail`. Verification uses `sendFreeSignupVerificationEmail`. The verification link is single-use, expires after 30 minutes, and belongs to its recipient. Keep that link in the email when editing its wording.
 
 No schema migration is needed. Account creation, proof consumption, and the new farm session are transactional. Free signup and invitation signup use separate routes.
+
+## Account form protection
+
+The same two reCAPTCHA keys enable the server-verified challenge on password sign-in, invitation or owner setup, password-reset requests, and public Free signup. Set `FLOCKENCE_AUTH_CAPTCHA="on"` on the hosted instance to require the keys even if the environment is accidentally incomplete. Verify the production hostname and keys in staging before enabling that setting. It applies to all local account roles and plans.
+
+The email link itself proves inbox control for Free signup. Reset completion uses a single-use recovery token, same-origin JSON requests, rate limits and no-referrer headers. The reset page does not load a third-party CAPTCHA script. Oriya sign-in continues through its existing provider. Farm operations, device endpoints, and offline sync keep their existing access controls. Invitation creation and role changes require authorized users, same-origin JSON and farm-scoped limits.

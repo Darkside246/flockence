@@ -1,3 +1,4 @@
+import { accountClientIp } from "@/lib/account-form-security";
 import { NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { newSignIn, sealSignIn } from "@/lib/oriya-account.mjs";
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   const base = oriyaBaseUrl();
   const auth = process.env.AUTH_SECRET ?? "";
   if (!base || !platformSecret() || auth.length < 32) return NextResponse.json({ error: "Sign in with Oriya is not set up on this server." }, { status: 503 });
-  const ip = request.headers.get("cf-connecting-ip")?.trim() || request.headers.get("x-real-ip")?.trim() || "local";
+  const ip = accountClientIp(request) || "unknown";
   const limit = await checkRateLimit("oriya-sso:start:" + ip, 30, 10 * 60_000);
   if (!limit.allowed) return NextResponse.json({ error: "Too many sign-in attempts. Please wait a few minutes." }, { status: 429 });
   const attempt = newSignIn();
