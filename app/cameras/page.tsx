@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Nav } from "@/components/nav";
+import { CameraGateways } from "@/components/camera-gateways";
 
 type Camera = { name: string; source: "blink" | "rtsp"; type: string | null; battery: string | number | null; armed: boolean | null; motionDetected: boolean | null; live: boolean; recording?: boolean };
 type Clip = { id: string; camera: string; source: "blink" | "rtsp" | "import"; createdAt: string; media: string; thumbnail: string | null };
@@ -339,12 +340,13 @@ export default function CamerasPage() {
         </div>
         {provider === "blink" && !status.available && <p>Blink setup is waiting for this farm’s private camera service.</p>}
         {provider === "blink" && status.connected && <p>Blink is connected to this farm.</p>}
-        {provider === "wyze" && <p>Wyze cloud connection is unavailable. Check Wyze’s <a href="https://support.wyze.com/hc/en-us/articles/360026245231-Wyze-Cam-RTSP" target="_blank" rel="noopener noreferrer">camera model and RTSP instructions</a> for a network connection.</p>}
-        {provider === "network" && !status.networkCameras && <p>A network camera needs a private gateway for this farm.</p>}
+        {provider === "wyze" && <p><a href="https://my.wyze.com/live" target="_blank" rel="noopener noreferrer">Open Wyze Web View</a> to sign in to Wyze and watch live. To send snapshots to Flockence, check <a href="https://support.wyze.com/hc/en-us/articles/360026245231-Wyze-Cam-RTSP" target="_blank" rel="noopener noreferrer">which Wyze models support RTSP</a>.</p>}
+        {provider === "network" && !status.networkCameras && <p>Use a private farm gateway to send snapshots from a compatible camera.</p>}
       </section>
       {provider === "blink" && status.available && !status.connected && <ConnectCard status={status} onDone={load} />}
       {(provider === "network" || provider === "wyze") && status.available && status.networkCameras && <ManageCameras cameras={cameras} onChange={load} />}
     </>}
+    <CameraGateways brand={provider === "wyze" || provider === "network" ? provider : null} />
     {status?.available && <>
       {cameras.length === 0 && <>
         <div className="card"><p>No cameras are connected yet. A farm owner can connect a camera or add recordings.</p></div>
