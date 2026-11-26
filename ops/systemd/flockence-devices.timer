@@ -1,0 +1,9 @@
+[Unit]
+Description=Push selected farm device readings to Flockence
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=60s
+
+[Install]
+WantedBy=timers.target

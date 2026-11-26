@@ -38,6 +38,10 @@ def capture(path):
     address = ip_address(parsed.hostname or "")
     if parsed.scheme != "rtsp" or not any(address in network for network in FARM_NETWORKS):
         raise ValueError("Use an RTSP address on the farm's private network.")
+    return capture_url(url)
+
+
+def capture_url(url):
     checked = subprocess.run(
         [
             "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
@@ -74,10 +78,15 @@ def main():
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--rtsp-file", type=Path, help="Private file containing the camera's local RTSP URL")
     source.add_argument("--jpeg", type=Path, help="JPEG captured by existing gateway software")
+    source.add_argument("--local-restream", help="Operator-configured go2rtc stream name on local port 8554")
     args = parser.parse_args()
     token = read_private(args.token_file, 256)
     if args.rtsp_file:
         photo, time = capture(args.rtsp_file)
+    elif args.local_restream:
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,39}", args.local_restream):
+            raise ValueError("Use a simple local restream name.")
+        photo, time = capture_url("rtsp://127.0.0.1:8554/" + args.local_restream)
     else:
         with args.jpeg.open("rb") as handle:
             photo = handle.read(MAX_BYTES + 1)

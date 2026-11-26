@@ -9,7 +9,7 @@ type NavItem = readonly [string, string, string];
 
 const groups: { label: string; items: NavItem[] }[] = [
   { label: "Operate", items: [["Overview", "/", "home"], ["Flocks", "/batches", "flock"], ["Daily round", "/operations", "operations"], ["Egg production", "/layers", "eggs"], ["Layer performance", "/layers/performance", "performance"], ["Pack eggs", "/layers/packing", "package"], ["House", "/house", "house"], ["Pens", "/pens", "pens"], ["Health", "/health", "health"]] },
-  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Production", "/planning", "production"]] },
+  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Devices", "/devices", "devices"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Production", "/planning", "production"]] },
   { label: "Understand", items: [["Performance", "/performance", "performance"], ["Reports", "/reports", "reports"]] }
 ];
 const teamGroup = { label: "Manage", items: [["Team", "/team", "users"]] as NavItem[] };
@@ -18,6 +18,7 @@ const settings: NavItem = ["Settings", "/settings", "settings"];
 function NavIcon({name}:{name:string}) {
   const paths:Record<string,React.ReactNode>={
     home:<><path d="m3 7 5-4 5 4v6H9v-4H7v4H3z"/></>,
+    devices:<><rect x="3" y="3.5" width="10" height="7" rx="1.4"/><path d="M8 10.5v2.2m-2.4 0h4.8M6 7h4"/></>,
     users:<><circle cx="6" cy="5" r="2"/><path d="M2.5 13v-1.2A3.5 3.5 0 0 1 6 8.3a3.5 3.5 0 0 1 3.5 3.5V13z"/><path d="M10 3.5a2 2 0 0 1 0 3.8M11 8.5a3.2 3.2 0 0 1 2.5 3.1V13"/></>,
     eggs:<><path d="M8 2.2c-2.2 0-4.6 3.8-4.6 7.1A4.6 4.6 0 0 0 8 13.8a4.6 4.6 0 0 0 4.6-4.5C12.6 6 10.2 2.2 8 2.2Z"/><path d="M6.2 9.5c.1 1.1.7 1.7 1.8 2"/></>,
     package:<><path d="m8 2 5 2.8v6.4L8 14l-5-2.8V4.8z"/><path d="m3 4.8 5 2.9 5-2.9M8 7.7V14"/></>,
