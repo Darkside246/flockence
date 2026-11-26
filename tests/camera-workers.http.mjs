@@ -85,7 +85,7 @@ try {
   const b = await worker("Farm B camera", "b".repeat(48), "rtsp");
   app = spawn(process.execPath, ["--import", "./tests/support/mock-vision-provider.mjs", "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], {
     stdio: "inherit",
-    env: { ...process.env, APP_URL: origin, FLOCKENCE_PLATFORM_ADMIN_IDS: platformId, ORIYA_URL: "https://oriya.si", CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
+    env: { ...process.env, APP_URL: origin, FLOCKENCE_AUTH_CAPTCHA: "on", RECAPTCHA_SITE_KEY: "ci-only-site", RECAPTCHA_SECRET_KEY: "ci-only-secret", FLOCKENCE_PLATFORM_ADMIN_IDS: platformId, ORIYA_URL: "https://oriya.si", CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
       CHICKENVERSE_RESEARCH_REPORT: researchReport, VISION_STORAGE_DIR: visionStorage, FLOCKENCE_CAMERA_VISION: "on", OPENAI_API_KEY: "ci-only-unused", FLOCKENCE_CAMERA_WORKERS: JSON.stringify({ [ids[0]]: a, [ids[1]]: b }) },
   });
   let ready = false;
@@ -95,6 +95,27 @@ try {
     await sleep(500);
   }
   assert.ok(ready, "Flockence failed to start");
+  const accountPost = (path, data, headers) => fetch(origin + "/api/auth/" + path, {
+    method: "POST", headers: { Origin: origin, "Content-Type": "application/json", ...headers }, body: JSON.stringify(data),
+  });
+  for (const [path, data] of [
+    ["login", { email: "robot@example.test", password: "Disposable-password!4" }],
+    ["signup", { name: "Example worker", email: "robot@example.test", password: "Disposable-password!4" }],
+    ["forgot-password", { email: "robot@example.test" }],
+  ]) {
+    const missing = await accountPost(path, data);
+    assert.equal(missing.status, 400);
+    assert.match((await missing.json()).error, /security check/i);
+    assert.equal((await accountPost(path, data, { Origin: "https://cross-origin.example" })).status, 403);
+  }
+  const oversized = await accountPost("login", { email: "x".repeat(17000), password: "x" });
+  assert.equal(oversized.status, 400);
+  assert.equal((await fetch(origin + "/reset-password?token=fixture")).headers.get("referrer-policy"), "no-referrer");
+  assert.equal((await fetch(origin + "/api/team", {
+    method: "POST",
+    headers: { Cookie: cookies[0], Origin: "https://cross-origin.example", "Content-Type": "application/json" },
+    body: "{}",
+  })).status, 403);
   const list = (index, spoofedFarm) => fetch(origin + "/api/cameras/cameras", {
     headers: { Cookie: cookies[index], "X-Flockence-Farm": spoofedFarm },
   });

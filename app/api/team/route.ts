@@ -3,6 +3,8 @@ import { createHash, randomBytes } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId } from "@/lib/operations";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
+import { accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const roles = ["OWNER", "MANAGER", "WORKER", "READ_ONLY"] as const;
 const inviteRoles = ["MANAGER", "WORKER", "READ_ONLY"] as const;
@@ -26,8 +28,16 @@ export async function POST(request: Request) {
   const access = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
   if (access.response) return access.response;
 
+  const originResponse = accountFormOriginResponse(request);
+  if (originResponse) return originResponse;
+
   try {
-    const input = await request.json();
+    const limit = await checkRateLimit("team:invite:" + currentFarmId(), 12, 15 * 60_000);
+    if (!limit.allowed) return NextResponse.json({ error: "Too many team changes. Try again later." }, {
+      status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) },
+    });
+    const input = await readAccountForm(request);
+    if (!input) return NextResponse.json({ error: "Invalid form data." }, { status: 400 });
     const requestedRole = String(input.role || "WORKER").toUpperCase();
     if (!inviteRoles.includes(requestedRole as typeof inviteRoles[number])) {
       return NextResponse.json({ error: "Choose Manager, Farm worker or Read only." }, { status: 400 });
@@ -76,8 +86,16 @@ export async function PATCH(request: Request) {
   const access = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
   if (access.response) return access.response;
 
+  const originResponse = accountFormOriginResponse(request);
+  if (originResponse) return originResponse;
+
   try {
-    const input = await request.json();
+    const limit = await checkRateLimit("team:role:" + currentFarmId(), 30, 15 * 60_000);
+    if (!limit.allowed) return NextResponse.json({ error: "Too many team changes. Try again later." }, {
+      status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) },
+    });
+    const input = await readAccountForm(request);
+    if (!input) return NextResponse.json({ error: "Invalid form data." }, { status: 400 });
     const userId = typeof input.userId === "string" ? input.userId : "";
     const role = String(input.role || "").toUpperCase() as UserRole;
     if (!userId || !roles.includes(role)) {

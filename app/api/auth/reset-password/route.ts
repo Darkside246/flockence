@@ -1,3 +1,4 @@
+import { accountClientIp, accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -9,11 +10,14 @@ import { runAsFarm } from "@/lib/farm-scope";
 export async function POST(request: Request) {
   // Oriya-only server: accounts come only from Oriya ("Sign in with Oriya"); no local passwords.
   if (process.env.FLOCKENCE_ORIYA_ONLY === "on") return NextResponse.json({ error: "Sign in with Oriya." }, { status: 404 });
+  const originResponse = accountFormOriginResponse(request);
+  if (originResponse) return originResponse;
   try {
-    const body = await request.json();
+    const body = await readAccountForm(request);
+    if (!body) return NextResponse.json({ error: "Invalid form data." }, { status: 400 });
     const token = typeof body.token === "string" ? body.token : "";
     const password = typeof body.password === "string" ? body.password : "";
-    const clientIp = request.headers.get("cf-connecting-ip")?.trim() || request.headers.get("x-real-ip")?.trim() || "";
+    const clientIp = accountClientIp(request);
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const [tokenLimit, ipLimit] = await Promise.all([
       checkRateLimit("password-reset-complete:token:" + tokenHash, 5, 60 * 60 * 1000),

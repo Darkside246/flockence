@@ -1,3 +1,4 @@
+import { accountCaptchaResponse, accountClientIp, accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getPasswordHash, createSession, setSessionCookie, normalizeEmail, verifyPassword } from "@/lib/auth";
@@ -8,8 +9,11 @@ import { runAsFarm, runUnscoped } from "@/lib/farm-scope";
 export async function POST(request: Request) {
   // Oriya-only server: accounts come only from Oriya ("Sign in with Oriya"); no local passwords.
   if (process.env.FLOCKENCE_ORIYA_ONLY === "on") return NextResponse.json({ error: "Sign in with Oriya." }, { status: 404 });
+  const originResponse = accountFormOriginResponse(request);
+  if (originResponse) return originResponse;
   try {
-    const body = await request.json();
+    const body = await readAccountForm(request);
+    if (!body) return NextResponse.json({ error: "Invalid form data." }, { status: 400 });
     const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
     const password = typeof body.password === "string" ? body.password : "";
 
@@ -20,9 +24,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email or password is too long." }, { status: 400 });
     }
 
-    const ip = request.headers.get("cf-connecting-ip")?.trim()
-      || request.headers.get("x-real-ip")?.trim()
-      || "";
+    const ip = accountClientIp(request);
     const [emailLimit, ipLimit] = await Promise.all([
       checkRateLimit("login:email:" + email, 8, 15 * 60 * 1000),
       ip ? checkRateLimit("login:ip:" + ip, 40, 15 * 60 * 1000) : Promise.resolve({ allowed: true, retryAfterSeconds: 0 }),
@@ -34,6 +36,9 @@ export async function POST(request: Request) {
         { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
       );
     }
+
+    const captchaResponse = await accountCaptchaResponse(body.captchaToken);
+    if (captchaResponse) return captchaResponse;
 
     // Which farm the email belongs to (many farms on one server); everything after runs inside that farm only.
     const user = await runUnscoped(() => prisma.user.findUnique({

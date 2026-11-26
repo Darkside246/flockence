@@ -23,3 +23,10 @@ export async function verifySignupCaptcha(token: unknown, hostname: string): Pro
     return "unavailable";
   }
 }
+
+/** Null preserves standalone installs that have no CAPTCHA configuration. */
+export function accountCaptchaSiteKey(): string | null {
+  const siteKey = process.env.RECAPTCHA_SITE_KEY?.trim() ?? "";
+  const configured = Boolean(siteKey || process.env.RECAPTCHA_SECRET_KEY?.trim());
+  return configured || process.env.FLOCKENCE_AUTH_CAPTCHA === "on" ? siteKey : null;
+}

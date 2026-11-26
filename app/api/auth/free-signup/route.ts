@@ -3,7 +3,7 @@ import { normalizeEmail, setSessionCookie, validatePassword } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { completeVerifiedFreeSignup, discardFreeEmailProof, freeSignupTokenPattern, issueFreeEmailProof } from "@/lib/free-email-proof";
 import { freeSignupEnabled } from "@/lib/free-signup-enabled";
-import { isTrustedAppOrigin } from "@/lib/request-origin";
+import { accountClientIp, accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
 import { verifySignupCaptcha } from "@/lib/signup-captcha";
 import { sendFreeSignupVerificationEmail, sendWelcomeEmail } from "@/lib/mail";
 
@@ -27,9 +27,11 @@ export async function POST(request: Request) {
   if (process.env.NODE_ENV === "production" && process.env.AUTH_COOKIE_SECURE !== "true") {
     return reply("Signup is temporarily unavailable.", 503);
   }
-  if (!isTrustedAppOrigin(request)) return reply("Open signup from the Flockence website.", 403);
-  const data = await request.json().catch(() => null);
-  const ip = request.headers.get("x-real-ip")?.trim() || "unknown";
+  const originResponse = accountFormOriginResponse(request);
+  if (originResponse) return originResponse;
+  const data = await readAccountForm(request);
+  if (!data) return reply("Invalid signup form.", 400);
+  const ip = accountClientIp(request) || "unknown";
   try {
     if (data?.action === "send") {
       const email = typeof data.email === "string" ? normalizeEmail(data.email) : "";

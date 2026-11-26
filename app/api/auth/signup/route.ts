@@ -1,3 +1,4 @@
+import { accountCaptchaResponse, accountClientIp, accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
 import { sendWelcomeEmail } from "@/lib/mail";
 import { after, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -22,13 +23,15 @@ function constantTimeSecretMatch(expected: string, supplied: string) {
 export async function POST(request: Request) {
   // Oriya-only server: accounts come only from Oriya ("Sign in with Oriya"); no local passwords.
   if (process.env.FLOCKENCE_ORIYA_ONLY === "on") return NextResponse.json({ error: "Sign in with Oriya." }, { status: 404 });
+  const originResponse = accountFormOriginResponse(request);
+  if (originResponse) return originResponse;
   return runAsFarm(DEFAULT_FARM_ID, () => signup(request));
 }
 
 async function signup(request: Request) {
   try {
-    await ensureFarm();
-    const body = await request.json();
+    const body = await readAccountForm(request);
+    if (!body) return NextResponse.json({ error: "Invalid form data." }, { status: 400 });
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -38,7 +41,7 @@ async function signup(request: Request) {
     if (!passwordCheck.valid) return NextResponse.json({ error: passwordCheck.errors.join(" ") }, { status: 400 });
     if (password.length > 128) return NextResponse.json({ error: "Password is too long." }, { status: 400 });
 
-    const clientIp = request.headers.get("cf-connecting-ip")?.trim() || request.headers.get("x-real-ip")?.trim() || "";
+    const clientIp = accountClientIp(request);
     const [emailLimit, ipLimit] = await Promise.all([
       checkRateLimit("signup:email:" + email, 5, 60 * 60 * 1000),
       clientIp ? checkRateLimit("signup:ip:" + clientIp, 10, 60 * 60 * 1000) : Promise.resolve({ allowed: true, retryAfterSeconds: 0 }),
@@ -50,7 +53,12 @@ async function signup(request: Request) {
       });
     }
 
+    const captchaResponse = await accountCaptchaResponse(body.captchaToken);
+    if (captchaResponse) return captchaResponse;
+
     const inviteCode = typeof body.inviteCode === "string" ? body.inviteCode : "";
+    if (inviteCode.length > 256) return NextResponse.json({ error: "Enter a valid setup or invitation code." }, { status: 400 });
+    await ensureFarm();
     const passwordHash = await hashPassword(password);
     const user = await prisma.$transaction(async (tx) => {
       // Serialize first-owner claims and invitation checks for this farm.
