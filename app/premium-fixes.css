@@ -205,3 +205,23 @@
 .layer-performance-header{background:var(--surface-soft);color:var(--muted);font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase}
 .layer-performance-row strong{color:var(--ink);font-size:11px}
 .layer-performance-row span{color:var(--muted)}
+
+.mobile-search-trigger { display: none; }
+@media (max-width: 760px) {
+  html:not([data-theme="crystal"]) .shell:has(.mobile-search-trigger) .main { padding-top: 65px; }
+  .shell .mobile-search-trigger {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    inset: 12px auto auto 58px;
+    z-index: 120;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    color: var(--ink);
+    background: var(--surface-solid);
+  }
+  .mobile-search-trigger svg { width: 20px; height: 20px; }
+  .shell:has(.mobile-drawer.open) .mobile-search-trigger { visibility: hidden; }
+}

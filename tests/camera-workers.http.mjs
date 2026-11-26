@@ -405,6 +405,13 @@ try {
       await palette.getByRole("link", { name: /Cameras/i }).waitFor();
       await page.keyboard.press("Escape");
       await palette.waitFor({ state: "hidden" });
+      await page.setViewportSize({ width: 390, height: 844 });
+      const mobileSearch = page.getByRole("button", { name: "Search Flockence", exact: true });
+      await mobileSearch.click();
+      await palette.waitFor({ state: "visible" });
+      await page.keyboard.press("Escape");
+      await palette.waitFor({ state: "hidden" });
+      await page.setViewportSize({ width: 1280, height: 900 });
       const provider = page.getByLabel("Camera provider");
       await provider.selectOption("blink");
       await page.getByLabel("Blink email").fill("blink-fixture@example.test");
