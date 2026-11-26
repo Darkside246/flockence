@@ -1,10 +1,9 @@
-import { accountCaptchaResponse, accountClientIp, accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
+import { accountCaptchaResponse, accountClientIp, accountFormOriginResponse, accountRateLimitResponse, readAccountForm } from "@/lib/account-form-security";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ensureFarm } from "@/lib/operations";
 import { createPasswordReset, normalizeEmail } from "@/lib/auth";
 import { sendPasswordResetEmail } from "@/lib/mail";
-import { checkRateLimit } from "@/lib/rate-limit";
 import { runAsFarm, runUnscoped } from "@/lib/farm-scope";
 
 export async function POST(request: Request) {
@@ -16,23 +15,19 @@ export async function POST(request: Request) {
     const body = await readAccountForm(request);
     if (!body) return NextResponse.json({ error: "Invalid form data." }, { status: 400 });
     const email = typeof body.email === "string" ? normalizeEmail(body.email) : "";
-    const clientIp = accountClientIp(request);
-    const [emailLimit, ipLimit] = await Promise.all([
-      checkRateLimit("password-reset:email:" + email, 3, 60 * 60 * 1000),
-      clientIp ? checkRateLimit("password-reset:ip:" + clientIp, 8, 60 * 60 * 1000) : Promise.resolve({ allowed: true, retryAfterSeconds: 0 }),
-    ]);
-    if (!emailLimit.allowed || !ipLimit.allowed) {
-      const retryAfterSeconds = Math.max(emailLimit.retryAfterSeconds, ipLimit.retryAfterSeconds);
-      return NextResponse.json(
-        { message: "If an account exists for that email, a password reset link will be sent shortly.", retryAfterSeconds },
-        { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
-      );
-    }
+    const message = "Too many password reset requests. Please try again later.";
+    const ip = accountClientIp(request) || "unknown";
+    const ipResponse = await accountRateLimitResponse("password-reset:ip:" + ip, 8, 60 * 60_000, message);
+    if (ipResponse) return ipResponse;
     if (!email || email.length > 254) {
       return NextResponse.json({ message: "If an account exists for that email, a password reset link will be sent shortly." });
     }
+
     const captchaResponse = await accountCaptchaResponse(body.captchaToken);
     if (captchaResponse) return captchaResponse;
+
+    const emailResponse = await accountRateLimitResponse("password-reset:email:" + email, 3, 60 * 60_000, message);
+    if (emailResponse) return emailResponse;
 
     const configuredUrl = process.env.APP_URL || (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000");
     const base = new URL(configuredUrl);

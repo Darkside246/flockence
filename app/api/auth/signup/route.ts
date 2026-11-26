@@ -1,11 +1,10 @@
-import { accountCaptchaResponse, accountClientIp, accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
+import { accountCaptchaResponse, accountClientIp, accountFormOriginResponse, accountRateLimitResponse, readAccountForm } from "@/lib/account-form-security";
 import { sendWelcomeEmail } from "@/lib/mail";
 import { after, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { createSession, hashPassword, setSessionCookie, normalizeEmail, validatePassword } from "@/lib/auth";
-import { checkRateLimit } from "@/lib/rate-limit";
 import { DEFAULT_FARM_ID, runAsFarm } from "@/lib/farm-scope";
 
 const inviteHash = (value: string) => createHash("sha256").update(value).digest("hex");
@@ -41,20 +40,16 @@ async function signup(request: Request) {
     if (!passwordCheck.valid) return NextResponse.json({ error: passwordCheck.errors.join(" ") }, { status: 400 });
     if (password.length > 128) return NextResponse.json({ error: "Password is too long." }, { status: 400 });
 
-    const clientIp = accountClientIp(request);
-    const [emailLimit, ipLimit] = await Promise.all([
-      checkRateLimit("signup:email:" + email, 5, 60 * 60 * 1000),
-      clientIp ? checkRateLimit("signup:ip:" + clientIp, 10, 60 * 60 * 1000) : Promise.resolve({ allowed: true, retryAfterSeconds: 0 }),
-    ]);
-    if (!emailLimit.allowed || !ipLimit.allowed) {
-      const retryAfterSeconds = Math.max(emailLimit.retryAfterSeconds, ipLimit.retryAfterSeconds);
-      return NextResponse.json({ error: "Too many account setup attempts. Please try again later.", retryAfterSeconds }, {
-        status: 429, headers: { "Retry-After": String(retryAfterSeconds) },
-      });
-    }
+    const message = "Too many account setup attempts. Please try again later.";
+    const ip = accountClientIp(request) || "unknown";
+    const ipResponse = await accountRateLimitResponse("signup:ip:" + ip, 10, 60 * 60_000, message);
+    if (ipResponse) return ipResponse;
 
     const captchaResponse = await accountCaptchaResponse(body.captchaToken);
     if (captchaResponse) return captchaResponse;
+
+    const emailResponse = await accountRateLimitResponse("signup:email:" + email, 5, 60 * 60_000, message);
+    if (emailResponse) return emailResponse;
 
     const inviteCode = typeof body.inviteCode === "string" ? body.inviteCode : "";
     if (inviteCode.length > 256) return NextResponse.json({ error: "Enter a valid setup or invitation code." }, { status: 400 });

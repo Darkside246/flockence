@@ -108,6 +108,10 @@ try {
     assert.match((await missing.json()).error, /security check/i);
     assert.equal((await accountPost(path, data, { Origin: "https://cross-origin.example" })).status, 403);
   }
+  // Missing challenges consume the network quota but cannot lock the target email.
+  for (let index = 0; index < 8; index++) {
+    assert.equal((await accountPost("login", { email: "robot@example.test", password: "Disposable-password!4" })).status, 400);
+  }
   const oversized = await accountPost("login", { email: "x".repeat(17000), password: "x" });
   assert.equal(oversized.status, 400);
   assert.equal((await fetch(origin + "/reset-password?token=fixture")).headers.get("referrer-policy"), "no-referrer");

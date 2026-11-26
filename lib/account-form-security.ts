@@ -1,5 +1,6 @@
 import { isIP } from "node:net";
 import { NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { isTrustedAppOrigin } from "@/lib/request-origin";
 import { accountCaptchaSiteKey, verifySignupCaptcha } from "@/lib/signup-captcha";
 
@@ -62,4 +63,13 @@ export async function readAccountForm(request: Request): Promise<Record<string, 
   } finally {
     reader.releaseLock();
   }
+}
+
+export async function accountRateLimitResponse(key: string, limit: number, windowMs: number, error: string) {
+  const result = await checkRateLimit(key, limit, windowMs);
+  if (result.allowed) return null;
+  return NextResponse.json({ error, retryAfterSeconds: result.retryAfterSeconds }, {
+    status: 429,
+    headers: { "Retry-After": String(result.retryAfterSeconds), "Cache-Control": "no-store" },
+  });
 }
