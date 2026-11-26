@@ -1,5 +1,7 @@
 # Flockence design, build and run handoff
 
+> **Current deployment note — 26 November 2026:** This is a historical Windows/local-development handoff. The current installation is on the VPS and is accessed at **https://flockence.com**. Work through the VPS and GitHub; the Windows paths, localhost browser URLs and local launchers below are not the current workflow. Read [the current README](../README.md#live-environment-and-working-agreement) and [AGENTS.md](../AGENTS.md) first.
+
 **Written:** 1 November 2026, for the next AI agent (or engineer) who takes this work over.
 **Repository:** `Darkside246/chicken-op` (private). **Branch:** `rebrand/flockence-2026-10-31`. **Pull request:** #7.
 **Read this together with:** `docs/FLOCKENCE_REBRAND_HANDOFF_2026-10-31.md` (brand and Oriya integration, written by another agent)
