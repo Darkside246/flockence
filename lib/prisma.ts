@@ -1,6 +1,7 @@
-import { PrismaClient } from "@prisma/client";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { Prisma, PrismaClient } from "@prisma/client";
 import {
-  CHILD_MODELS, FARM_MODELS, FarmScopeError, GLOBAL_MODELS, currentFarmId, farmFilter, isUnscoped, linkedIds, withFarm,
+  CHILD_MODELS, FARM_MODELS, FarmScopeError, GLOBAL_MODELS, currentFarmId, currentFarmIdOrNull, farmFilter, isUnscoped, linkedIds, withFarm,
 } from "@/lib/farm-scope";
 
 /**
@@ -24,7 +25,10 @@ function delegateFor(client: unknown, model: string): Delegate {
   return (client as Record<string, Delegate>)[model.charAt(0).toLowerCase() + model.slice(1)];
 }
 
-function buildClient() {
+type Tx = Prisma.TransactionClient;
+const transactions = new AsyncLocalStorage<{ farm: string | null; client: Tx }>();
+
+function buildClient(base: PrismaClient) {
   // eslint-disable-next-line prefer-const
   let scoped: ReturnType<typeof extend>;
   const extend = () => base.$extends({
@@ -57,7 +61,7 @@ function buildClient() {
             const connected = child ? (row[child.relation] as { connect?: { id?: unknown } } | undefined)?.connect?.id : undefined;
             if (typeof connected === "string") links.push({ target: child!.parent, id: connected });
             for (const link of links) {
-              const found = await delegateFor(scoped, link.target).count({ where: { id: link.id } });
+              const found = await delegateFor(transactions.getStore()?.client ?? scoped, link.target).count({ where: { id: link.id } });
               if (found !== 1) throw new FarmScopeError("LINK_OUTSIDE_FARM");
             }
             return row;
@@ -81,10 +85,140 @@ function buildClient() {
   return scoped;
 }
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+type Work = (client: Tx) => unknown;
+type TxOptions = { maxWait?: number; timeout?: number; isolationLevel?: Prisma.TransactionIsolationLevel };
+const farmTables = ["Farm", ...FARM_MODELS, ...Object.keys(CHILD_MODELS)];
+const modelKeys = new Map(Object.values(Prisma.ModelName).map((name) => [name[0].toLowerCase() + name.slice(1), name]));
+const raw = new Set(["$queryRaw", "$queryRawUnsafe", "$executeRaw", "$executeRawUnsafe"]);
 
-// The extension only changes what queries do, not what can be called, so callers keep the ordinary client type
-// (helpers typed with Prisma.TransactionClient keep working inside transactions, which are scoped the same way).
-export const prisma: PrismaClient = globalForPrisma.prisma ?? (buildClient() as unknown as PrismaClient);
+function tenantFacade(identity: PrismaClient, tenant: PrismaClient): PrismaClient {
+  const jobs = new WeakMap<object, Work>();
+
+  function scope() {
+    return isUnscoped() ? null : currentFarmId();
+  }
+
+  function inTransaction<T>(farm: string | null, work: (tx: Tx) => Promise<T>, options?: TxOptions) {
+    const db = farm === null ? identity : tenant;
+    return db.$transaction(async (tx) => {
+      if (farm !== null) {
+        const [bound] = await tx.$queryRaw<{ farm: string; role: string; active: number }[]>`
+          SELECT set_config('app.farm_id', ${farm}, true) AS farm, current_user::text AS role,
+            (
+              SELECT count(*)::int FROM pg_policies
+              WHERE schemaname = 'public' AND tablename::text IN (${Prisma.join(farmTables)})
+                AND policyname = 'flockence_farm_boundary' AND permissive = 'RESTRICTIVE'
+                AND 'flockence_tenant' = ANY(roles)
+                AND row_security_active(to_regclass(format('public.%I', tablename)))
+            ) AS active
+        `;
+        if (bound?.farm !== farm || bound.role !== "flockence_tenant" || bound.active !== farmTables.length) {
+          throw new FarmScopeError("FARM_DATABASE_RLS_REQUIRED");
+        }
+      }
+      return transactions.run({ farm, client: tx }, () => work(tx));
+    }, options);
+  }
+
+  async function execute(work: Work, shared = false) {
+    if (shared && !transactions.getStore()) return await work(tenant);
+    const farm = scope();
+    const active = transactions.getStore();
+    if (active) {
+      if (active.farm !== farm) throw new FarmScopeError("FARM_TRANSACTION_SCOPE_MISMATCH");
+      return await work(active.client);
+    }
+    if (farm === null) return await work(identity);
+    return await inTransaction(farm, async (tx) => await work(tx));
+  }
+
+  function task(work: Work, shared = false) {
+    let promise: Promise<unknown> | undefined;
+    const run = () => promise ??= execute(work, shared);
+    const result = {
+      then: (yes: (value: unknown) => unknown, no: (reason: unknown) => unknown) => run().then(yes, no),
+      catch: (no: (reason: unknown) => unknown) => run().catch(no),
+      finally: (done: () => void) => run().finally(done),
+      [Symbol.toStringTag]: "PrismaPromise",
+    };
+    const lazy: object = new Proxy(result, {
+      get(target, method, receiver) {
+        if (typeof method !== "string" || Reflect.has(target, method)) return Reflect.get(target, method, receiver);
+        // Prisma findUnique exposes relation methods before its promise runs.
+        return (...args: unknown[]) => task((tx) => invoke(work(tx), method, args), shared);
+      },
+    });
+    jobs.set(lazy, work);
+    return lazy;
+  }
+
+  function invoke(receiver: unknown, method: string, args: unknown[]) {
+    return Reflect.apply(Reflect.get(receiver as object, method), receiver, args);
+  }
+
+  return new Proxy(identity, {
+    get(target, key, receiver) {
+      if (key === "$transaction") return (input: unknown, options?: TxOptions) => {
+        if (transactions.getStore()) throw new FarmScopeError("NESTED_FARM_TRANSACTION");
+        const farm = scope();
+        if (typeof input === "function") return inTransaction(farm, async (tx) => await input(tx), options);
+        if (!Array.isArray(input)) throw new TypeError("Expected a Prisma transaction callback or operations");
+        const work = input.map((operation) => {
+          const item = jobs.get(operation);
+          if (!item) throw new TypeError("Expected unconsumed operations from the Flockence database client");
+          return item;
+        });
+        return inTransaction(farm, async (tx) => {
+          const results: unknown[] = [];
+          for (const item of work) results.push(await item(tx));
+          return results;
+        }, options);
+      };
+      if (key === "$disconnect") return () => Promise.all([identity.$disconnect(), tenant.$disconnect()]).then(() => undefined);
+      if (key === "$connect") return () => Promise.all([identity.$connect(), tenant.$connect()]).then(() => undefined);
+      if (typeof key === "string" && raw.has(key)) return (...args: unknown[]) => task((tx) => invoke(tx, key, args));
+
+      const model = typeof key === "string" ? modelKeys.get(key) : undefined;
+      const delegate = Reflect.get(target, key, receiver);
+      if (!model) return delegate;
+      return new Proxy(delegate as object, {
+        get(modelTarget, method, modelReceiver) {
+          const value = Reflect.get(modelTarget, method, modelReceiver);
+          if (typeof method !== "string" || typeof value !== "function") return value;
+          return (...args: unknown[]) => task(
+            (tx) => invoke(Reflect.get(tx as object, key), method, args),
+            GLOBAL_MODELS.has(model),
+          );
+        },
+      });
+    },
+  });
+}
+
+// Keep link validation on the same connection for callbacks on the legacy client too.
+function scopeLegacyTransactions(client: PrismaClient): PrismaClient {
+  return new Proxy(client, {
+    get(target, key, receiver) {
+      if (key !== "$transaction") return Reflect.get(target, key, receiver);
+      return (input: unknown, ...options: unknown[]) => {
+        if (typeof input !== "function") return Reflect.apply(target.$transaction, target, [input, ...options]);
+        const farm = currentFarmIdOrNull();
+        return target.$transaction(
+          (tx) => transactions.run({ farm, client: tx }, async () => await input(tx)),
+          options[0] as TxOptions | undefined,
+        );
+      };
+    },
+  });
+}
+
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const legacy = buildClient(base) as unknown as PrismaClient;
+const url = process.env.FARM_RLS_DATABASE_URL;
+const restricted = url ? buildClient(new PrismaClient({ datasourceUrl: url })) as unknown as PrismaClient : null;
+
+export const prisma: PrismaClient = globalForPrisma.prisma ?? (restricted ? tenantFacade(legacy, restricted) : scopeLegacyTransactions(legacy));
+// Only the rate limiter uses this client. The table contains no farm records.
+export const rateLimitDatabase = restricted ?? legacy;
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

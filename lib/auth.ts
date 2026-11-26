@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { createHash, createHmac, randomBytes, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +13,7 @@ const RESET_PREFIX = "AUTH_RESET::";
 const PASSWORD_PREFIX = "AUTH_PASSWORD::";
 const SESSION_DAYS = 30;
 const RESET_MINUTES = 30;
+const SESSION_FORMAT = /^[A-Za-z0-9_-]{1,1024}\.[A-Za-z0-9_-]{43}$/;
 
 export function normalizeEmail(value: string) { return value.trim().toLowerCase(); }
 
@@ -42,9 +44,14 @@ export async function verifyPassword(password: string, stored: string) {
 
 function digest(value: string) { return createHash("sha256").update(value).digest("hex"); }
 function secret() { const value = process.env.AUTH_SECRET; if (!value || value.length < 32) throw new Error("AUTH_SECRET must be configured with at least 32 characters."); return value; }
-function signingPayload(userId: string, expiresAt: number, nonce: string) { return Buffer.from(JSON.stringify({ userId, expiresAt, nonce })).toString("base64url"); }
+function signingPayload(userId: string, farmId: string, expiresAt: number, nonce: string) {
+  return Buffer.from(JSON.stringify({ userId, farmId, expiresAt, nonce })).toString("base64url");
+}
 function sign(payload: string) { return createHmac("sha256", secret()).update(payload).digest("base64url"); }
-function signedSessionToken(userId: string, expiresAt: number) { const payload = signingPayload(userId, expiresAt, randomBytes(16).toString("base64url")); return `${payload}.${sign(payload)}`; }
+function signedSessionToken(userId: string, farmId: string, expiresAt: number) {
+  const payload = signingPayload(userId, farmId, expiresAt, randomBytes(16).toString("base64url"));
+  return `${payload}.${sign(payload)}`;
+}
 function isProduction() { return process.env.NODE_ENV === "production"; }
 
 function secureCookieOptions(maxAge: number) {
@@ -53,11 +60,12 @@ function secureCookieOptions(maxAge: number) {
 }
 
 /** maxAgeSeconds: shorter for Oriya sign-ins, so a removal or downgrade in Oriya takes effect within hours. */
-export async function createSession(userId: string, maxAgeSeconds = SESSION_DAYS * 86400) {
+export async function createSession(userId: string, maxAgeSeconds = SESSION_DAYS * 86400, client: Prisma.TransactionClient = prisma) {
   await ensureFarm();
   const expiresAt = new Date(Date.now() + maxAgeSeconds * 1000);
-  const token = signedSessionToken(userId, expiresAt.getTime());
-  await prisma.setting.create({ data: { farmId: currentFarmId(), key: `${SESSION_PREFIX}${digest(token)}`, value: JSON.stringify({ userId, expiresAt: expiresAt.toISOString() }) } });
+  const farmId = currentFarmId();
+  const token = signedSessionToken(userId, farmId, expiresAt.getTime());
+  await client.setting.create({ data: { farmId, key: sessionKey(token), value: JSON.stringify({ userId, expiresAt: expiresAt.toISOString() }) } });
   return { token, expiresAt };
 }
 
@@ -65,7 +73,7 @@ export async function createSession(userId: string, maxAgeSeconds = SESSION_DAYS
 export async function destroySession(token: string) {
   const session = await sessionFromToken(token);
   if (!session) return;
-  await runAsFarm(session.farmId, () => prisma.setting.deleteMany({ where: { key: `${SESSION_PREFIX}${digest(token)}` } }));
+  await runAsFarm(session.farmId, () => prisma.setting.deleteMany({ where: { key: sessionKey(token) } }));
 }
 
 /**
@@ -74,23 +82,95 @@ export async function destroySession(token: string) {
  * how the request learns its farm.
  */
 export async function sessionFromToken(token: string): Promise<{ userId: string; farmId: string } | null> {
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
+  if (!SESSION_FORMAT.test(token)) return null;
+  const [encoded, signature] = token.split(".");
   try {
-    const payloadText = Buffer.from(parts[0], "base64url").toString("utf8");
-    const payload = JSON.parse(payloadText) as { userId: string; expiresAt: number; nonce: string };
-    const expectedSig = Buffer.from(sign(parts[0]), "base64url");
-    const suppliedSig = Buffer.from(parts[1], "base64url");
-    if (expectedSig.length !== suppliedSig.length || !timingSafeEqual(expectedSig, suppliedSig)) return null;
-    if (!payload.userId || !payload.nonce || !Number.isFinite(payload.expiresAt) || payload.expiresAt <= Date.now()) return null;
-    return await runUnscoped(async () => {
-      const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { farmId: true } });
-      if (!user) return null;
-      const row = await prisma.setting.findUnique({ where: { farmId_key: { farmId: user.farmId, key: `${SESSION_PREFIX}${digest(token)}` } } });
-      if (!row) return null;
+    const expected = Buffer.from(sign(encoded));
+    if (!timingSafeEqual(expected, Buffer.from(signature))) return null;
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    if (typeof payload?.userId !== "string" || !payload.userId || typeof payload.nonce !== "string" ||
+        !payload.nonce || !Number.isFinite(payload.expiresAt) || payload.expiresAt <= Date.now() ||
+        (payload.farmId !== undefined && typeof payload.farmId !== "string")) return null;
+
+    // Older signed sessions did not include the farm. Resolve it through the
+    // user's existing session row while new tokens must match their signed farm.
+    const user = await runUnscoped(() => prisma.user.findUnique({ where: { id: payload.userId }, select: { farmId: true } }));
+    if (!user || (payload.farmId !== undefined && payload.farmId !== user.farmId)) return null;
+    return await runAsFarm(user.farmId, async () => {
+      const row = await prisma.setting.findUnique({
+        where: { farmId_key: { farmId: user.farmId, key: sessionKey(token) } }, select: { value: true },
+      });
+      const saved = row ? readSessionRow(row.value) : null;
+      if (!saved || saved.userId !== payload.userId || saved.expiresAt !== payload.expiresAt) return null;
       return { userId: payload.userId, farmId: user.farmId };
     });
   } catch { return null; }
+}
+
+function sessionKey(token: string) { return SESSION_PREFIX + digest(token); }
+
+export function sessionCookieFromRequest(request: Request) {
+  const cookie = (request.headers.get("cookie") ?? "").split(";")
+    .map((part) => part.trim()).find((part) => part.startsWith(SESSION_COOKIE + "="));
+  if (!cookie) return null;
+  try {
+    const token = decodeURIComponent(cookie.slice(SESSION_COOKIE.length + 1));
+    return SESSION_FORMAT.test(token) ? token : null;
+  } catch { return null; }
+}
+
+function readSessionRow(value: string) {
+  try {
+    const record = JSON.parse(value);
+    if (typeof record?.userId !== "string" || typeof record.expiresAt !== "string") return null;
+    const expiresAt = Date.parse(record.expiresAt);
+    return Number.isFinite(expiresAt) ? { userId: record.userId, expiresAt } : null;
+  } catch { return null; }
+}
+
+function userSessionPrefix(userId: string) { return '{"userId":' + JSON.stringify(userId) + ','; }
+
+function userSessionFilter(userId: string) {
+  // All issued sessions have the account id as the first field.
+  return {
+    farmId: currentFarmId(),
+    key: { startsWith: SESSION_PREFIX },
+    value: { startsWith: userSessionPrefix(userId) },
+  };
+}
+
+export async function activeAccountSessions(userId: string, token: string) {
+  const filter = userSessionFilter(userId);
+  const current = sessionKey(token);
+  const [rows, currentRow] = await Promise.all([
+    prisma.setting.findMany({
+      where: { ...filter, key: { ...filter.key, not: current } },
+      select: { id: true, value: true, updatedAt: true },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }], take: 50,
+    }),
+    prisma.setting.findFirst({
+      where: { ...filter, key: current }, select: { id: true, value: true, updatedAt: true },
+    }),
+  ]);
+  return [currentRow, ...rows].flatMap((row, index) => {
+    if (!row) return [];
+    const saved = readSessionRow(row.value);
+    if (!saved || saved.userId !== userId || saved.expiresAt <= Date.now()) return [];
+    return [{ id: row.id, current: index === 0, signedInAt: row.updatedAt.toISOString(), expiresAt: new Date(saved.expiresAt).toISOString() }];
+  });
+}
+
+export async function revokeOtherAccountSessions(userId: string, token: string, id?: string) {
+  const prefix = userSessionPrefix(userId);
+  // Match literal prefixes as text, including ids from older installations.
+  return prisma.$executeRaw`
+    DELETE FROM "Setting"
+    WHERE "farmId" = ${currentFarmId()}
+      AND left("key", ${SESSION_PREFIX.length}::int) = ${SESSION_PREFIX}
+      AND left("value", char_length(${prefix}::text)) = ${prefix}
+      AND "key" <> ${sessionKey(token)}
+      ${id ? Prisma.sql`AND "id" = ${id}` : Prisma.empty}
+  `;
 }
 
 export function setSessionCookie(token: string, maxAgeSeconds = SESSION_DAYS * 86400) { return `${SESSION_COOKIE}=${encodeURIComponent(token)}; ${secureCookieOptions(maxAgeSeconds)}`; }

@@ -8,6 +8,29 @@
 
 Flockence is a complete poultry operations platform for broiler and layer production, designed for independent farmers through commercial enterprises. Flockence manages poultry operations and remains the operational system of record; Oriya provides shared intelligence and connected business capabilities.
 
+## Live environment and working agreement
+
+**Owner-confirmed, 26 November 2026:** Flockence is operated on the VPS and accessed at **https://flockence.com**. Work on this installation through the VPS, the live domain and this GitHub repository.
+
+- Use **https://flockence.com** for browser checks and user-facing links. Do not direct the owner to localhost, start a Windows/local copy, or make an SSH tunnel part of the normal workflow unless the owner explicitly requests it.
+- GitHub is the source of truth for code, review and operational notes: https://github.com/Darkside246/flockence. Changes are built and run on the VPS.
+- The systemd service is `flockence.service`; it runs as user/group `flockence`. The administrator logs in as `flockadmin` and uses `sudo -u flockence -H` for application commands.
+- The last confirmed application checkout is `/opt/flockence-release-9ed3991/app`. It is a Git checkout in detached-HEAD mode. `/opt/flockence` is not a Git repository, and `flockadmin` cannot enter it directly. Do not assume either path is the active checkout without checking the service.
+- The last confirmed service starts Next.js with `/usr/local/bin/node` and listens on **127.0.0.1:3002 inside the VPS**. That is the internal backend address, not the public browser address. Public access uses **https://flockence.com**.
+- Directory names do not establish the deployed commit. Read the current service configuration and Git revision before giving update commands. Use `--no-pager` so diagnostics return to the shell.
+
+Read-only deployment checks, run in the VPS SSH shell:
+
+```bash
+sudo systemctl show flockence --no-pager -p User -p Group -p WorkingDirectory -p ExecStart
+sudo systemctl status flockence --no-pager -l
+# Use the WorkingDirectory reported above when checking the deployed Git revision:
+sudo -u flockence -H git -C /opt/flockence-release-9ed3991/app rev-parse HEAD
+curl -I https://flockence.com
+```
+
+A build or restart is not proof that the public site works: verify the live domain after an authorized deployment. Do not change database records, permissions, secrets or service configuration as part of an unrelated visual task. Older Windows/local-run handoff instructions below and in archived notes are historical and do not describe the current operating workflow. See [AGENTS.md](AGENTS.md) for the corresponding agent instructions.
+
 ## Current build
 
 The application includes flock and batch tracking, mortality, feed, daily flock checks, inventory movements, sales, slaughter, processing, transport, health records, biosecurity, tasks, planning, profitability, reports, PWA support, and Farm Vision. The active development line now distinguishes broiler meat production from layer egg production instead of forcing both through one lifecycle.

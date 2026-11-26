@@ -1,3 +1,4 @@
+import { withProtectedFarmData } from "@/lib/farm-database";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { blinkConfigured, blinkFetch } from "@/lib/blink-sidecar";
@@ -10,7 +11,7 @@ import {
   type OriyaClimateEntry, type ThermometerReadingInput,
 } from "@/lib/climate.mjs";
 import { loadReferenceFrame, saveReferenceFrame } from "@/lib/frame-store";
-import { pollSwitchbot } from "@/lib/thermometers";
+import { pollSwitchbot, storeReadings } from "@/lib/thermometers";
 import { farmLinkConfig } from "@/lib/oriya-farm-link";
 import { camerasBelongToThisFarm } from "@/lib/camera-guard";
 import { reconcileLiveBirdsFromSnapshot } from "@/lib/poultry-metrics.mjs";
@@ -83,16 +84,41 @@ export async function postToOriya(config: OriyaLinkConfig, path: string, body: u
   try { return { status: response.status, json: JSON.parse(text) }; } catch { return { status: response.status, json: null }; }
 }
 
+function cameraTemperatureAliases() {
+  if (process.env.ORIYA_BLINK_TEMPERATURES !== "on" || !camerasBelongToThisFarm()) return new Map<string, string>();
+  return new Map([...allowedCameras(process.env)].map(([code, name]) => [name, "Blink camera " + code])
+    .filter(([, sensor]) => /^[A-Za-z0-9_. -]{1,40}$/.test(sensor)) as [string, string][]);
+}
+
+export async function collectOriyaCameraTemperatures() {
+  const aliases = cameraTemperatureAliases();
+  if (!aliases.size || !blinkConfigured()) return 0;
+  const response = await blinkFetch("/blink/temperature-sample", {}, 20_000);
+  if (!response.ok) return 0;
+  const sample = await response.json();
+  const readAt = new Date(typeof sample.observedAt === "string" ? sample.observedAt : NaN);
+  if (!Number.isFinite(readAt.getTime()) || Math.abs(Date.now() - readAt.getTime()) > 15 * 60_000 || !Array.isArray(sample.cameras)) return 0;
+  const readings = sample.cameras.slice(0, 128).flatMap((item: { name?: unknown; temperatureC?: unknown } | null) => {
+    const sensor = typeof item?.name === "string" ? aliases.get(item.name) : undefined;
+    const value = item?.temperatureC;
+    if (!sensor || typeof value !== "number" || !Number.isFinite(value) || value < -20 || value > 70) return [];
+    return [{ sensor, readAt, temperatureC: value, humidityPct: null }];
+  });
+  return storeReadings(readings, "BLINK_CAMERA");
+}
+
 /**
  * Each thermometer's latest reading (within the last 3 hours) and the one about an hour before it, for Oriya's
  * `climate`. Imported history older than that is not sent.
  */
 export async function currentClimate(now = new Date()): Promise<OriyaClimateEntry[]> {
   await ensureFarm();
-  const rows = await prisma.thermometerReading.findMany({
-    where: { farmId: currentFarmId(), readAt: { gte: new Date(now.getTime() - (SEND_WITHIN_MINUTES + 100) * 60_000), lte: new Date(now.getTime() + 5 * 60_000) } },
+  const rows = await withProtectedFarmData("oriya", (db) => db.thermometerReading.findMany({
+    where: { farmId: currentFarmId(), readAt: { gte: new Date(now.getTime() - (SEND_WITHIN_MINUTES + 100) * 60_000), lte: new Date(now.getTime() + 5 * 60_000) },
+      OR: [{ source: { not: "BLINK_CAMERA" } }, { source: "BLINK_CAMERA", sensor: { in: [...cameraTemperatureAliases().values()] } }],
+    },
     orderBy: { readAt: "desc" }, take: 5000, select: { sensor: true, readAt: true, temperatureC: true, humidityPercent: true },
-  });
+  }));
   const bySensor = new Map<string, ThermometerReadingInput[]>();
   for (const row of rows) {
     const list = bySensor.get(row.sensor) ?? [];
@@ -119,22 +145,25 @@ export async function currentFlockCheck(house: string) {
   await ensureFarm();
   const now = new Date();
   const since = new Date(now.getTime() - 24 * 3_600_000);
-  const batches = await prisma.batch.findMany({
-    where: { farmId: currentFarmId(), status: "ACTIVE" },
-    select: {
-      id: true, initialChicks: true, startDate: true,
-      birdCounts: { where: { date: { lte: now } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 1, select: { liveCount: true, date: true, createdAt: true } },
-      mortalityEvents: { select: { quantity: true, date: true, reason: true, createdAt: true } },
-      slaughterEvents: { select: { sentQuantity: true, date: true, createdAt: true } },
-    },
+  const { batches, purchases, used, used24, healthCases } = await withProtectedFarmData("oriya", async (db) => {
+    const batches = await db.batch.findMany({
+      where: { farmId: currentFarmId(), status: "ACTIVE" },
+      select: {
+        id: true, initialChicks: true, startDate: true,
+        birdCounts: { where: { date: { lte: now } }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 1, select: { liveCount: true, date: true, createdAt: true } },
+        mortalityEvents: { select: { quantity: true, date: true, reason: true, createdAt: true } },
+        slaughterEvents: { select: { sentQuantity: true, date: true, createdAt: true } },
+      },
+    });
+    const batchIds = batches.map((b) => b.id);
+    const [purchases, used, used24, healthCases] = await Promise.all([
+      db.feedPurchase.findMany({ where: { OR: [{ farmId: currentFarmId() }, { batchId: { in: batchIds } }] }, select: { bagSizeKg: true, quantityBags: true } }),
+      db.feedUsage.aggregate({ where: { batchId: { in: batchIds } }, _sum: { quantityKg: true } }),
+      db.feedUsage.aggregate({ where: { batchId: { in: batchIds }, date: { gte: since } }, _sum: { quantityKg: true } }),
+      db.healthCase.count({ where: { farmId: currentFarmId(), status: { in: ["OPEN", "MONITORING"] } } }),
+    ]);
+    return { batches, purchases, used, used24, healthCases };
   });
-  const batchIds = batches.map((b) => b.id);
-  const [purchases, used, used24, healthCases] = await Promise.all([
-    prisma.feedPurchase.findMany({ where: { OR: [{ farmId: currentFarmId() }, { batchId: { in: batchIds } }] }, select: { bagSizeKg: true, quantityBags: true } }),
-    prisma.feedUsage.aggregate({ where: { batchId: { in: batchIds } }, _sum: { quantityKg: true } }),
-    prisma.feedUsage.aggregate({ where: { batchId: { in: batchIds }, date: { gte: since } }, _sum: { quantityKg: true } }),
-    prisma.healthCase.count({ where: { farmId: currentFarmId(), status: { in: ["OPEN", "MONITORING"] } } }),
-  ]);
   const causes: Partial<Record<DeathCause, number>> = {};
   let deaths = 0;
   let alive = 0;
@@ -261,7 +290,7 @@ export async function pushToOriya(options: { house: string; pictures: "none" | "
     const outcome: PushOutcome = { check: null, snapshots: [] };
     const answers: OriyaAnswer[] = [];
     // Fresh SwitchBot readings first (at most every 5 minutes), so the check carries the current temperatures.
-    await pollSwitchbot(now).catch(() => undefined);
+    await Promise.all([pollSwitchbot(now).catch(() => undefined), collectOriyaCameraTemperatures().catch(() => undefined)]);
     const check = await currentFlockCheck(options.house);
     const sent = await postToOriya(config, "/api/public/farm/chicken-op/flock-checks", check);
     outcome.check = { status: sent.status, alerts: sent.status === 201 ? await keepAlerts(sent.json as OriyaAnswer, "farm numbers") : 0, reason: refusalReason(sent) };

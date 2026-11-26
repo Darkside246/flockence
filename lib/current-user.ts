@@ -1,15 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
-import { SESSION_COOKIE, sessionFromToken } from "@/lib/auth";
+import { sessionCookieFromRequest, sessionFromToken } from "@/lib/auth";
 import { beginRequestScope, setRequestFarm } from "@/lib/farm-scope";
 
 export async function requireCurrentUser(request: Request) {
   // The farm of this request (many farms on one server): opened before the first await so the calling route shares
   // it, and filled in only from a valid session. Until then every farm query is refused.
   const scope = beginRequestScope();
-  const cookieHeader = request.headers.get("cookie") || "";
-  const token = cookieHeader.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`))?.slice(`${SESSION_COOKIE}=`.length);
-  const session = token ? await sessionFromToken(decodeURIComponent(token)) : null;
+  const token = sessionCookieFromRequest(request);
+  const session = token ? await sessionFromToken(token) : null;
   const sessionUserId = session?.userId ?? null;
 
   // No sign-in, no user, in every mode (security review 2026-11-01). There used to be a development shortcut that

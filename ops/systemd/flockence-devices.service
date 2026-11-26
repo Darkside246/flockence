@@ -1,0 +1,18 @@
+[Unit]
+Description=Flockence farm device gateway push
+After=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+LoadCredential=config:/etc/flockence-farm/devices.json
+LoadCredential=home-assistant.token:/etc/flockence-farm/home-assistant.token
+LoadCredential=flockence.token:/etc/flockence-farm/flockence-device.token
+ExecStart=/usr/bin/python3 /opt/flockence-farm/push-device-gateway.py --config ${CREDENTIALS_DIRECTORY}/config --ha-token ${CREDENTIALS_DIRECTORY}/home-assistant.token --upload-token ${CREDENTIALS_DIRECTORY}/flockence.token
+TimeoutStartSec=120
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+UMask=0077

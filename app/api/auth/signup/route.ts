@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server";
+import { sendWelcomeEmail } from "@/lib/mail";
+import { after, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
@@ -53,7 +54,7 @@ async function signup(request: Request) {
     const passwordHash = await hashPassword(password);
     const user = await prisma.$transaction(async (tx) => {
       // Serialize first-owner claims and invitation checks for this farm.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${currentFarmId()}, 0))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${currentFarmId()}, 0))::text`;
 
       const existing = await tx.user.findUnique({ where: { email }, select: { id: true } });
       if (existing) throw new Error("ACCOUNT_ALREADY_EXISTS");
@@ -105,6 +106,15 @@ async function signup(request: Request) {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
     }, { status: 201 });
     response.headers.set("Set-Cookie", setSessionCookie(session.token));
+    if (process.env.FLOCKENCE_WELCOME_EMAIL === "on") {
+      after(async () => {
+        try {
+          if (!(await sendWelcomeEmail(user.email, user.id))) console.warn("[flockence-mail] Welcome email was not accepted.");
+        } catch {
+          console.warn("[flockence-mail] Welcome email delivery failed.");
+        }
+      });
+    }
     return response;
   } catch (error) {
     const code = error instanceof Error ? error.message : "";

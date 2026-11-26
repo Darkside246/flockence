@@ -5,13 +5,13 @@ in data/rtsp_cameras.json and are never returned by any endpoint.
 Live view, snapshots and recordings all go through ffmpeg.
 """
 import asyncio
-import json
 import os
 import re
 import shutil
 import time
 from datetime import datetime
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,28 +20,50 @@ from pydantic import BaseModel
 
 import imports as imported_clips
 from settings import (DATA_DIR, FFMPEG, RECORD_KEEP_DAYS, RECORDINGS_DIR, SEGMENT_SECONDS,
-                      require_token, slug)
+                      open_credentials, require_token, seal_credentials, slug)
 
 STORE = DATA_DIR / "rtsp_cameras.json"
+NETWORK_CAMERAS_ENABLED = os.environ.get("BLINK_DISABLE_NETWORK_CAMERAS") != "1"
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,39}$")
 recorders: dict[str, asyncio.subprocess.Process] = {}
 router = APIRouter(dependencies=[Depends(require_token)])
 
 
 def _load() -> dict[str, dict]:
-    try:
-        return json.loads(STORE.read_text())
-    except (OSError, ValueError):
+    if not NETWORK_CAMERAS_ENABLED:
         return {}
+    try:
+        data, _ = open_credentials(STORE.read_text(), purpose=b"flockence-rtsp-config-v1")
+    except FileNotFoundError:
+        return {}
+    if not isinstance(data, dict):
+        raise RuntimeError("Invalid RTSP camera configuration")
+    return data
 
 
 def _save(data: dict[str, dict]):
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    STORE.write_text(json.dumps(data))
+    sealed = seal_credentials(data, purpose=b"flockence-rtsp-config-v1")
+    temporary = None
     try:
-        os.chmod(STORE, 0o600)
-    except OSError:
-        pass
+        with NamedTemporaryFile(dir=DATA_DIR, mode="w", delete=False) as output:
+            temporary = Path(output.name)
+            output.write(sealed)
+        temporary.replace(STORE)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def protect_saved_addresses():
+    if not NETWORK_CAMERAS_ENABLED:
+        return
+    try:
+        raw = STORE.read_text()
+    except FileNotFoundError:
+        return
+    if not raw.startswith("v1:"):
+        _save(_load())
 
 
 def has(name: str) -> bool:
@@ -192,6 +214,8 @@ class NewCamera(BaseModel):
 
 @router.post("/rtsp/cameras")
 async def add_camera(body: NewCamera):
+    if not NETWORK_CAMERAS_ENABLED:
+        raise HTTPException(403, "Network cameras require a private farm gateway")
     name = body.name.strip()
     if not NAME_RE.match(name):
         raise HTTPException(400, "Name must be 1-40 letters, numbers, spaces, dashes or underscores")

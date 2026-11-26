@@ -16,7 +16,7 @@ concurrency:
 jobs:
   app:
     name: Validate database, types and production build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     services:
       postgres:
@@ -24,7 +24,7 @@ jobs:
         env:
           POSTGRES_USER: ci
           POSTGRES_PASSWORD: ci
-          POSTGRES_DB: chicken_op
+          POSTGRES_DB: flockence_ci_test
         ports:
           - 5432:5432
         options: >-
@@ -33,7 +33,7 @@ jobs:
           --health-timeout=5s
           --health-retries=20
     env:
-      DATABASE_URL: postgresql://ci:ci@localhost:5432/chicken_op
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/flockence_ci_test
       AUTH_SECRET: ci-secret-abcdefghijklmnopqrstuvwxyz-123456
       AUTH_COOKIE_SECURE: "false"
       APP_URL: http://localhost:3000
@@ -51,7 +51,7 @@ jobs:
       - name: Install dependencies
         run: |
           set -o pipefail
-          npm install --no-audit --no-fund 2>&1 | tee ci-npm-install.log
+          npm ci --no-audit --no-fund 2>&1 | tee ci-npm-install.log
 
       - name: Validate Prisma
         run: |
@@ -73,6 +73,23 @@ jobs:
           set -o pipefail
           npm test 2>&1 | tee ci-tests.log
 
+      - name: Farm isolation and transaction checks
+        run: |
+          set -o pipefail
+          node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/farm-isolation.db.mjs 2>&1 | tee ci-farm-isolation.log
+
+      - name: Database row security and camera worker isolation
+        run: |
+          psql -X "$DATABASE_URL" --file tests/farm-rls.sql
+          node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/camera-workers.mjs
+          python3 -m compileall -q services/blink
+          python3 -m unittest discover -s services/blink/tests -p test_clip_archive.py
+          python3 tests/chickenverse-research.py
+          bash -n ops/systemd/enable-local-stack.sh
+          bash -n services/blink/install-vps.sh
+          node --experimental-strip-types --test tests/mail.mjs
+          node --experimental-strip-types --test tests/vision-assessment.mjs
+
       - name: Type check
         run: |
           set -o pipefail
@@ -83,6 +100,38 @@ jobs:
           set -o pipefail
           npm run build 2>&1 | tee ci-build.log
 
+      - name: Exercise camera routing, platform access and offline browser recovery
+        run: |
+          OFFLINE_BROWSER="$RUNNER_TEMP/flockence-offline-browser"
+          npm install --prefix "$OFFLINE_BROWSER" playwright@1.56.1
+          "$OFFLINE_BROWSER/node_modules/.bin/playwright" install --with-deps chromium
+          FLOCKENCE_BROWSER_MODULE="$OFFLINE_BROWSER/node_modules/playwright" node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-workers.http.mjs
+
+      - name: Exercise private camera and smart device gateways with restricted database roles
+        env:
+          CAMERA_GATEWAY_DATABASE_URL: postgresql://flockence_camera_gateway:gateway-ci-only@localhost:5432/flockence_ci_test
+          CAMERA_GATEWAY_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          DEVICE_GATEWAY_DATABASE_URL: postgresql://flockence_device_gateway:device-ci-only@localhost:5432/flockence_ci_test
+          DEVICE_GATEWAY_KEY: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBE
+          FARM_RLS_DATABASE_URL: postgresql://flockence_tenant:tenant-ci-only@localhost:5432/flockence_ci_test
+          CUSTOMER_RLS_DATABASE_URL: postgresql://flockence_customer_runtime:customer-ci-only@localhost:5432/flockence_ci_test
+          ORIYA_RLS_DATABASE_URL: postgresql://flockence_oriya_reader:oriya-ci-only@localhost:5432/flockence_ci_test
+        run: |
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_camera_gateway LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'gateway-ci-only'"
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/camera-gateway-role.sql
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_device_gateway LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'device-ci-only'"
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/device-gateway-role.sql
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_customer_runtime LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'customer-ci-only'"
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_oriya_reader LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'oriya-ci-only'"
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/farm-runtime-rls.sql
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_tenant LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'tenant-ci-only'"
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/farm-tenant-access.sql
+          node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/farm-isolation.db.mjs
+          node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-gateway.http.mjs
+          node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-workers.http.mjs
+          python3 -m py_compile scripts/push-camera-frame.py scripts/push-device-gateway.py
+          python3 tests/device_gateway_edge.py
+
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,3 +140,70 @@ jobs:
           path: ci-*.log
           if-no-files-found: warn
           retention-days: 7
+
+  screenshots:
+    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/design-system-rebuild' || github.head_ref == 'feature/poultry-farm-refinement')
+    name: Theme visual review (${{ matrix.revision }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    strategy:
+      fail-fast: false
+      matrix:
+        revision: [before, after]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: flockence_visual_test
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready -U ci -d flockence_visual_test" --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/flockence_visual_test
+      AUTH_SECRET: disposable-visual-ci-auth-secret-0123456789
+      AUTH_COOKIE_SECURE: "true"
+      FARM_OWNER_SETUP_CODE: disposable-visual-ci-owner-setup
+      APP_URL: http://localhost:3000
+      VISUAL_SEED_DASHBOARD: ${{ github.head_ref == 'feature/poultry-farm-refinement' }}
+      VISUAL_THEMES: ${{ github.head_ref == 'feature/poultry-farm-refinement' && 'poultry' || '' }}
+      VISUAL_REVISION: ${{ matrix.revision }}
+      VISUAL_OUTPUT: ${{ github.workspace }}/theme-screenshots
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: harness
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.revision == 'before' && github.event.pull_request.base.sha || github.event.pull_request.head.sha }}
+          path: app-source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the app with a disposable database
+        working-directory: app-source
+        run: |
+          npm ci
+          npx prisma db push
+          npm run build
+      - name: Install browser tooling
+        run: |
+          export VISUAL_DEPS="$RUNNER_TEMP/flockence-visual"
+          npm install --prefix "$VISUAL_DEPS" playwright@1.56.1
+          "$VISUAL_DEPS/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Capture themes and run browser smoke checks
+        working-directory: app-source
+        run: |
+          npm run start -- -H 127.0.0.1 -p 3000 > "$RUNNER_TEMP/flockence-visual.log" 2>&1 &
+          trap 'kill $! 2>/dev/null || true' EXIT
+          curl --retry 20 --retry-connrefused --retry-delay 1 --fail --silent http://localhost:3000/login > /dev/null
+          VISUAL_DEPS="$RUNNER_TEMP/flockence-visual" node ../harness/tests/theme-visual.mjs
+      - name: Upload review evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: themes-${{ matrix.revision }}
+          path: |
+            theme-screenshots
+            ${{ runner.temp }}/flockence-visual.log

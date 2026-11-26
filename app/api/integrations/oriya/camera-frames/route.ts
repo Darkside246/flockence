@@ -1,3 +1,4 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { claimOriyaRequestId, currentClimate, framesFromCamera, referenceFor } from "@/lib/oriya";
@@ -23,6 +24,8 @@ export async function POST(request: Request) {
   if (raw.length === 0 || raw.length > 4096) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400 });
   const signed = verifyOriyaSignature(config.secret, request.headers.get("x-oriya-timestamp"), request.headers.get("x-oriya-signature"), raw);
   if (!signed.ok) return NextResponse.json({ error: signed.reason }, { status: 401 });
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   const limit = await checkRateLimit("oriya:camera-frames", 10, 60_000);
   if (!limit.allowed) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   let body: unknown;

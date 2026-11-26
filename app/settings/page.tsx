@@ -1,44 +1,205 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { Nav } from "@/components/nav";
+import { SettingsCameraProviders } from "@/components/settings-camera-providers";
+import { useSession } from "@/components/auth-gate";
 import { useTheme } from "@/components/theme-provider";
+import { themes } from "@/lib/theme-registry";
 
-type ThemeName = "crystal" | "aero" | "heritage" | "workhorse" | "sol" | "terra";
-const themes: { id: ThemeName; name: string; desc: string; bg: string; accent: string }[] = [
-  { id: "crystal", name: "Cyber Crystal", desc: "Obsidian glass with cyber-teal light", bg: "linear-gradient(135deg,#050a12,#10283a)", accent: "#35e0d0" },
-  { id: "aero", name: "Aero Glass", desc: "Dark glass with cyan highlights", bg: "linear-gradient(135deg,#070b12,#0f172a)", accent: "#00f2fe" },
-  { id: "heritage", name: "Heritage Sovereign", desc: "Deep green with brass accents", bg: "linear-gradient(135deg,#0e1210,#1c2821)", accent: "#e5c378" },
-  { id: "workhorse", name: "Field Workhorse", desc: "High-contrast industrial amber", bg: "linear-gradient(135deg,#141618,#303438)", accent: "#ffb703" },
-  { id: "sol", name: "Sol Tactical", desc: "Maximum-contrast black and yellow", bg: "linear-gradient(135deg,#000000,#1a1a1a)", accent: "#ffe500" },
-  { id: "terra", name: "Terra Flora", desc: "Warm earth with soft green", bg: "linear-gradient(135deg,#171412,#2c2723)", accent: "#86efac" }
+const sections = [
+  ["account", "Account & security"],
+  ["farm", "Farm profile"],
+  ["operations", "Farm operations"],
+  ["team", "Team & permissions"],
+  ["devices", "Devices & plan"],
+  ["cameras", "Camera connections"],
+  ["appearance", "Appearance"],
+  ["storage", "Storage & sync"],
+] as const;
+
+type Section = typeof sections[number][0];
+const defaults = {
+  default_feed_bag_price: "56", default_chick_cost: "2.90", default_slaughter_cost: "2.00",
+  weather_location_name: "", weather_latitude: "", weather_longitude: "",
+};
+type Preferences = typeof defaults;
+type PreferenceKey = keyof Preferences;
+type Notice = { message: string; error?: boolean };
+
+const costFields: { key: PreferenceKey; label: string }[] = [
+  { key: "default_feed_bag_price", label: "Default feed bag price" },
+  { key: "default_chick_cost", label: "Default chick cost" },
+  { key: "default_slaughter_cost", label: "Default slaughter cost" },
 ];
 
-export default function SettingsPage(){
-  const [farmName,setFarmName]=useState("Alchemy Farms");
-  const [feedPrice,setFeedPrice]=useState("56");
-  const [chickCost,setChickCost]=useState("2.90");
-  const [slaughter,setSlaughter]=useState("2.00");
-  const [weatherName,setWeatherName]=useState("");
-  const [weatherLat,setWeatherLat]=useState("");
-  const [weatherLon,setWeatherLon]=useState("");
-  const [message,setMessage]=useState("");
-  const { theme, density, radius, setTheme, setDensity, setRadius } = useTheme();
+function selectedSection(): Section {
+  const hash = window.location.hash.slice(1);
+  return sections.find(([key]) => key === hash)?.[0] ?? "account";
+}
 
-  useEffect(()=>{fetch("/api/settings").then(r=>r.json()).then(d=>{setFarmName(d.farm?.name||"Alchemy Farms");const map=Object.fromEntries((d.settings||[]).map((x:{key:string,value:string})=>[x.key,x.value]));setFeedPrice(map.default_feed_bag_price||"56");setChickCost(map.default_chick_cost||"2.90");setSlaughter(map.default_slaughter_cost||"2.00");setWeatherName(map.weather_location_name||"");setWeatherLat(map.weather_latitude||"");setWeatherLon(map.weather_longitude||"")}).catch(()=>setMessage("Settings could not be loaded."))},[]);
-  async function save(e:FormEvent){e.preventDefault();setMessage("");const r=await fetch("/api/settings",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({farmName,settings:[{key:"default_feed_bag_price",value:feedPrice},{key:"default_chick_cost",value:chickCost},{key:"default_slaughter_cost",value:slaughter},{key:"weather_location_name",value:weatherName},{key:"weather_latitude",value:weatherLat},{key:"weather_longitude",value:weatherLon}]})});setMessage(r.ok?"Farm settings saved.":"Could not save farm settings.")}
+export default function SettingsPage() {
+  const user = useSession();
+  const editable = user?.role === "OWNER" || user?.role === "MANAGER";
+  const [section, setSection] = useState<Section>("account");
+  const [farm, setFarm] = useState<{ name: string; currency: string } | null>(null);
+  const [loaded, setLoaded] = useState<Partial<Preferences> | null>(null);
+  const [preferences, setPreferences] = useState<Preferences>(defaults);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [saving, setSaving] = useState(false);
+  const { theme, freeAppearance, density, radius, setTheme, setDensity, setRadius } = useTheme();
+
+  useEffect(() => {
+    const change = () => setSection(selectedSection());
+    change();
+    window.addEventListener("hashchange", change);
+    return () => window.removeEventListener("hashchange", change);
+  }, []);
+
+  async function loadSettings() {
+    const response = await fetch("/api/settings", { cache: "no-store" });
+    if (!response.ok) throw new Error("Settings could not be loaded.");
+    const data = await response.json() as { farm: { name: string; currency: string }; settings: { key: string; value: string }[] };
+    const values = Object.fromEntries(data.settings.map(({ key, value }) => [key, value]));
+    setLoaded(values);
+    setPreferences({ ...defaults, ...values });
+    setFarm(data.farm);
+  }
+
+  useEffect(() => {
+    loadSettings().catch(() => setNotice({ message: "Farm settings could not be loaded.", error: true }));
+  }, []);
+
+  const update = (key: PreferenceKey, value: string) =>
+    setPreferences((previous) => ({ ...previous, [key]: value }));
+
+  async function save(event: FormEvent<HTMLFormElement>, keys: PreferenceKey[]) {
+    event.preventDefault();
+    if (!editable || !loaded || saving) return;
+    const changed = keys.filter((key) => preferences[key] !== (loaded[key] ?? defaults[key]));
+    if (!changed.length) {
+      setNotice({ message: "Your settings are already up to date." });
+      return;
+    }
+    setSaving(true);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: changed.map((key) => ({ key, value: preferences[key], previous: loaded[key] ?? null })),
+        }),
+      });
+      if (response.status === 409) {
+        setNotice({ message: "These settings changed elsewhere. Reload them before saving again.", error: true });
+        return;
+      }
+      if (!response.ok) throw new Error("Could not save settings.");
+      setLoaded({ ...loaded, ...Object.fromEntries(changed.map((key) => [key, preferences[key]])) });
+      setNotice({ message: "Settings saved." });
+    } catch {
+      setNotice({ message: "Could not save settings. Check the values and try again.", error: true });
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return <div className="shell">
-    <header className="topbar"><div className="brand"><div className="brand-main"><div className="brand-mark">F</div><div><h1>Settings</h1><p>Control the way Flockence looks and works.</p></div></div><span className="badge">CONTROL CENTER</span></div></header>
-    <Nav/>
+    <header className="topbar"><div className="brand"><div><h1>Settings</h1><p>Manage your account and farm preferences.</p></div></div></header>
+    <Nav />
     <main className="main">
-      <section className="hero"><div className="hero-kicker">Appearance</div><h2>Your operation. Your interface.</h2><p>Switch the visual style, information density, and shape without changing production data.</p></section>
-      <section className="section card"><div className="section-head"><div><h3>Visual style</h3><p>Five built-in looks for different work environments.</p></div></div><div className="theme-grid">{themes.map(t=><button type="button" key={t.id} className={`theme-option ${theme===t.id?"selected":""}`} onClick={()=>setTheme(t.id)} aria-pressed={theme===t.id}><div className="theme-swatch" style={{background:t.bg}}><div style={{width:20,height:20,borderRadius:7,background:t.accent,margin:12}}/></div><span className="theme-name">{t.name}</span><span className="theme-desc">{t.desc}</span></button>)}</div></section>
-      <section className="section card"><div className="section-head"><div><h3>Interface feel</h3><p>Adjust how much information fits on screen.</p></div></div><div className="grid2"><div><label>Information density</label><div className="segmented"><button className={density==="comfortable"?"selected":""} type="button" onClick={()=>setDensity("comfortable")}>Comfortable</button><button className={density==="compact"?"selected":""} type="button" onClick={()=>setDensity("compact")}>Compact</button></div></div><div><label>Card shape</label><div className="segmented"><button className={radius==="soft"?"selected":""} type="button" onClick={()=>setRadius("soft")}>Soft</button><button className={radius==="sharp"?"selected":""} type="button" onClick={()=>setRadius("sharp")}>Sharp</button></div></div></div></section>
-      <form className="section card form grid2" onSubmit={save}><div className="section-head" style={{gridColumn:"1/-1"}}><div><h3>Farm configuration</h3><p>Defaults only. Flockence is currently scoped to the Farmer business type.</p></div><span className="badge">CONFIGURATION</span></div><label>Business type<input value="Farmer" readOnly/></label>
-<label>Farm name<input value={farmName} onChange={e=>setFarmName(e.target.value)}/></label><label>Default feed bag price BBD<input type="number" step="0.01" value={feedPrice} onChange={e=>setFeedPrice(e.target.value)}/></label><label>Default chick cost BBD<input type="number" step="0.01" value={chickCost} onChange={e=>setChickCost(e.target.value)}/></label><label>Default slaughter cost BBD<input type="number" step="0.01" value={slaughter} onChange={e=>setSlaughter(e.target.value)}/></label><div><button className="button button-primary" type="submit">Save farm settings</button>{message&&<span className="notice">{message}</span>}</div></form>
-      <section className="section card"><div className="section-head"><div><h3>Farm weather location</h3><p>Enter the farm location once. Flockence uses it for live weather and heat watches.</p></div><span className="badge">WEATHER</span></div><div className="grid2"><label>Location name<input value={weatherName} onChange={e=>setWeatherName(e.target.value)} placeholder="Farm / community"/></label><label>Latitude<input value={weatherLat} onChange={e=>setWeatherLat(e.target.value)} type="number" step="0.000001" placeholder="13.000000"/></label><label>Longitude<input value={weatherLon} onChange={e=>setWeatherLon(e.target.value)} type="number" step="0.000001" placeholder="-59.000000"/></label><div><p className="muted">Weather comes from a server-side provider. The API key is never stored in farm settings or sent to the browser.</p></div></div></section>
-      <section className="section card"><div className="section-head"><div><h3>Design principles</h3><p>Built for people working with the farm, not software engineers.</p></div></div><div className="stats"><div><span>Language</span><strong>Plain and direct</strong></div><div><span>Hierarchy</span><strong>Important first</strong></div><div><span>Mobile</span><strong>Thumb friendly</strong></div><div><span>Records</span><strong>No fake data</strong></div></div></section>
+      <nav aria-label="Settings categories" className="section card quick">
+        {sections.map(([key, label]) => <a key={key} className={section === key ? "button button-primary" : "button"} href={"#" + key}
+          onClick={() => { setSection(key); setNotice(null); }} aria-current={section === key ? "location" : undefined}>{label}</a>)}
+      </nav>
+
+      {section === "account" && <section className="section card">
+        <h2>Account &amp; security</h2>
+        {user && <p>{user.name} · {user.role.toLowerCase().replaceAll("_", " ")}</p>}
+        <Link href="/account" className="button">Account and active sessions</Link>
+        {user?.role === "OWNER" && <p><Link href="/reports" className="action">Farm data exports</Link></p>}
+      </section>}
+
+      {section === "farm" && <>
+        <section className="section card">
+          <h2>Farm profile</h2>
+          {farm && <p>{farm.name} · {farm.currency}</p>}
+          {editable && <Link href="/farm-setup" className="button button-primary">Edit farm profile</Link>}
+        </section>
+        <form className="section card form" onSubmit={(event) => save(event, ["weather_location_name", "weather_latitude", "weather_longitude"])}>
+          <h2>Weather location</h2>
+          <fieldset className="grid2" disabled={!editable || saving || !loaded}>
+            <label>Location name<input value={preferences.weather_location_name} maxLength={120} onChange={(e) => update("weather_location_name", e.target.value)} /></label>
+            <label>Latitude<input type="number" min="-90" max="90" step="any" value={preferences.weather_latitude} onChange={(e) => update("weather_latitude", e.target.value)} /></label>
+            <label>Longitude<input type="number" min="-180" max="180" step="any" value={preferences.weather_longitude} onChange={(e) => update("weather_longitude", e.target.value)} /></label>
+          </fieldset>
+          {editable && <button className="button button-primary" type="submit" disabled={saving || !loaded}>{saving ? "Saving…" : "Save location"}</button>}
+        </form>
+      </>}
+
+      {section === "operations" && <form className="section card form" onSubmit={(event) => save(event, costFields.map(({ key }) => key))}>
+        <h2>Default operating costs</h2>
+        <fieldset className="grid2" disabled={!editable || saving || !loaded}>
+          {costFields.map(({ key, label }) => <label key={key}>{label} {farm?.currency ?? "BBD"}
+            <input type="number" min="0" max="9999999" step="0.01" value={preferences[key]} onChange={(e) => update(key, e.target.value)} required />
+          </label>)}
+        </fieldset>
+        {editable && <button className="button button-primary" type="submit" disabled={saving || !loaded}>{saving ? "Saving…" : "Save operating costs"}</button>}
+        <p><Link className="action" href="/pens">Pen records and configuration</Link></p>
+      </form>}
+
+      {section === "team" && <section className="section card">
+        <h2>Team &amp; permissions</h2>
+        <p>Your farm role is {user?.role.toLowerCase().replaceAll("_", " ") ?? "loading"}.</p>
+        {user?.role === "OWNER" && <Link href="/team" className="button">Manage members and invitations</Link>}
+      </section>}
+
+      {section === "devices" && <section className="section card">
+        <h2>Devices &amp; plan</h2>
+        <p>Farm records, basic reports and offline mortality capture are included.</p>
+        <div className="quick"><Link href="/settings/plan" className="button">View plan and devices</Link><a href="#cameras" className="button">Set up cameras</a></div>
+      </section>}
+
+      {section === "cameras" && <SettingsCameraProviders />}
+
+      {section === "appearance" && <>
+        <section className="section card">
+          <h2>Visual style</h2>
+          <div className="theme-grid">{themes.map((entry) => <button type="button" key={entry.id} disabled={freeAppearance && entry.premium}
+            className={`theme-option ${theme === entry.id ? "selected" : ""}`} aria-pressed={theme === entry.id} onClick={() => setTheme(entry.id)}>
+            <span className="theme-preview" data-theme={entry.id} aria-hidden="true"><span className="theme-preview-rail" /><span className="theme-preview-content" /></span>
+            <span className="theme-name">{entry.name}</span><span className="theme-desc">{entry.description}</span>
+            {entry.premium && <span className="theme-tier">{freeAppearance ? "Upgrade required" : "Premium"}</span>}
+          </button>)}</div>
+        </section>
+        <section className="section card">
+          <h2>Display preferences</h2>
+          <div className="grid2">
+            <fieldset><legend>Information density</legend><div className="segmented">
+              {(["comfortable", "compact"] as const).map((choice) => <button type="button" key={choice} aria-pressed={density === choice} className={density === choice ? "selected" : ""} onClick={() => setDensity(choice)}>{choice}</button>)}
+            </div></fieldset>
+            <fieldset><legend>Card shape</legend><div className="segmented">
+              {(["soft", "sharp"] as const).map((choice) => <button type="button" key={choice} aria-pressed={radius === choice} className={radius === choice ? "selected" : ""} onClick={() => setRadius(choice)}>{choice}</button>)}
+            </div></fieldset>
+          </div>
+        </section>
+      </>}
+
+      {section === "storage" && <section className="section card">
+        <h2>Storage &amp; sync</h2>
+        <p>Prepare this device while signed in to record mortality later without a connection.</p>
+        <a href="/offline.html" className="button">Open offline mortality workspace</a>
+        {user?.role === "OWNER" && <p><Link href="/reports" className="action">Export farm records</Link></p>}
+      </section>}
+
+      {notice && <div className="notice" role={notice.error ? "alert" : "status"}>
+        {notice.message} {notice.error && <button type="button" className="button" onClick={() => {
+          setNotice(null);
+          loadSettings().catch(() => setNotice({ message: "Settings could not be loaded.", error: true }));
+        }}>Reload settings</button>}
+      </div>}
     </main>
-  </div>
+  </div>;
 }

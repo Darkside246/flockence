@@ -1,3 +1,4 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { pushToOriya } from "@/lib/oriya";
@@ -27,6 +28,8 @@ export async function POST(request: Request) {
   if (!authorized(request)) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
   // The push token belongs to this install's own farm.
   enterFarm(DEFAULT_FARM_ID);
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   const limit = await checkRateLimit("oriya:push", 30, 60_000);
   if (!limit.allowed) return NextResponse.json({ error: "RATE_LIMITED" }, { status: 429 });
   const url = new URL(request.url);

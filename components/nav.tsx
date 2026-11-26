@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useSession } from "@/components/auth-gate";
 
 type NavItem = readonly [string, string, string];
 
 const groups: { label: string; items: NavItem[] }[] = [
   { label: "Operate", items: [["Overview", "/", "home"], ["Flocks", "/batches", "flock"], ["Daily round", "/operations", "operations"], ["Egg production", "/layers", "eggs"], ["Layer performance", "/layers/performance", "performance"], ["Pack eggs", "/layers/packing", "package"], ["House", "/house", "house"], ["Pens", "/pens", "pens"], ["Health", "/health", "health"]] },
-  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Production", "/planning", "production"]] },
+  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Devices", "/devices", "devices"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Production", "/planning", "production"]] },
   { label: "Understand", items: [["Performance", "/performance", "performance"], ["Reports", "/reports", "reports"]] }
 ];
 const teamGroup = { label: "Manage", items: [["Team", "/team", "users"]] as NavItem[] };
@@ -18,6 +18,7 @@ const settings: NavItem = ["Settings", "/settings", "settings"];
 function NavIcon({name}:{name:string}) {
   const paths:Record<string,React.ReactNode>={
     home:<><path d="m3 7 5-4 5 4v6H9v-4H7v4H3z"/></>,
+    devices:<><rect x="3" y="3.5" width="10" height="7" rx="1.4"/><path d="M8 10.5v2.2m-2.4 0h4.8M6 7h4"/></>,
     users:<><circle cx="6" cy="5" r="2"/><path d="M2.5 13v-1.2A3.5 3.5 0 0 1 6 8.3a3.5 3.5 0 0 1 3.5 3.5V13z"/><path d="M10 3.5a2 2 0 0 1 0 3.8M11 8.5a3.2 3.2 0 0 1 2.5 3.1V13"/></>,
     eggs:<><path d="M8 2.2c-2.2 0-4.6 3.8-4.6 7.1A4.6 4.6 0 0 0 8 13.8a4.6 4.6 0 0 0 4.6-4.5C12.6 6 10.2 2.2 8 2.2Z"/><path d="M6.2 9.5c.1 1.1.7 1.7 1.8 2"/></>,
     package:<><path d="m8 2 5 2.8v6.4L8 14l-5-2.8V4.8z"/><path d="m3 4.8 5 2.9 5-2.9M8 7.7V14"/></>,
@@ -43,6 +44,37 @@ export function Nav() {
   const [open, setOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const searchTrigger = useRef<HTMLElement | null>(null);
+  const drawerTrigger = useRef<HTMLElement | null>(null);
+
+  const openSearch = useCallback((trigger: HTMLElement | null) => {
+    searchTrigger.current = trigger;
+    setCommandOpen(true);
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setCommandOpen(false);
+    searchTrigger.current?.focus();
+    searchTrigger.current = null;
+  }, []);
+
+  function searchKeys(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const links = [...event.currentTarget.querySelectorAll<HTMLAnchorElement>(".command-results a")];
+    const input = event.currentTarget.querySelector("input");
+    const last = links.at(-1) ?? input;
+    const focused = document.activeElement;
+    if (event.key === "Tab" && (event.shiftKey ? focused === input : focused === last)) {
+      event.preventDefault();
+      (event.shiftKey ? last : input)?.focus();
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (!links.length) return;
+      event.preventDefault();
+      const index = links.findIndex((link) => link === focused);
+      const next = event.key === "ArrowDown" ? links[index + 1] ?? input : index < 0 ? last : links[index - 1] ?? input;
+      next?.focus();
+    }
+  }
   const session = useSession();
   const canManage = session?.role === "OWNER" || session?.role === "MANAGER";
   const visibleGroups = useMemo(() => canManage ? [...groups, teamGroup] : groups, [canManage]);
@@ -71,29 +103,32 @@ export function Nav() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setCommandOpen(value => !value);
+        if (commandOpen) closeSearch();
+        else openSearch(document.activeElement instanceof HTMLElement ? document.activeElement : null);
       }
-      if (event.key === "Escape") { setCommandOpen(false); setOpen(false); }
+      if (event.key === "Escape") {
+        if (commandOpen) closeSearch();
+        else if (open) { setOpen(false); drawerTrigger.current?.focus(); }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [commandOpen, open, openSearch, closeSearch]);
 
   useEffect(() => { setCommandOpen(false); setQuery(""); }, [pathname]);
 
   const links = (items: NavItem[], mobile = false) => items.map(([label, href, icon]) =>
-    <Link key={href} href={href} onClick={() => mobile && setOpen(false)} className={isActive(href) ? "active" : ""} title={label}>
+    <Link key={href} href={href} onClick={() => mobile && setOpen(false)} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined} title={label}>
       <span aria-hidden="true" className="nav-glyph"><NavIcon name={icon}/></span><span>{label}</span>
     </Link>
   );
 
   return <>
-    <div className="nav-command-trigger">
-      <button type="button" onClick={() => setCommandOpen(true)} aria-label="Search Flockence"><span className="nav-command-icon">⌕</span><span>Find anything</span><kbd>⌘K</kbd></button>
-    </div>
-
     <nav className="nav" aria-label="Main navigation">
       <div className="nav-brand-block"><div className="nav-brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div>
+      <div className="nav-command-trigger">
+        <button type="button" onClick={(event) => openSearch(event.currentTarget)} aria-label="Search Flockence"><span className="nav-command-icon" aria-hidden="true">⌕</span><span>Search</span><kbd>⌘K</kbd></button>
+      </div>
       {visibleGroups.map(group => <div className="nav-group" key={group.label}><div className="nav-group-label">{group.label}</div>{links(group.items)}</div>)}
       <div className="nav-bottom">{links([settings])}<div className="nav-footer-status"><i /> Farm workspace</div>{process.env.NODE_ENV !== "development" && <><button className="nav-signout" type="button" onClick={() => void signOut()} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>{signOutError && <p className="nav-signout-error" role="alert">{signOutError}</p>}</>}</div>
     </nav>
@@ -102,22 +137,22 @@ export function Nav() {
       {([["Dash", "/", "home"], ["Cameras", "/cameras", "camera"], ["Flocks", "/batches", "flock"], ["Houses", "/house", "house"]] as NavItem[]).map(([label, href, icon]) =>
         <Link key={href} href={href} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}><NavIcon name={icon}/><span>{label}</span></Link>
       )}
-      <button type="button" onClick={() => setOpen(true)} aria-label="More destinations" aria-expanded={open}>
+      <button type="button" onClick={(event) => { drawerTrigger.current = event.currentTarget; setOpen(true); }} aria-label="More destinations" aria-expanded={open}>
         <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round"><circle cx="3.5" cy="8" r=".6"/><circle cx="8" cy="8" r=".6"/><circle cx="12.5" cy="8" r=".6"/></svg><span>More</span>
       </button>
     </nav>
 
-    <button className="mobile-nav-toggle" aria-label="Open menu" onClick={() => setOpen(true)}>☰</button>
+    <button className="mobile-nav-toggle" aria-label="Open menu" onClick={(event) => { drawerTrigger.current = event.currentTarget; setOpen(true); }}>☰</button>
     {open && <div className="drawer-backdrop" onClick={() => setOpen(false)} aria-hidden="true"/>}
-    <aside className={`mobile-drawer${open ? " open" : ""}`} aria-label="Navigation menu">
-      <div className="drawer-head"><div className="brand-main"><div className="brand-mark">F</div><div><strong>Flockence</strong><p>Farmer operating system</p></div></div><button className="icon-button" aria-label="Close menu" onClick={() => setOpen(false)}>×</button></div>
-      <button className="drawer-search" type="button" onClick={() => { setOpen(false); setCommandOpen(true); }}><span>⌕</span> Find anything <kbd>⌘K</kbd></button>
+    <aside className={`mobile-drawer${open ? " open" : ""}`} aria-label="Navigation menu" inert={!open}>
+      <div className="drawer-head"><div className="brand-main"><div className="brand-mark">F</div><div><strong>Flockence</strong><p>Farmer operating system</p></div></div><button className="icon-button" aria-label="Close menu" onClick={() => { setOpen(false); drawerTrigger.current?.focus(); }}>×</button></div>
+      <button className="drawer-search" type="button" onClick={() => { setOpen(false); openSearch(drawerTrigger.current); }}><span>⌕</span> Find anything <kbd>⌘K</kbd></button>
       {visibleGroups.map(group => <div className="drawer-group" key={group.label}><div className="drawer-group-label">{group.label}</div><div className="drawer-links">{links(group.items, true)}</div></div>)}
       <div className="drawer-group"><div className="drawer-group-label">Workspace</div><div className="drawer-links">{links([settings], true)}</div>{process.env.NODE_ENV !== "development" && <><button className="nav-signout" type="button" onClick={() => { setOpen(false); void signOut(); }} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>{signOutError && <p className="nav-signout-error" role="alert">{signOutError}</p>}</>}</div>
     </aside>
 
-    {commandOpen && <div className="command-backdrop" role="presentation" onMouseDown={() => setCommandOpen(false)}>
-      <div className="command-palette" role="dialog" aria-modal="true" aria-label="Flockence search" onMouseDown={event => event.stopPropagation()}>
+    {commandOpen && <div className="command-backdrop" role="presentation" onMouseDown={closeSearch}>
+      <div className="command-palette" role="dialog" aria-modal="true" aria-label="Flockence search" onKeyDown={searchKeys} onMouseDown={event => event.stopPropagation()}>
         <div className="command-input-wrap"><span>⌕</span><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="Search batches, operations, inventory, reports…" aria-label="Search Flockence" /><kbd>ESC</kbd></div>
         <div className="command-section-label">{query ? "Results" : "Jump to"}</div>
         <div className="command-results">
