@@ -17,6 +17,14 @@ const categories = [
 
 const moneyish = (value: unknown) => String(value ?? "");
 
+type ResearchReport = {
+  createdAt: string;
+  archives: { archive: string; imageFiles: number; videoFiles: number; annotationFiles: number }[];
+  detection?: { averagePrecision: number; images: number };
+  segmentation?: { averagePrecision: number; images: number };
+  behavior?: { clips: number; accuracy: number; macroF1: number };
+};
+const score = (ratio: number) => (ratio * 100).toFixed(1) + "%";
 type VisionCamera = { name: string; source: "blink" | "rtsp" };
 type Batch = { id: string; name: string };
 type VisionResult = { summary?: string; confidence?: string; severity?: string; observations?: { title?: string; detail?: string; confidence?: string }[]; concerns?: { title?: string; whyItMatters?: string }[]; checks?: string[]; escalate?: boolean; escalationReason?: string; medicalDisclaimer?: string };
@@ -30,6 +38,7 @@ export default function VisionPage() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
+  const [research, setResearch] = useState<{ report: ResearchReport | null } | null>(null);
   const [cameras, setCameras] = useState<VisionCamera[]>([]);
   const [cameraName, setCameraName] = useState("");
   const [shareCamera, setShareCamera] = useState(false);
@@ -47,6 +56,8 @@ export default function VisionPage() {
     loadHistory().catch(() => undefined);
     fetch("/api/vision/cameras", { cache: "no-store" }).then((r) => r.ok ? r.json() : [])
       .then(setCameras).catch(() => setCameras([]));
+    fetch("/api/vision/research", { cache: "no-store" }).then((r) => r.ok ? r.json() : null)
+      .then(setResearch).catch(() => setResearch(null));
   }, []);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
@@ -137,6 +148,21 @@ export default function VisionPage() {
         <div className="section card notice-card"><strong>{result.medicalDisclaimer || "Image findings are observations only. They do not confirm disease or cause of death."}</strong></div>
       </section>}
 
+      {research && <section className="section card">
+        <div className="section-head"><div><h3>ChickenVerse research</h3><p>Benchmark results for detection, segmentation and behavior recognition.</p></div></div>
+        {!research.report ? <p>No research report has been installed.</p> : <>
+          <p>Release verified {new Date(research.report.createdAt).toLocaleDateString()}</p>
+          <ul>{research.report.archives.map((archive) => <li key={archive.archive}>
+            {archive.archive} · {archive.imageFiles.toLocaleString()} images · {archive.videoFiles.toLocaleString()} clips
+          </li>)}</ul>
+          <dl>
+            <dt>Detection AP</dt><dd>{research.report.detection ? score(research.report.detection.averagePrecision) : "Awaiting predictions"}</dd>
+            <dt>Segmentation AP</dt><dd>{research.report.segmentation ? score(research.report.segmentation.averagePrecision) : "Awaiting predictions"}</dd>
+            <dt>Behavior macro-F1</dt><dd>{research.report.behavior ? score(research.report.behavior.macroF1) : "Awaiting predictions"}</dd>
+          </dl>
+        </>}
+        <a className="action" href="https://doi.org/10.5281/zenodo.20672799">ChickenVerse dataset and license</a>
+      </section>}
       <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong><span>{item.notes?.slice(0, 280) || "No notes recorded."}</span></div></article>)}</div>}</section>
     </main>
   </div>;

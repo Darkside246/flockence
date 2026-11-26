@@ -84,6 +84,7 @@ jobs:
           node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/camera-workers.mjs
           python3 -m compileall -q services/blink
           python3 -m unittest discover -s services/blink/tests -p test_clip_archive.py
+          python3 tests/chickenverse-research.py
 
       - name: Type check
         run: |
