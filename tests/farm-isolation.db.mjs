@@ -199,3 +199,34 @@ test("onboarding creates separate flocks and starting counts, and safely retries
     await runAsFarm(A, () => prisma.batch.deleteMany({ where }));
   }
 });
+
+
+test("signup welcome uses the mail provider only when configured", async (t) => {
+  const { sendSignupWelcomeEmail } = await import("../lib/mail.ts");
+  const previousKey = process.env.RESEND_API_KEY;
+  const previousFrom = process.env.RESEND_FROM;
+  const send = t.mock.method(globalThis, "fetch", async () => ({ ok: true }));
+  try {
+    delete process.env.RESEND_API_KEY;
+    delete process.env.RESEND_FROM;
+    assert.equal(await sendSignupWelcomeEmail("new-owner@example.test"), false);
+    assert.equal(send.mock.callCount(), 0);
+    process.env.RESEND_API_KEY = "disposable-test-key";
+    process.env.RESEND_FROM = "Flockence <no-reply@example.test>";
+    assert.equal(await sendSignupWelcomeEmail("new-owner@example.test"), true);
+    const [url, request] = send.mock.calls[0].arguments;
+    assert.equal(url, "https://api.resend.com/emails");
+    const email = JSON.parse(request.body);
+    assert.deepEqual(email.to, ["new-owner@example.test"]);
+    assert.equal(email.subject, "Welcome to Flockence");
+    assert.match(email.html, /https:\/\/flockence\.com\/login/);
+    assert.doesNotMatch(email.html, /token=|password=/);
+    send.mock.mockImplementation(async () => ({ ok: false }));
+    assert.equal(await sendSignupWelcomeEmail("new-owner@example.test"), false);
+  } finally {
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = previousKey;
+    if (previousFrom === undefined) delete process.env.RESEND_FROM;
+    else process.env.RESEND_FROM = previousFrom;
+  }
+});
