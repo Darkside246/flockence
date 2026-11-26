@@ -30,14 +30,17 @@ Return ONLY valid JSON with this exact shape:
 {
   "summary": "one concise sentence",
   "confidence": "LOW|MEDIUM|HIGH",
-  "severity": "LOW|MEDIUM|HIGH|URGENT",
+  "severity": "LOW|MODERATE|HIGH|URGENT",
   "observations": [{"title":"", "detail":"", "confidence":"LOW|MEDIUM|HIGH"}],
   "concerns": [{"title":"", "whyItMatters":""}],
   "checks": ["practical next check 1", "practical next check 2"],
+  "signals": [{"category":"LITTER","state":"NOT_OBSERVED"}],
   "escalate": false,
   "escalationReason": "",
   "medicalDisclaimer": "Image findings are observations only. They do not confirm disease or cause of death."
 }
+
+Signals have categories BEHAVIOR, DISTRIBUTION, LITTER, COMFORT, FEED_WATER, EQUIPMENT, VISIBLE_HEALTH and states NOT_OBSERVED, NORMAL, ATTENTION, WARNING, CRITICAL. For every state except NOT_OBSERVED, add a brief "evidence" string describing what is visible. Omit a category if it cannot be assessed. Do not infer movement over time from a single image. Treat blocked views and insufficient image quality as NOT_OBSERVED. Never infer ammonia, temperature, humidity, water quality or a diagnosis from the picture.
 
 Do not invent measurements that are not visible. Do not identify a disease as confirmed. When something cannot be determined from the image, say so.`;
 }

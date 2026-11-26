@@ -8,6 +8,7 @@ import { captureVisionCamera, maxVisionImageBytes, validVisionCameraName, vision
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
+import { createVisionAssessment, visionResultSchema } from "@/lib/vision-assessment";
 import { safeJson, visionPrompt, VISION_MODEL, visionCategories, type VisionCategory } from "@/lib/vision";
 
 export const runtime = "nodejs";
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     orderBy: { observedAt: "desc" },
     take: 100,
   });
-  return NextResponse.json(rows);
+  return NextResponse.json(rows, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: Request) {
@@ -117,9 +118,10 @@ export async function POST(request: Request) {
     const ai = await openaiResponse.json() as { output_text?: string; output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> };
     const outputText = ai.output?.filter((item) => item.type === "message").flatMap((item) => item.content ?? [])
       .filter((item) => item.type === "output_text").map((item) => item.text ?? "").join("\n");
-    const parsed = safeJson(ai.output_text || outputText || "");
-    if (!parsed) return NextResponse.json({ error: "Vision returned an unreadable result." }, { status: 502 });
+    const verified = visionResultSchema.safeParse(safeJson(ai.output_text || outputText || ""));
+    if (!verified.success) return NextResponse.json({ error: "Vision returned an unreadable result." }, { status: 502 });
 
+    const parsed = verified.data;
     const extensions: Record<string, string> = {
       "image/jpeg": "jpg",
       "image/png": "png",
@@ -160,6 +162,10 @@ export async function POST(request: Request) {
         },
       });
       const imageUrl = `/api/vision/media/${media.id}`;
+      const visionAssessment = createVisionAssessment(parsed, {
+        model: VISION_MODEL, inspectionCategory: categoryRaw, evidenceId: media.id,
+        source: capture ? { kind: "CAMERA", name: capture.camera.name, provider: capture.camera.source } : { kind: "UPLOAD" },
+      });
       const observation = await tx.healthObservation.create({
         data: {
           farmId: currentFarmId(),
@@ -172,13 +178,16 @@ export async function POST(request: Request) {
           notes: noteBody,
           imageUrl,
           visionMediaId: media.id,
+          visionAssessment,
         },
       });
       return { observation, imageUrl };
     });
 
     uploadedPath = null;
-    return NextResponse.json({ ...saved, analysis: parsed, model: VISION_MODEL }, { status: 201 });
+    return NextResponse.json({ ...saved, analysis: parsed, model: VISION_MODEL }, {
+      status: 201, headers: { "Cache-Control": "private, no-store" },
+    });
   } catch (error) {
     const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
     console.error("[farm-vision] Inspection failed", error instanceof Error ? error.name : "UnknownError", code);
