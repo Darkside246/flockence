@@ -17,9 +17,10 @@ export async function camerasWithPens(cameras: VisionCamera[]) {
   ]);
   const assignments = new Map(rows.map(row => [row.key, row.value]));
   const livePens = new Map(pens.map(pen => [pen.id, pen]));
-  return cameras.map(camera => ({
-    name: camera.name, source: camera.source, pen: livePens.get(assignments.get(keyFor(camera)) ?? "") ?? null,
-  }));
+  return cameras.map(camera => {
+    const pen = livePens.get(assignments.get(keyFor(camera)) ?? "");
+    return { name: camera.name, source: camera.source, ...(pen ? { pen } : {}) };
+  });
 }
 
 export async function assignedCameraPen(camera: VisionCamera) {

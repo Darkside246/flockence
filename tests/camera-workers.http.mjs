@@ -297,6 +297,18 @@ try {
   assert.equal((await submitEggs(0, { ...eggs, offline: { ...eggs.offline, id: randomUUID() } })).status, 409);
   const previousDay = new Date(Date.parse(workspace.today) - 86400000).toISOString().slice(0, 10);
 
+  const feed = { batchId: flock.id, date: workspace.today, feedKg: 3.25, offline: { ...workspace.scope, id: randomUUID() } };
+  const submitFeed = (index, data) => fetch(origin + "/api/daily-flock-check", {
+    method: "POST", headers: headerFor(index), body: JSON.stringify(data),
+  });
+  assert.equal((await submitFeed(1, feed)).status, 403);
+  const feedResponses = await Promise.all([submitFeed(0, feed), submitFeed(0, feed)]);
+  assert.deepEqual(feedResponses.map(response => response.status), [201, 201]);
+  const [feedA, feedB] = await Promise.all(feedResponses.map(response => response.json()));
+  assert.equal(feedA.id, feedB.id);
+  assert.equal((await submitFeed(0, { ...feed, feedKg: 3.5 })).status, 409);
+  assert.equal((await submitFeed(0, { ...feed, offline: { ...feed.offline, id: randomUUID() } })).status, 409);
+
   if (process.env.FLOCKENCE_BROWSER_MODULE) {
     const { chromium } = createRequire(import.meta.url)(process.env.FLOCKENCE_BROWSER_MODULE);
     const browser = await chromium.launch();
@@ -328,18 +340,27 @@ try {
       await page.locator("#saleable-eggs").fill("6");
       await page.locator("#save").click();
       await page.getByText(/Egg collection.*Waiting to sync/).waitFor();
+      await page.selectOption("#record-kind", "feed");
+      await page.selectOption("#flock", flock.id);
+      await page.locator("#date").fill(previousDay);
+      await page.locator("#feed-weight").fill("2.5");
+      await page.locator("#save").click();
+      await page.getByText(/Feed consumption.*Waiting to sync/).waitFor();
       await page.reload();
       await page.locator("#passphrase").fill("test-device-research-only-123");
       await page.locator("#unlock-button").click();
       await page.getByText(/Mortality.*Waiting to sync/).waitFor();
       await page.getByText(/Live weight.*Waiting to sync/).waitFor();
       await page.getByText(/Egg collection.*Waiting to sync/).waitFor();
+      await page.getByText(/Feed consumption.*Waiting to sync/).waitFor();
       await context.setOffline(false);
       await page.getByText("No entries waiting to sync.").waitFor();
       assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
       assert.equal(await runAsFarm(ids[0], () => prisma.weightRecord.count({ where: { batchId: flock.id } })), 2);
 
       assert.equal(await runAsFarm(ids[0], () => prisma.eggCollection.count({ where: { batchId: laying.id } })), 2);
+
+      assert.equal(await runAsFarm(ids[0], () => prisma.dailyFlockCheck.count({ where: { batchId: flock.id } })), 2);
 
       let blink = "disconnected";
       await page.route("**/api/cameras/status", (route) => route.fulfill({ json: {

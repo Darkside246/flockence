@@ -28,7 +28,7 @@
         <p id="last-sync"></p>
         <form id="entry">
           <label for="record-kind">Record type</label>
-          <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option></select>
+          <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option><option value="feed">Feed consumption</option></select>
           <label for="flock">Flock</label>
           <select name="batchId" id="flock" required></select>
           <label for="date">Date</label>
@@ -40,6 +40,10 @@
           <div id="weight-fields" hidden>
             <label for="average-weight">Average weight per bird (kg)</label>
             <input name="avgWeightKg" id="average-weight" type="number" min="0.001" max="100" step="0.001" inputmode="decimal" disabled>
+          </div>
+          <div id="feed-fields" hidden>
+            <label for="feed-weight">Feed consumed (kg)</label>
+            <input name="feedKg" id="feed-weight" type="number" min="0" max="999999999" step="0.001" inputmode="decimal" disabled>
           </div>
           <fieldset id="egg-fields" hidden disabled>
             <legend>Daily collection</legend>

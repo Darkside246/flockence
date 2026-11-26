@@ -1,3 +1,4 @@
+import { offlineEventId } from "@/lib/offline-event";
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
@@ -32,6 +33,11 @@ export async function POST(request: Request) {
   try {
     await ensureFarm();
     const input = await request.json();
+    const syncId = input.offline === undefined ? undefined : offlineEventId(request, input.offline, session.user);
+    if (syncId === null) return NextResponse.json({ error: "Sign in as the original farm account to sync this entry." }, { status: 403 });
+    if (syncId && Object.keys(input).some(key => !["batchId", "date", "feedKg", "offline"].includes(key))) {
+      return NextResponse.json({ error: "Offline feed entries accept only the flock, date and feed amount." }, { status: 400 });
+    }
     const batchId = String(input.batchId || "");
     // Owner, 2026-11-02: deaths are easy to record, live birds are hard to count. The live count is optional: left
     // blank, it is worked out from the starting birds, recorded deaths and birds sent to slaughter; a number typed in
@@ -59,6 +65,9 @@ export async function POST(request: Request) {
     }
 
     const feedKg = validNumber(input.feedKg);
+    if (syncId && (feedKg == null || feedKg > 999999999 || Number(feedKg.toFixed(3)) !== feedKg)) {
+      return NextResponse.json({ error: "Enter feed in kilograms with three decimal places or fewer." }, { status: 400 });
+    }
     const waterLiters = validNumber(input.waterLiters);
     const avgWeightKg = validNumber(input.avgWeightKg, 0.001);
     const weightSampleQuantity = input.weightSampleQuantity === "" || input.weightSampleQuantity == null ? null : Number(input.weightSampleQuantity);
@@ -95,7 +104,21 @@ export async function POST(request: Request) {
       orderBy: { date: "desc" },
     });
     const row = await prisma.$transaction(async tx => {
+      if (syncId) await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${syncId}, 0))::text`;
       await lockFlockOperations(tx, [batchId]);
+      if (syncId) {
+        const receipt = await tx.dailyFlockCheck.findUnique({ where: { id: syncId } });
+        if (receipt) {
+          if (receipt.batchId !== batchId || receipt.date.getTime() !== date.getTime() || feedKg == null || !receipt.feedKg?.equals(feedKg)) {
+            throw new Error("OFFLINE_FEED_CONFLICT: This feed entry already synced with different details.");
+          }
+          return receipt;
+        }
+        if (await tx.dailyFlockCheck.findUnique({ where: { batchId_date: { batchId, date } } })
+          || await tx.feedUsage.findFirst({ where: { batchId, date }, select: { id: true } })) {
+          throw new Error("OFFLINE_FEED_CONFLICT: This flock already has a daily check or feed record for that date. Review the records online.");
+        }
+      }
 
       const [latestSnapshot, deathsToDate, dispatchesToDate] = await Promise.all([
         tx.birdCount.findFirst({
@@ -143,7 +166,7 @@ export async function POST(request: Request) {
       const check = await tx.dailyFlockCheck.upsert({
         where: { batchId_date: { batchId, date } },
         create: {
-          farmId: currentFarmId(), batchId, date, liveCount, feedKg, waterLiters, avgWeightKg,
+          ...(syncId ? { id: syncId } : {}), farmId: currentFarmId(), batchId, date, liveCount, feedKg, waterLiters, avgWeightKg,
           weightSampleQuantity, temperatureC, humidityPercent, ammoniaPpm,
           litterCondition: input.litterCondition ? String(input.litterCondition) : null,
           pantingObserved: Boolean(input.pantingObserved),
@@ -205,6 +228,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(row, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not save daily flock check." }, { status: 400 });
+    const message = error instanceof Error ? error.message : "Could not save daily flock check.";
+    const conflict = message.startsWith("OFFLINE_FEED_CONFLICT:");
+    return NextResponse.json({ error: message.replace(/^OFFLINE_FEED_CONFLICT: /, "") }, { status: conflict ? 409 : 400 });
   }
 }

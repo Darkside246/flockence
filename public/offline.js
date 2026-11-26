@@ -70,6 +70,7 @@ async function render(active) {
   for (const { entry } of rows) {
     const li = document.createElement("li");
     const detail = entry.kind === "eggs" ? entry.collection.totalEggs + " eggs · Egg collection"
+      : entry.kind === "feed" ? entry.feedKg + " kg · Feed consumption"
       : entry.quantity + " birds · " + (entry.kind === "weight" ? "Live weight, " + entry.avgWeightKg + " kg average" : "Mortality");
     li.textContent = entry.flock + " · " + entry.date + " · " + detail + " · "
       + (entry.review ? "Needs review — " + entry.review : "Waiting to sync");
@@ -127,8 +128,9 @@ async function sync() {
       if (entry.review) continue;
       const weight = entry.kind === "weight";
       const eggs = entry.kind === "eggs";
-      const endpoint = eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
-      const values = eggs ? entry.collection : weight ? { quantity: entry.quantity, avgWeightKg: entry.avgWeightKg }
+      const feed = entry.kind === "feed";
+      const endpoint = feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
+      const values = feed ? { feedKg: entry.feedKg } : eggs ? entry.collection : weight ? { quantity: entry.quantity, avgWeightKg: entry.avgWeightKg }
         : { quantity: entry.quantity, reason: entry.reason, notes: entry.notes };
       const response = await fetch(endpoint, {
         method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(12000),
@@ -227,10 +229,14 @@ unlockForm.addEventListener("submit", async (event) => {
 function updateRecordFields() {
   const weight = find("record-kind").value === "weight";
   const eggs = find("record-kind").value === "eggs";
+  const feed = find("record-kind").value === "feed";
   find("quantity-label").textContent = weight ? "Birds weighed" : "Birds lost";
-  find("mortality-fields").hidden = weight || eggs;
-  find("bird-fields").hidden = eggs;
-  find("quantity").disabled = eggs;
+  find("mortality-fields").hidden = weight || eggs || feed;
+  find("bird-fields").hidden = eggs || feed;
+  find("quantity").disabled = eggs || feed;
+  find("feed-fields").hidden = !feed;
+  find("feed-weight").disabled = !feed;
+  find("feed-weight").required = feed;
   find("egg-fields").hidden = !eggs;
   find("egg-fields").disabled = !eggs;
   find("weight-fields").hidden = !weight;
@@ -252,7 +258,9 @@ form.addEventListener("submit", async (event) => {
   const date = String(data.get("date") ?? "");
   const kind = String(data.get("kind"));
   if (!flock || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
-  if (kind !== "eggs" && (!Number.isSafeInteger(quantity) || quantity < 1)) return;
+  if ((kind === "mortality" || kind === "weight") && (!Number.isSafeInteger(quantity) || quantity < 1)) return;
+  const feedKg = Number(data.get("feedKg"));
+  if (kind === "feed" && (!Number.isFinite(feedKg) || feedKg < 0 || feedKg > 999999999)) return;
   let collection;
   if (kind === "eggs") {
     if (!flock.layer) { show("Choose a layer flock for this collection."); return; }
@@ -275,7 +283,7 @@ form.addEventListener("submit", async (event) => {
     const id = crypto.randomUUID();
     const entry = {
       kind, flock: flock.name, batchId: flock.id, date, quantity,
-      ...(kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
+      ...(kind === "feed" ? { feedKg } : kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
       createdAt: Date.now(),
     };
     await storage("outbox", "add", { id, value: await seal(active.key, id, entry) }, id);
