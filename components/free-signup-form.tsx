@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 type Recaptcha = {
+  ready?: (callback: () => void) => void;
   render: (element: HTMLElement, options: {
     sitekey: string;
     size: "compact";
@@ -59,6 +60,13 @@ export function FreeSignupForm({ captchaSiteKey }: { captchaSiteKey: string }) {
     } catch {
       captchaUnavailable();
     }
+  }
+
+  function waitForCaptcha() {
+    const widget = recaptcha();
+    if (typeof widget?.render === "function") renderCaptcha();
+    else if (typeof widget?.ready === "function") widget.ready(renderCaptcha);
+    else captchaUnavailable();
   }
 
   function resetCaptcha() {
@@ -116,7 +124,7 @@ export function FreeSignupForm({ captchaSiteKey }: { captchaSiteKey: string }) {
         <label>Email address<input type="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /></label>
         {captchaSiteKey && <>
           <div ref={captchaElement} />
-          <Script src="https://www.google.com/recaptcha/api.js?render=explicit" onReady={renderCaptcha} onError={captchaUnavailable} />
+          <Script src="https://www.google.com/recaptcha/api.js?render=explicit" onReady={waitForCaptcha} onError={captchaUnavailable} />
         </>}
         {(!captchaSiteKey || captchaError) && <p className="auth-message auth-error" role="alert">{captchaError || "Public signup is temporarily unavailable."}</p>}
       </>}
