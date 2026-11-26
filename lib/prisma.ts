@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { Prisma, PrismaClient } from "@prisma/client";
 import {
-  CHILD_MODELS, FARM_MODELS, FarmScopeError, GLOBAL_MODELS, currentFarmId, farmFilter, isUnscoped, linkedIds, withFarm,
+  CHILD_MODELS, FARM_MODELS, FarmScopeError, GLOBAL_MODELS, currentFarmId, currentFarmIdOrNull, farmFilter, isUnscoped, linkedIds, withFarm,
 } from "@/lib/farm-scope";
 
 /**
@@ -195,12 +195,29 @@ function tenantFacade(identity: PrismaClient, tenant: PrismaClient): PrismaClien
   });
 }
 
+// Keep link validation on the same connection for callbacks on the legacy client too.
+function scopeLegacyTransactions(client: PrismaClient): PrismaClient {
+  return new Proxy(client, {
+    get(target, key, receiver) {
+      if (key !== "$transaction") return Reflect.get(target, key, receiver);
+      return (input: unknown, ...options: unknown[]) => {
+        if (typeof input !== "function") return Reflect.apply(target.$transaction, target, [input, ...options]);
+        const farm = currentFarmIdOrNull();
+        return target.$transaction(
+          (tx) => transactions.run({ farm, client: tx }, async () => await input(tx)),
+          options[0] as TxOptions | undefined,
+        );
+      };
+    },
+  });
+}
+
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 const legacy = buildClient(base) as unknown as PrismaClient;
 const url = process.env.FARM_RLS_DATABASE_URL;
 const restricted = url ? buildClient(new PrismaClient({ datasourceUrl: url })) as unknown as PrismaClient : null;
 
-export const prisma: PrismaClient = globalForPrisma.prisma ?? (restricted ? tenantFacade(legacy, restricted) : legacy);
+export const prisma: PrismaClient = globalForPrisma.prisma ?? (restricted ? tenantFacade(legacy, restricted) : scopeLegacyTransactions(legacy));
 // Only the rate limiter uses this client. The table contains no farm records.
 export const rateLimitDatabase = restricted ?? legacy;
 

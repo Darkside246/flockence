@@ -179,7 +179,9 @@ export async function POST(request: Request) {
 
     uploadedPath = null;
     return NextResponse.json({ ...saved, analysis: parsed, model: VISION_MODEL }, { status: 201 });
-  } catch {
+  } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
+    console.error("[farm-vision] Inspection failed", error instanceof Error ? error.name : "UnknownError", code);
     if (uploadedPath) await unlink(uploadedPath).catch(() => undefined);
     return NextResponse.json({ error: "Could not analyze image." }, { status: 500 });
   }
