@@ -125,8 +125,12 @@ try {
           const asset = await context.request.get(origin + "/brand/" + expectedAsset, { maxRetries: 2 });
           assert.ok(asset.ok(), "Missing image asset: " + expectedAsset);
         }
-        report.push({ device, theme, route, ...metrics, overflow: metrics.documentWidth > metrics.viewportWidth + 2 });
+        const overflow = metrics.documentWidth > metrics.viewportWidth + 2;
+        report.push({ device, theme, route, ...metrics, overflow });
         await snapshot(page, device + "-" + theme + "-" + name);
+        if (process.env.VISUAL_REVISION === "after" && process.env.VISUAL_SEED_DASHBOARD === "true") {
+          assert.equal(overflow, false, "Horizontal overflow on " + device + " " + route);
+        }
       }
 
       if (device === "mobile") {

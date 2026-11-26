@@ -146,3 +146,13 @@ html[data-theme="poultry"] .cx-kpi-icon { border-color: var(--border-default); b
 /* Drawer labels must not inherit the legacy 18px icon width. */
 html[data-theme="poultry"] .mobile-drawer .drawer-links a > span:not(.nav-glyph) { width: auto; flex: 1; text-align: left; }
 html[data-theme="poultry"] .shell:has(.mobile-drawer.open) .mobile-nav-toggle { visibility: hidden; }
+
+/* Two-column record forms can otherwise grow to their selects' intrinsic width beside the tablet sidebar. */
+@media (min-width: 761px) and (max-width: 1000px) {
+  html[data-theme="poultry"] .main .grid2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  html[data-theme="poultry"] .main :is(.grid2 > *, .form label, .form input, .form select) {
+    min-width: 0;
+  }
+}
