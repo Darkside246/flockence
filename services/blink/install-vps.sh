@@ -43,13 +43,16 @@ runuser -u flockence --/usr/bin/python3 -m venv "$release/venv"
 runuser -u flockence -- "$release/venv/bin/python" -m pip install   -r "$release/services/blink/requirements.txt"
 
 install -d -m 0755 "$(dirname "$dropin")"
-install -d -m 0700 /etc/flockence
+if [[ ! -d /etc/flockence ]]; then
+  install -d -m 0700 /etc/flockence
+fi
 restarting_app=0
 rollback() {
   trap - EXIT
   set +e
   systemctl stop "$camera" 2>/dev/null
   rm -f -- "$dropin" "$unit" "$token_file" "$camera_env"
+  rmdir -- "$state" 2>/dev/null || true
   systemctl daemon-reload
   if [[ $restarting_app == 1 ]]; then
     systemctl restart "$service"
@@ -98,10 +101,16 @@ for path, content in (
 ' "$token_file" "$camera_env"
 const fs = require("node:fs");
 const path = require("node:path");
+const { parseEnv } = require("node:util");
+const values = {};
 const app = process.argv[2];
 for (const file of [".env.production.local", ".env.local", ".env.production", ".env"]) {
   const candidate = path.join(app, file);
-  if (fs.existsSync(candidate)) process.loadEnvFile(candidate);
+  if (fs.existsSync(candidate)) {
+    for (const [key, value] of Object.entries(parseEnv(fs.readFileSync(candidate, "utf8")))) {
+      values[key] ??= value;
+    }
+  }
 }
 const allowed = [
   "BLINK_SIDECAR_URL", "BLINK_SIDECAR_TOKEN", "BLINK_DATA_DIR",
@@ -110,7 +119,7 @@ const allowed = [
   "CAMERA_RECORD_KEEP_DAYS", "CAMERA_SEGMENT_SECONDS",
 ];
 process.stdout.write(JSON.stringify(Object.fromEntries(allowed.map(
-  (name) => [name, process.env[name] ?? ""],
+  (name) => [name, values[name] ?? ""],
 ))));
 JS
 
