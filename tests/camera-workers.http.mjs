@@ -251,6 +251,52 @@ try {
       await context.setOffline(false);
       await page.getByText("No entries waiting to sync.").waitFor();
       assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
+
+      let blink = "disconnected";
+      await page.route("**/api/cameras/status", (route) => route.fulfill({ json: {
+        available: true, canManage: true, networkCameras: true,
+        connected: blink === "connected", pending2fa: blink === "verification",
+      } }));
+      await page.route("**/api/cameras/cameras", (route) => route.fulfill({ json: [
+        ...(blink === "connected" ? [{ name: "Brooder camera", source: "blink" }] : []),
+        { name: "Network barn camera", source: "rtsp" },
+      ] }));
+      await page.route("**/api/cameras/auth/login", async (route) => {
+        const submitted = route.request().postDataJSON();
+        assert.equal(submitted.username, "blink-fixture@example.test");
+        blink = "verification";
+        await route.fulfill({ json: { pending2fa: true } });
+      });
+      await page.route("**/api/cameras/auth/verify", async (route) => {
+        assert.equal(route.request().postDataJSON().pin, "123456");
+        blink = "connected";
+        await route.fulfill({ json: { connected: true } });
+      });
+      await page.route("**/api/camera-gateway", (route) => route.fulfill({ json: {
+        enabled: true, owner: true, feeds: [
+          { id: "wyze-fixture", name: "Wyze hatchery", brand: "wyze", capturedAt: "2026-11-26T10:00:00Z" },
+          { id: "network-fixture", name: "Other gateway", brand: "network", capturedAt: null },
+        ],
+      } }));
+      await page.goto(origin + "/settings#cameras");
+      const provider = page.getByLabel("Camera provider");
+      await provider.selectOption("blink");
+      await page.getByLabel("Blink email").fill("blink-fixture@example.test");
+      await page.getByLabel("Blink password").fill("disposable-camera-password");
+      await page.getByRole("button", { name: "Connect", exact: true }).click();
+      await page.getByLabel("Verification code from Blink").fill("123456");
+      await page.getByRole("button", { name: "Verify", exact: true }).click();
+      await page.getByRole("link", { name: "Brooder camera", exact: true }).waitFor();
+      assert.equal(await page.getByRole("link", { name: "Network barn camera", exact: true }).count(), 0);
+      await provider.selectOption("wyze");
+      assert.equal(await page.getByRole("link", { name: "Open Wyze sign-in" }).getAttribute("href"), "https://my.wyze.com/live");
+      await page.getByRole("heading", { name: "Wyze hatchery" }).waitFor();
+      assert.equal(await page.getByLabel("Blink password").count(), 0);
+      assert.equal(await page.getByRole("heading", { name: "Other gateway" }).count(), 0);
+      await provider.selectOption("network");
+      await page.getByRole("link", { name: "Network barn camera", exact: true }).waitFor();
+      await page.getByRole("heading", { name: "Other gateway" }).waitFor();
+      assert.equal(await page.getByRole("heading", { name: "Wyze hatchery" }).count(), 0);
     } finally {
       await browser.close();
     }
