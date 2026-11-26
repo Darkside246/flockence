@@ -1,0 +1,148 @@
+/* Poultry Farm only. Keep compatibility fixes here, after the shared theme and photo sheets. */
+html[data-theme="poultry"] {
+  --bg-canvas: #f5f6f1;
+  --bg-surface-secondary: #edf2e9;
+  --text-primary: #202923;
+  --text-secondary: #536258;
+  --text-muted: #5b695e;
+  --text-heading: #193f2c;
+  --accent-primary: #285b3a;
+  --accent-primary-hover: #193f2c;
+  --accent-secondary: #c58b32;
+  --accent-soft: #e4edde;
+  --accent-soft-gold: #f3e7cc;
+  --border-default: #dce4da;
+  --border-strong: #6c7b6b;
+  --border-focus: #285b3a;
+  --status-info: #3d6247;
+  --bg-overlay: #193f2c66;
+  --shadow-card: 0 1px 2px #193f2c08, 0 6px 18px #193f2c0d, inset 0 1px #ffffff;
+  --shadow-elevated: 0 3px 8px #193f2c0f, 0 16px 40px #193f2c17;
+  --shadow-hover: 0 2px 5px #193f2c0d, 0 10px 24px #193f2c14;
+  --chart-green: #285b3a;
+  --chart-sage: #5c795c;
+  --chart-gold: #996619;
+  --chart-neutral: #68766c;
+  --photo-tint: #c58b32;
+  --photo-tint-strength: 5%;
+  --photo-grade: saturate(.96) brightness(1.02);
+}
+html[data-theme="poultry"] body { font-family: Inter, "Segoe UI", system-ui, sans-serif; font-weight: 450; }
+html[data-theme="poultry"] .shell { background: linear-gradient(145deg, #edf2e955, transparent 45%), var(--bg-canvas); }
+html[data-theme="poultry"] :is(h1,h2,h3,h4,h5,h6) { color: var(--text-heading) !important; font-weight: 700; }
+html[data-theme="poultry"] :is(.stats strong,.row strong,.metric-value,.empty strong,.empty-chart strong,.quick-action strong,.profile-copy strong,.nav-brand-block strong,.status-panel h3) { color: var(--text-primary) !important; }
+html[data-theme="poultry"] :is(.metric-value,.stats strong,.cx-num) { font-weight: 700; font-variant-numeric: tabular-nums; }
+html[data-theme="poultry"] :is(.row strong,.quick-action strong,.card > strong) { font-weight: 600; }
+html[data-theme="poultry"] :is(.metric-label,.metric-foot,.cx-foot,.cx-sub,.row span,.stats span,.section-head p,.muted,.empty,.empty-chart,.profile-copy span,.nav-brand-block span,.status-panel p,.dashboard-head p,.command-section-label,.command-results small,.command-footer,.nav-group-label,.drawer-group-label,.nav-footer-status) { color: var(--text-secondary) !important; }
+html[data-theme="poultry"] :is(.row span,.stats span,.metric-foot,.cx-foot,.section-head p) { font-weight: 450; }
+html[data-theme="poultry"] :is(.metric-label,label) { font-weight: 600; letter-spacing: 0; }
+html[data-theme="poultry"] :is(.card,.action,.quick-action,.metric,.notice-card,.status-panel,.alert,.stats > div) { background: var(--bg-surface) !important; color: var(--text-primary); border-color: var(--border-default) !important; box-shadow: var(--shadow-card) !important; backdrop-filter: none; }
+html[data-theme="poultry"] :is(.card .card,.stats > div) { box-shadow: none !important; }
+html[data-theme="poultry"] :is(.card,.action,.quick-action,.theme-option) { transition: box-shadow .16s ease, border-color .16s ease; }
+html[data-theme="poultry"] :is(.card,.action,.quick-action,.theme-option):hover { box-shadow: var(--shadow-hover) !important; }
+html[data-theme="poultry"] .stats { background: var(--border-default) !important; }
+html[data-theme="poultry"] .list .row { background: var(--bg-surface) !important; }
+html[data-theme="poultry"] :is(.row,td,th) { font-variant-numeric: tabular-nums; }
+html[data-theme="poultry"] :is(.row span,.row strong) { overflow-wrap: anywhere; }
+html[data-theme="poultry"] .shell .nav { box-shadow: 3px 0 18px #193f2c08; }
+html[data-theme="poultry"] .shell .nav a { font-weight: 550; color: var(--text-secondary); }
+html[data-theme="poultry"] :is(.nav a,.drawer-links a):hover { background: var(--bg-surface-secondary) !important; color: var(--text-heading) !important; }
+html[data-theme="poultry"] :is(.nav-group a,.drawer-links a)[aria-current="page"] { background: var(--accent-primary) !important; color: #fff !important; box-shadow: inset 3px 0 #c58b32; }
+html[data-theme="poultry"] :is(.nav-group a,.drawer-links a)[aria-current="page"] > * { color: inherit !important; }
+html[data-theme="poultry"] :is(.nav-command-trigger button,.drawer-search,.search-box,.icon-button,.profile-chip,.appearance-button) { background: var(--bg-surface) !important; color: var(--text-secondary) !important; border-color: var(--border-strong) !important; backdrop-filter: none; box-shadow: 0 2px 6px #193f2c08; }
+html[data-theme="poultry"] :is(.nav-command-icon,.command-icon,.command-arrow) { color: var(--accent-primary); }
+html[data-theme="poultry"] :is(.nav-footer-status,.command-icon,.quick-icon,.action-icon) { background: var(--bg-surface-secondary); color: var(--accent-primary); }
+html[data-theme="poultry"] :is(.command-palette,.appearance-popover,[role="dialog"]) { background: var(--bg-surface-elevated) !important; color: var(--text-primary); border: 1px solid var(--border-default); box-shadow: var(--shadow-elevated) !important; backdrop-filter: none; }
+html[data-theme="poultry"] :is(.command-backdrop,.drawer-backdrop) { background: var(--bg-overlay); backdrop-filter: none; }
+html[data-theme="poultry"] :is(input,select,textarea) { background: var(--bg-input) !important; color: var(--text-primary) !important; border-color: var(--border-strong) !important; font-weight: 450; accent-color: var(--accent-primary); }
+html[data-theme="poultry"] :is(input,textarea)::placeholder { color: var(--text-muted) !important; opacity: 1; }
+html[data-theme="poultry"] :is(input,select,textarea):disabled { background: var(--bg-surface-secondary) !important; color: var(--text-secondary) !important; opacity: 1; cursor: not-allowed; }
+html[data-theme="poultry"] option { background: var(--bg-surface); color: var(--text-primary); }
+html[data-theme="poultry"] :is(.button,button) { font-weight: 600; }
+html[data-theme="poultry"] .shell .button { background: var(--bg-surface) !important; color: var(--accent-primary) !important; border: 1px solid var(--border-strong); box-shadow: 0 2px 4px #193f2c09; }
+html[data-theme="poultry"] .shell .button-primary { background: var(--accent-primary) !important; color: #fff !important; border-color: var(--accent-primary) !important; }
+html[data-theme="poultry"] .shell .button-primary:hover:enabled { background: var(--accent-primary-hover) !important; }
+html[data-theme="poultry"] :is(.button-primary,.appearance-choice.selected,.segmented button.selected) > :is(span,svg) { color: inherit !important; }
+html[data-theme="poultry"] :is(button,.button):disabled { opacity: 1; background: var(--bg-surface-secondary) !important; color: var(--text-muted) !important; cursor: not-allowed; box-shadow: none !important; }
+html[data-theme="poultry"] :is(a,button,input,select,textarea,summary,[tabindex]):focus-visible { outline: 3px solid var(--border-focus) !important; outline-offset: 3px !important; box-shadow: 0 0 0 2px #fff !important; }
+html[data-theme="poultry"] :is(.badge,.pill,.flow span,.status-pill) { background: var(--bg-surface-secondary); color: var(--accent-primary) !important; border-color: var(--border-strong) !important; }
+html[data-theme="poultry"] .flow b { color: var(--text-secondary); }
+html[data-theme="poultry"] .alert-row { background: #fceeea; color: var(--text-primary); border-color: #d9b7b0; }
+html[data-theme="poultry"] .alert.danger { background: var(--danger-soft) !important; }
+html[data-theme="poultry"] :is(.theme-option.selected,.tab.active) { background: var(--accent-soft) !important; border-color: var(--accent-primary) !important; }
+html[data-theme="poultry"] :is(.table-wrap,table) { color: var(--text-primary); }
+html[data-theme="poultry"] th { color: var(--text-secondary); font-weight: 600; }
+html[data-theme="poultry"] tbody tr:hover { background: var(--bg-surface-secondary); }
+html[data-theme="poultry"] :is(.finance-bars .bar-track,.donut,.pipe-track) { background-color: var(--bg-surface-secondary); }
+html[data-theme="poultry"] .finance-bars .bar-fill { background: var(--chart-green); }
+html[data-theme="poultry"] .finance-bars .bar-fill.cost { background: var(--chart-gold); }
+html[data-theme="poultry"] .finance-bars .bar-fill.inventory { background: var(--chart-sage); }
+html[data-theme="poultry"] .pipe-bar { background: linear-gradient(180deg, var(--chart-sage), var(--chart-green)); }
+html[data-theme="poultry"] :is(.cx-kpi-icon,.quick-icon) { color: var(--accent-primary); background: var(--bg-surface-secondary); }
+html[data-theme="poultry"] .cx-kpi { border-top: 2px solid #a4b69b !important; }
+html[data-theme="poultry"] .cx-hero { background: #f8f8f1; border-color: var(--border-default); box-shadow: var(--shadow-elevated); }
+html[data-theme="poultry"] .cx-hero-title { color: var(--text-heading) !important; font-weight: 700; text-shadow: 0 1px #fff9; }
+html[data-theme="poultry"] .cx-hero-sub { color: var(--text-secondary); font-weight: 450; }
+html[data-theme="poultry"] .cx-action { background: #fff; border-color: var(--border-strong); font-weight: 600; }
+html[data-theme="poultry"] .cx-action:first-child { background: var(--accent-soft-gold); border-color: #996619; }
+html[data-theme="poultry"] .cx-action:hover { background: var(--bg-surface-secondary); }
+html[data-theme="poultry"] .cx-chip { background: #fff; border: 1px solid var(--border-default); color: var(--text-secondary) !important; box-shadow: none; }
+html[data-theme="poultry"] .cx-chip.ok { color: var(--status-success) !important; }
+html[data-theme="poultry"] .cx-chip.warn { color: var(--status-warning) !important; background: var(--accent-soft-gold); }
+html[data-theme="poultry"] .cx-chip i { background: currentColor; box-shadow: none; }
+html[data-theme="poultry"] .theme-photo-dashboard { --photo-base: #f8f8f1; --photo-crop: 58% 48%; }
+html[data-theme="poultry"] .theme-photo-dashboard::after { background: linear-gradient(90deg, var(--photo-base), #f8f8f160 22%, transparent 58%), linear-gradient(0deg, #f8f8f150, transparent 52%); }
+html[data-theme="poultry"] ::selection { color: #fff; background: var(--accent-primary); }
+@media (max-width: 760px) {
+  html[data-theme="poultry"] .shell :is(.row,.row[style]) { grid-template-columns: repeat(2,minmax(0,1fr)) !important; gap: 14px; }
+  html[data-theme="poultry"] .shell .row > div:last-child:nth-child(3) { grid-column: 1 / -1; }
+  html[data-theme="poultry"] :is(.button,input,select,.cx-action) { min-height: 48px; }
+}
+@media (max-width: 680px) {
+  html[data-theme="poultry"] .cx-hero-photo { min-height: 180px; }
+  html[data-theme="poultry"] .theme-photo-dashboard { --photo-crop: 55% 42%; }
+  html[data-theme="poultry"] .theme-photo-dashboard::after { background: linear-gradient(0deg,var(--photo-base),transparent 42%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="poultry"] :is(.card,.action,.quick-action,.theme-option,.button) { transition: none; transform: none; }
+}
+/* Shared dashboard classes historically contained unscoped Crystal colours. */
+html[data-theme="poultry"] :is(.cx-empty,.cx-na,.cx-label,.cx-track-labels,.cx-section-head p,.cx-timeline-foot,.quick-action > span:last-child > span) { color: var(--text-secondary) !important; }
+html[data-theme="poultry"] :is(.cx-empty strong,.cx-wordmark) { color: var(--text-primary) !important; font-weight: 600; }
+html[data-theme="poultry"] .cx-stat { background: var(--bg-surface-secondary); border-color: var(--border-default); }
+html[data-theme="poultry"] .cx-stat .cx-num { color: var(--text-primary); }
+html[data-theme="poultry"] .cx-kpi .metric-value { text-shadow: none; }
+html[data-theme="poultry"] .cx-kpi .metric-label::before { display: none; }
+html[data-theme="poultry"] .cx-kpis > .cx-kpi:nth-child(even) .cx-kpi-icon { color: var(--accent-primary); background: var(--bg-surface-secondary); border-color: var(--border-default); box-shadow: none; }
+html[data-theme="poultry"] .cx-section-head { border-image: none; border-bottom-color: var(--border-default); }
+html[data-theme="poultry"] .cx-section-head h3::before { background: #748d73; box-shadow: none; }
+html[data-theme="poultry"] .cx-cam { border-color: var(--border-default) !important; }
+html[data-theme="poultry"] .cx-cam::before { display: none; }
+html[data-theme="poultry"] .cx-cam-offline { background: var(--bg-surface-secondary); color: var(--text-secondary); }
+html[data-theme="poultry"] .cx-cam-offline strong { color: var(--text-primary); }
+html[data-theme="poultry"] .cx-cam-name { color: #fff !important; text-shadow: 0 1px 2px #193f2c; }
+html[data-theme="poultry"] .cx-tag { background: #fff; color: var(--text-primary); border-color: var(--border-strong); }
+html[data-theme="poultry"] .cx-tag.live { color: var(--status-success); }
+html[data-theme="poultry"] .cx-tag.off { color: var(--status-danger); }
+html[data-theme="poultry"] .cx-ring .track { stroke: #dce4da; }
+html[data-theme="poultry"] .cx-ring .val { stroke: var(--chart-green); }
+html[data-theme="poultry"] .cx-track { background: #dce4da; }
+html[data-theme="poultry"] .cx-track-fill { background: var(--chart-green); box-shadow: none; }
+html[data-theme="poultry"] .cx-track-now { background: #fff; border-color: var(--chart-green); box-shadow: 0 0 0 3px #e4edde; }
+html[data-theme="poultry"] .cx-skel { background: var(--bg-surface-secondary) !important; }
+html[data-theme="poultry"] .cx-skel::after { background: linear-gradient(100deg,transparent 30%,#ffffff88 50%,transparent 70%); }
+html[data-theme="poultry"] .shell .empty-chart { background: linear-gradient(180deg,#edf2e9,#fff); border-color: var(--border-strong); }
+html[data-theme="poultry"] .shell .bar-track { background: var(--bg-surface-secondary); }
+html[data-theme="poultry"] :is(.auth-card,.setup-panel) { box-shadow: var(--shadow-elevated); }
+html[data-theme="poultry"] .shell .main { padding-top: 76px; }
+@media(max-width:760px) {
+  html[data-theme="poultry"] .shell .main { padding-top: 70px; }
+  html[data-theme="poultry"] .cx-hero-body { padding-top: 20px; }
+}
+
+html[data-theme="poultry"] .shell :is(.hero-kicker,.cx-hero-kicker) { color: var(--accent-primary); font-weight: 600; }
+html[data-theme="poultry"] :is(.cx-chip,.cx-tag,.cx-kpi-icon,.cx-action-icon) { text-shadow: none; }
+html[data-theme="poultry"] .cx-kpi-icon { border-color: var(--border-default); box-shadow: none; }
+/* Drawer labels must not inherit the legacy 18px icon width. */
+html[data-theme="poultry"] .mobile-drawer .drawer-links a > span:not(.nav-glyph) { width: auto; flex: 1; text-align: left; }
+html[data-theme="poultry"] .shell:has(.mobile-drawer.open) .mobile-nav-toggle { visibility: hidden; }

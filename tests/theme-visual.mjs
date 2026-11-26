@@ -5,21 +5,24 @@ import { join } from "node:path";
 
 const require = createRequire(process.env.VISUAL_DEPS + "/package.json");
 const { chromium } = require("playwright");
-const origin = "http://localhost:3000";
+const origin = process.env.VISUAL_ORIGIN || "http://localhost:3000";
 const output = process.env.VISUAL_OUTPUT;
-const themes = ["poultry", "crystal", "aero", "heritage", "workhorse", "sol", "terra"];
+const themes = process.env.VISUAL_THEMES?.split(",") || ["poultry", "crystal", "aero", "heritage", "workhorse", "sol", "terra"];
 const pages = [
   ["/", "dashboard"], ["/pens", "housing"], ["/batches", "flocks"],
   ["/layers", "eggs"], ["/layers/performance", "layer-performance"], ["/inventory", "inventory-feed"], ["/reports", "reports"],
-  ["/settings", "appearance"], ["/farm-setup", "farm-setup"],
+  ["/settings", "appearance"], ["/farm-setup", "farm-setup"], ["/team", "team"],
+  ["/operations", "daily-round"], ["/health", "health"], ["/health/treatments", "treatments"], ["/health/tests", "diagnostics"],
+  ["/layers/packing", "packing"], ["/house", "house"], ["/finances", "finances"], ["/performance", "performance"],
+  ["/planning", "planning"], ["/trace", "trace"], ["/account", "account"], ["/vision", "vision"], ["/cameras", "cameras"],
 ];
-const devices = { desktop: { width: 1440, height: 1000 }, mobile: { width: 390, height: 844 } };
+const devices = { desktop: { width: 1440, height: 1000 }, tablet: { width: 820, height: 1180 }, mobile: { width: 390, height: 844 } };
 const report = [];
 const browser = await chromium.launch();
 await mkdir(output, { recursive: true });
 
 async function snapshot(page, name) {
-  await page.screenshot({ path: join(output, name + ".png"), animations: "disabled", timeout: 15000 });
+  await page.screenshot({ path: join(output, name + ".png"), animations: "disabled", fullPage: true, timeout: 15000 });
 }
 
 try {
@@ -75,6 +78,10 @@ try {
         const menu = page.getByRole("button", { name: /Open menu|More destinations/ }).filter({ visible: true }).first();
         if (await menu.isVisible()) {
           await menu.click();
+          if (theme === "poultry") {
+            const widths = await page.locator('.mobile-drawer.open .drawer-links a > span:not(.nav-glyph)').evaluateAll(labels => labels.map(label => label.getBoundingClientRect().width));
+            assert.ok(widths.length > 0 && widths.every(width => width >= 80), "Mobile destination labels are constrained to icon width");
+          }
           await snapshot(page, device + "-" + theme + "-navigation");
           await page.getByRole("button", { name: /Find anything/ }).filter({ visible: true }).click();
           await page.getByRole("dialog", { name: "Flockence search" }).waitFor();

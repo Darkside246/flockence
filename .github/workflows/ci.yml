@@ -98,7 +98,7 @@ jobs:
           retention-days: 7
 
   screenshots:
-    if: github.event_name == 'pull_request' && github.head_ref == 'feature/design-system-rebuild'
+    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/design-system-rebuild' || github.head_ref == 'feature/poultry-farm-refinement')
     name: Theme visual review (${{ matrix.revision }})
     runs-on: ubuntu-24.04
     timeout-minutes: 18

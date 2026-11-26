@@ -2,29 +2,29 @@ html:root,
 html[data-theme="poultry"],
 .theme-preview[data-theme="poultry"] {
   color-scheme: light;
-  --bg-canvas: #f7f8f4;
+  --bg-canvas: #f5f6f1;
   --bg-surface: #ffffff;
-  --bg-surface-secondary: #eff3eb;
+  --bg-surface-secondary: #edf2e9;
   --bg-surface-elevated: #ffffff;
   --text-primary: #202923;
-  --text-secondary: #48584d;
-  --text-muted: #58665c;
-  --accent-primary: #245638;
-  --accent-primary-hover: #1d482d;
+  --text-secondary: #536258;
+  --text-muted: #5b695e;
+  --accent-primary: #285b3a;
+  --accent-primary-hover: #193f2c;
   --accent-secondary: #c58b32;
   --accent-soft: #dfebdc;
   --accent-contrast: #ffffff;
-  --border-default: #dfe6dc;
-  --border-strong: #758477;
-  --border-focus: #245638;
+  --border-default: #dce4da;
+  --border-strong: #6c7b6b;
+  --border-focus: #285b3a;
   --status-success: #21603b;
   --status-warning: #784701;
   --status-danger: #a22e2a;
-  --status-info: #15557b;
+  --status-info: #3d6247;
   --card-radius: 16px;
   --surface-blur: 0px;
-  --shadow-card: 0 3px 12px #183c2b0d;
-  --shadow-elevated: 0 12px 32px #183c2b1c;
+  --shadow-card: 0 1px 2px #193f2c08, 0 6px 18px #193f2c0d, inset 0 1px #ffffff;
+  --shadow-elevated: 0 3px 8px #193f2c0f, 0 16px 40px #193f2c17;
 }
 
 html[data-theme="crystal"],
