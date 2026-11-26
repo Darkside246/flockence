@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -15,9 +18,16 @@ const { createSession, SESSION_COOKIE } = await import("../lib/auth.ts");
 const origin = "http://127.0.0.1:3100";
 const ids = ["camera-ci-a", "camera-ci-b", "camera-ci-unconfigured"];
 const servers = [];
+const visionStorage = await mkdtemp(join(tmpdir(), "flockence-vision-ci-"));
+const researchReport = join(visionStorage, "research.json");
+await writeFile(researchReport, JSON.stringify({ version: 1, release: "10.5281/zenodo.20672799", createdAt: new Date(),
+  archives: [{ archive: "ChickenDet.zip", imageFiles: 1, videoFiles: 0, annotationFiles: 1 },
+    { archive: "ChickenAct.zip", imageFiles: 0, videoFiles: 5, annotationFiles: 0 }],
+  behavior: { clips: 5, accuracy: 0.8, macroF1: 0.75 },
+}));
 let app;
 
-async function worker(label, token) {
+async function worker(label, token, source) {
   const server = createServer((req, res) => {
     res.setHeader("Content-Type", "application/json");
     if (req.headers["x-sidecar-token"] !== token) {
@@ -30,7 +40,10 @@ async function worker(label, token) {
       req.resume();
       res.end(JSON.stringify({ updated: true, worker: label }));
     } else if (req.url === "/cameras") {
-      res.end(JSON.stringify([{ name: label }]));
+      res.end(JSON.stringify([{ name: label, source }]));
+    } else if (req.url === "/cameras/" + encodeURIComponent(label) + "/snapshot?fresh=true") {
+      res.setHeader("Content-Type", "image/jpeg");
+      res.end(Buffer.from([255, 216, 255, 217]));
     } else if (req.method === "POST" && req.url === "/auth/login") {
       req.resume();
       res.end(JSON.stringify({ connected: false, pending2fa: true }));
@@ -53,11 +66,12 @@ try {
     const { token } = await createSession(user.id);
     return SESSION_COOKIE + "=" + encodeURIComponent(token);
   })));
-  const a = await worker("Farm A camera", "a".repeat(48));
-  const b = await worker("Farm B camera", "b".repeat(48));
-  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], {
+  const a = await worker("Farm A camera", "a".repeat(48), "blink");
+  const b = await worker("Farm B camera", "b".repeat(48), "rtsp");
+  app = spawn(process.execPath, ["--import", "./tests/support/mock-vision-provider.mjs", "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], {
     stdio: "inherit",
-    env: { ...process.env, APP_URL: origin, FLOCKENCE_CAMERA_WORKERS: JSON.stringify({ [ids[0]]: a, [ids[1]]: b }) },
+    env: { ...process.env, APP_URL: origin, CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
+      CHICKENVERSE_RESEARCH_REPORT: researchReport, VISION_STORAGE_DIR: visionStorage, FLOCKENCE_CAMERA_VISION: "on", OPENAI_API_KEY: "ci-only-unused", FLOCKENCE_CAMERA_WORKERS: JSON.stringify({ [ids[0]]: a, [ids[1]]: b }) },
   });
   let ready = false;
   for (let n = 0; n < 25; n++) {
@@ -71,8 +85,8 @@ try {
   });
   const results = await Promise.all([list(0, ids[1]), list(1, ids[0]), list(2, ids[0])]);
   assert.deepEqual(results.map((response) => response.status), [200, 200, 503]);
-  assert.deepEqual(await results[0].json(), [{ name: "Farm A camera" }]);
-  assert.deepEqual(await results[1].json(), [{ name: "Farm B camera" }]);
+  assert.deepEqual(await results[0].json(), [{ name: "Farm A camera", source: "blink" }]);
+  assert.deepEqual(await results[1].json(), [{ name: "Farm B camera", source: "rtsp" }]);
   assert.equal((await fetch(origin + "/api/cameras/cameras")).status, 401);
 
   const login = (requestOrigin) => fetch(origin + "/api/cameras/auth/login", {
@@ -95,6 +109,39 @@ try {
   const change = await command(origin);
   assert.equal(change.status, 200);
   assert.equal((await change.json()).worker, "Farm A camera");
+  const visionList = (index) => fetch(origin + "/api/vision/cameras", {
+    headers: { Cookie: cookies[index], "X-Flockence-Farm": ids[1 - index] || ids[0] },
+  }).then((response) => response.json());
+  assert.deepEqual(await visionList(0), [{ name: "Farm A camera", source: "blink" }]);
+  assert.deepEqual(await visionList(1), [{ name: "Farm B camera", source: "rtsp" }]);
+  assert.deepEqual(await visionList(2), []);
+  const inspect = (consent, requestOrigin, camera = "Farm B camera") => {
+    const form = new FormData();
+    form.set("camera", camera);
+    if (consent) form.set("shareCameraImage", "yes");
+    return fetch(origin + "/api/vision", {
+      method: "POST", headers: { Cookie: cookies[0], Origin: requestOrigin }, body: form,
+    });
+  };
+  assert.equal((await inspect(false, origin)).status, 400);
+  assert.equal((await inspect(true, "https://other.example")).status, 403);
+  assert.equal((await inspect(true, origin)).status, 502);
+  const inspection = await inspect(true, origin, "Farm A camera");
+  assert.equal(inspection.status, 201);
+  const saved = await inspection.json();
+  assert.equal(saved.analysis.summary, "Inspection test result.");
+  assert.match(saved.observation.notes, /Camera: Farm A camera \(blink\)/);
+  const media = origin + saved.imageUrl;
+  const ownImage = await fetch(media, { headers: { Cookie: cookies[0] } });
+  assert.equal(ownImage.status, 200);
+  assert.deepEqual([...new Uint8Array(await ownImage.arrayBuffer())], [255, 216, 255, 217]);
+  assert.equal((await fetch(media, { headers: { Cookie: cookies[1] } })).status, 404);
+  const reportUrl = origin + "/api/vision/research";
+  const research = await fetch(reportUrl, { headers: { Cookie: cookies[0] } });
+  assert.equal(research.status, 200);
+  assert.equal((await research.json()).report.behavior.macroF1, 0.75);
+  assert.equal((await fetch(reportUrl, { headers: { Cookie: cookies[1] } })).status, 404);
+  assert.equal((await fetch(reportUrl)).status, 401);
   console.log("Camera HTTP checks passed for two private workers and an unconfigured farm.");
 } finally {
   app?.kill();
@@ -104,4 +151,5 @@ try {
   }
   for (const farmId of ids) await runAsFarm(farmId, () => prisma.farm.deleteMany({ where: { id: farmId } }));
   await prisma.$disconnect();
+  await rm(visionStorage, { recursive: true, force: true });
 }

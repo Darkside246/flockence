@@ -17,6 +17,15 @@ const categories = [
 
 const moneyish = (value: unknown) => String(value ?? "");
 
+type ResearchReport = {
+  createdAt: string;
+  archives: { archive: string; imageFiles: number; videoFiles: number; annotationFiles: number }[];
+  detection?: { averagePrecision: number; images: number };
+  segmentation?: { averagePrecision: number; images: number };
+  behavior?: { clips: number; accuracy: number; macroF1: number };
+};
+const score = (ratio: number) => (ratio * 100).toFixed(1) + "%";
+type VisionCamera = { name: string; source: "blink" | "rtsp" };
 type Batch = { id: string; name: string };
 type VisionResult = { summary?: string; confidence?: string; severity?: string; observations?: { title?: string; detail?: string; confidence?: string }[]; concerns?: { title?: string; whyItMatters?: string }[]; checks?: string[]; escalate?: boolean; escalationReason?: string; medicalDisclaimer?: string };
 type HistoryRow = { id: string; observedAt: string; imageUrl?: string; notes?: string; category?: string; severity?: string; batchId?: string };
@@ -29,6 +38,10 @@ export default function VisionPage() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
+  const [research, setResearch] = useState<{ report: ResearchReport | null } | null>(null);
+  const [cameras, setCameras] = useState<VisionCamera[]>([]);
+  const [cameraName, setCameraName] = useState("");
+  const [shareCamera, setShareCamera] = useState(false);
   const [result, setResult] = useState<VisionResult | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,11 +54,19 @@ export default function VisionPage() {
   useEffect(() => {
     fetch("/api/batches", { cache: "no-store" }).then(r => r.json()).then(setBatches).catch(() => setBatches([]));
     loadHistory().catch(() => undefined);
+    fetch("/api/vision/cameras", { cache: "no-store" }).then((r) => r.ok ? r.json() : [])
+      .then(setCameras).catch(() => setCameras([]));
+    fetch("/api/vision/research", { cache: "no-store" }).then((r) => r.ok ? r.json() : null)
+      .then(setResearch).catch(() => setResearch(null));
   }, []);
+
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   function pickFile(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null;
     setFile(next);
+    setCameraName("");
+    setShareCamera(false);
     setResult(null);
     setMessage("");
     if (next) setPreview(URL.createObjectURL(next));
@@ -54,12 +75,16 @@ export default function VisionPage() {
 
   async function analyze(event: FormEvent) {
     event.preventDefault();
-    if (!file) { setMessage("Add a photo first."); return; }
+    if (!file && !cameraName) { setMessage("Add a photo or choose a camera first."); return; }
+    if (cameraName && !shareCamera) { setMessage("Confirm that the camera image can be shared for analysis."); return; }
     setBusy(true);
     setMessage("");
     setResult(null);
     const form = new FormData();
-    form.append("image", file);
+    if (cameraName) {
+      form.append("camera", cameraName);
+      form.append("shareCameraImage", "yes");
+    } else if (file) form.append("image", file);
     form.append("category", category);
     form.append("batchId", batchId);
     form.append("notes", notes);
@@ -89,6 +114,23 @@ export default function VisionPage() {
 
         <div className="section-head" style={{ marginTop: 24 }}><div><h3>2. Add the photo</h3><p>On a phone, this can open the camera. Maximum image size: 8 MB.</p></div></div>
         <label className="upload-zone"><input type="file" accept="image/*" capture="environment" onChange={pickFile} /><span className="upload-icon">+</span><strong>{file ? file.name : "Take photo or choose image"}</strong><small>{file ? "Ready for inspection" : "Use a clear photo with good lighting"}</small></label>
+        {cameras.length > 0 && <div className="grid2" style={{ marginTop: 18 }}>
+          <label>Farm camera<select value={cameraName} onChange={(event) => {
+            setCameraName(event.target.value);
+            setShareCamera(false);
+            setResult(null);
+            setMessage("");
+            if (event.target.value) { setFile(null); setPreview(""); }
+          }}>
+            <option value="">Choose a connected camera</option>
+            {cameras.map((camera) => <option key={camera.name} value={camera.name}>
+              {camera.name} ({camera.source === "blink" ? "Blink" : "Network camera"})
+            </option>)}
+          </select></label>
+          {cameraName && <label><input type="checkbox" checked={shareCamera} onChange={(event) => setShareCamera(event.target.checked)} />
+            Send one new camera image to the vision provider for this inspection and save it in farm history.
+          </label>}
+        </div>}
         {preview && <div className="vision-preview"><img src={preview} alt="Selected poultry inspection" /></div>}
 
         <div className="grid2" style={{ marginTop: 18 }}><label>Batch<select value={batchId} onChange={e => setBatchId(e.target.value)}><option value="">Farm-wide</option>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label><label>What should the AI know?<input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Example: birds are 24 days old and feed intake dropped" /></label></div>
@@ -106,6 +148,21 @@ export default function VisionPage() {
         <div className="section card notice-card"><strong>{result.medicalDisclaimer || "Image findings are observations only. They do not confirm disease or cause of death."}</strong></div>
       </section>}
 
+      {research && <section className="section card">
+        <div className="section-head"><div><h3>ChickenVerse research</h3><p>Benchmark results for detection, segmentation and behavior recognition.</p></div></div>
+        {!research.report ? <p>No research report has been installed.</p> : <>
+          <p>Release verified {new Date(research.report.createdAt).toLocaleDateString()}</p>
+          <ul>{research.report.archives.map((archive) => <li key={archive.archive}>
+            {archive.archive} · {archive.imageFiles.toLocaleString()} images · {archive.videoFiles.toLocaleString()} clips
+          </li>)}</ul>
+          <dl>
+            <dt>Detection AP</dt><dd>{research.report.detection ? score(research.report.detection.averagePrecision) : "Awaiting predictions"}</dd>
+            <dt>Segmentation AP</dt><dd>{research.report.segmentation ? score(research.report.segmentation.averagePrecision) : "Awaiting predictions"}</dd>
+            <dt>Behavior macro-F1</dt><dd>{research.report.behavior ? score(research.report.behavior.macroF1) : "Awaiting predictions"}</dd>
+          </dl>
+        </>}
+        <a className="action" href="https://doi.org/10.5281/zenodo.20672799">ChickenVerse dataset and license</a>
+      </section>}
       <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong><span>{item.notes?.slice(0, 280) || "No notes recorded."}</span></div></article>)}</div>}</section>
     </main>
   </div>;
