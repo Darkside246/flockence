@@ -15,6 +15,9 @@ systemctl show "$service" --no-pager -p User -p Group -p WorkingDirectory -p Exe
 systemctl is-active --quiet "$service"
 [[ $(systemctl show -p User --value "$service") == flockence ]]
 app=$(systemctl show -p WorkingDirectory --value "$service")
+[[ $# -le 1 ]] || { echo "Usage: install-vps.sh [prepared release app directory]" >&2; exit 1; }
+source_app=$(readlink -e -- "${1:-$app}")
+[[ $source_app == /opt/* && -d "$source_app/services/blink" ]]
 [[ $app == /opt/* && -d "$app/services/blink" ]]
 for target in "$unit" "$dropin" "$token_file" "$camera_env" "$state" "$app/services/blink/data"; do
   if [[ -e "$target" || -L "$target" ]]; then
@@ -36,8 +39,8 @@ fi
 release=$(mktemp -d /opt/flockence-blink.XXXXXX)
 chown flockence:flockence "$release"
 chmod 0750 "$release"
-revision=$(runuser -u flockence -- git -C "$app" rev-parse HEAD)
-runuser -u flockence -- git -C "$app" archive "$revision" services/blink |
+revision=$(runuser -u flockence -- git -C "$source_app" rev-parse HEAD)
+runuser -u flockence -- git -C "$source_app" archive "$revision" services/blink |
   runuser -u flockence -- tar -xf - -C "$release"
 runuser -u flockence -- /usr/bin/python3 -m venv "$release/venv"
 runuser -u flockence -- "$release/venv/bin/python" -m pip install \
@@ -75,7 +78,7 @@ if settings.pop("BLINK_DATA_DIR", ""):
     sys.exit("An existing camera data directory needs review before installing.")
 
 token = settings.pop("BLINK_SIDECAR_TOKEN", "") or secrets.token_hex(32)
-if not re.fullmatch(r"[A-Za-z0-9_\-]{32,}", token):
+if not re.fullmatch(r"[A-Za-z0-9_\-]{32,128}", token):
     sys.exit("The existing camera token needs review before installing.")
 key = settings.get("BLINK_CREDENTIALS_KEY", "").strip() or base64.b64encode(secrets.token_bytes(32)).decode()
 try:

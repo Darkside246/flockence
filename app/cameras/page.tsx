@@ -334,12 +334,21 @@ export default function CamerasPage() {
       const s = await json<Status>(api("status")); setStatus(s); setError("");
       if (!s.available) { setCameras([]); return; }
       if (s.pending2fa) setProvider("blink");
+      else if (s.canManage && !s.connected) setProvider((current) => current ?? "blink");
       const c = await json<Camera[]>(api("cameras")); setCameras(c); const wanted = new URLSearchParams(window.location.search).get("camera"); setSelected((cur) => cur || (wanted && c.some((x) => x.name === wanted) ? wanted : c[0]?.name) || "");
     } catch (e) { setStatus(null); setCameras([]); setError(e instanceof Error ? e.message : "Unable to reach the camera service."); }
   }, []);
   useEffect(() => { load(); }, [load]);
   return <div className="shell"><header className="topbar"><div className="brand"><div><div className="hero-kicker">Site security</div><h1>Cameras</h1><p>Live view, latest pictures and recordings from Blink and local network cameras.</p></div><span className="badge">LIVE · STILLS · RECORDINGS</span></div></header><Nav /><main className="main">
-    {error && <div className="card" role="alert"><p>{error}</p></div>}
+    {error && <div className="card" role="alert"><p>{error}</p>
+      <button type="button" className="button" onClick={() => void load()}>Check connection again</button>
+      {error.includes("requires Flockence Premium") && <p><a href="/settings/plan">View your farm plan</a></p>}
+    </div>}
+    {status && !status.available && <section className="section card">
+      <h2>Camera connection unavailable</h2>
+      <p>Ask your Flockence administrator to start this farm’s private camera service. The Blink sign-in form appears here when the service is ready.</p>
+      <button type="button" className="button" onClick={() => void load()}>Check connection again</button>
+    </section>}
     {(status?.canManage || gatewayOwner) && <>
       <section className="card" aria-label="Camera brand">
         <div className="section-head"><div><h2>Connect a camera</h2><p>Choose the brand or connection type for this farm.</p></div></div>
@@ -348,7 +357,6 @@ export default function CamerasPage() {
             <button key={id} type="button" aria-pressed={provider === id} className={provider === id ? "selected" : ""} onClick={() => setProvider(id)}>{label}</button>
           )}
         </div>
-        {provider === "blink" && !status?.available && <p>Blink setup is waiting for this farm’s private camera service.</p>}
         {provider === "blink" && status?.connected && <p>Blink is connected to this farm.</p>}
         {provider === "wyze" && <p><a href="https://my.wyze.com/live" target="_blank" rel="noopener noreferrer">Open Wyze Web View</a> to sign in to Wyze and watch live. To send snapshots to Flockence, check <a href="https://support.wyze.com/hc/en-us/articles/360026245231-Wyze-Cam-RTSP" target="_blank" rel="noopener noreferrer">which Wyze models support RTSP</a>.</p>}
         {provider === "network" && !status?.networkCameras && <p>Use a private farm gateway to send snapshots from a compatible camera.</p>}

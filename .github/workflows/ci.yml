@@ -85,6 +85,9 @@ jobs:
           python3 -m compileall -q services/blink
           python3 -m unittest discover -s services/blink/tests -p test_clip_archive.py
           python3 tests/chickenverse-research.py
+          bash -n ops/systemd/enable-local-stack.sh
+          bash -n services/blink/install-vps.sh
+          node --experimental-strip-types --test tests/mail.mjs
           node --experimental-strip-types --test tests/vision-assessment.mjs
 
       - name: Type check

@@ -10,6 +10,8 @@ export async function platformAdministrator(request: Request) {
 
 export function platformStatus() {
   return {
+    emailDeliveryConfigured: Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM),
+    welcomeEmailEnabled: process.env.FLOCKENCE_WELCOME_EMAIL === "on",
     aiVisionConfigured: Boolean(process.env.OPENAI_API_KEY),
     oriyaSignInConfigured: Boolean(process.env.ORIYA_PLATFORM_SECRET && process.env.ORIYA_URL),
     databaseIsolationConfigured: Boolean(process.env.FARM_RLS_DATABASE_URL),

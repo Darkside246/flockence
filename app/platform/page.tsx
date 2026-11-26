@@ -13,6 +13,8 @@ export default async function PlatformPage() {
       <h1>Platform diagnostics</h1>
       <p>Server configuration status</p>
       <dl>
+        <dt>Email delivery</dt><dd>{status.emailDeliveryConfigured ? "Configured" : "Unavailable"}</dd>
+        <dt>Welcome email</dt><dd>{status.welcomeEmailEnabled ? "Enabled" : "Disabled"}</dd>
         <dt>AI vision</dt><dd>{status.aiVisionConfigured ? "Configured" : "Unavailable"}</dd>
         <dt>Oriya sign-in</dt><dd>{status.oriyaSignInConfigured ? "Configured" : "Unavailable"}</dd>
         <dt>Restricted PostgreSQL connection</dt><dd>{status.databaseIsolationConfigured ? "Configured" : "Unavailable"}</dd>
