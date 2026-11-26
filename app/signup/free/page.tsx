@@ -5,5 +5,5 @@ import { FreeSignupForm } from "@/components/free-signup-form";
 export const dynamic = "force-dynamic";
 export default function FreeSignupPage() {
   if (!freeSignupEnabled()) notFound();
-  return <FreeSignupForm />;
+  return <FreeSignupForm captchaSiteKey={process.env.RECAPTCHA_SITE_KEY?.trim() ?? ""} />;
 }

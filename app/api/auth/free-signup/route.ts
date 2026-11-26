@@ -3,6 +3,8 @@ import { normalizeEmail, setSessionCookie, validatePassword } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { completeVerifiedFreeSignup, discardFreeEmailProof, freeSignupTokenPattern, issueFreeEmailProof } from "@/lib/free-email-proof";
 import { freeSignupEnabled } from "@/lib/free-signup-enabled";
+import { isTrustedAppOrigin } from "@/lib/request-origin";
+import { verifySignupCaptcha } from "@/lib/signup-captcha";
 import { sendFreeSignupVerificationEmail, sendWelcomeEmail } from "@/lib/mail";
 
 const headers = { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" };
@@ -25,19 +27,24 @@ export async function POST(request: Request) {
   if (process.env.NODE_ENV === "production" && process.env.AUTH_COOKIE_SECURE !== "true") {
     return reply("Signup is temporarily unavailable.", 503);
   }
+  if (!isTrustedAppOrigin(request)) return reply("Open signup from the Flockence website.", 403);
   const data = await request.json().catch(() => null);
-  const ip = request.headers.get("cf-connecting-ip")?.trim() || request.headers.get("x-real-ip")?.trim() || "unknown";
+  const ip = request.headers.get("x-real-ip")?.trim() || "unknown";
   try {
     if (data?.action === "send") {
       const email = typeof data.email === "string" ? normalizeEmail(data.email) : "";
       if (!/^\S+@\S+\.\S+$/.test(email) || email.length > 254) return reply("Enter a valid email address.", 400);
-      const limits = await Promise.all([
-        checkRateLimit("free-signup-email:" + email, 3, 3600000),
-        checkRateLimit("free-signup-send-ip:" + ip, 10, 3600000),
-      ]);
-      if (limits.some((limit) => !limit.allowed)) return reply("Too many requests. Please try again later.", 429);
+      if (!(await checkRateLimit("free-signup-send-ip:" + ip, 10, 3600000)).allowed) {
+        return reply("Too many requests. Please try again later.", 429);
+      }
+      const hostname = new URL(signupUrl("")).hostname;
+      const captcha = await verifySignupCaptcha(data.captchaToken, hostname);
+      if (captcha === "unavailable") return reply("Signup security check is temporarily unavailable.", 503);
+      if (captcha === "rejected") return reply("Complete the security check and try again.", 400);
+      if (!(await checkRateLimit("free-signup-email:" + email, 3, 3600000)).allowed) {
+        return reply("Too many requests. Please try again later.", 429);
+      }
       if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM) return reply("Signup email is temporarily unavailable.", 503);
-      signupUrl("");
       const token = await issueFreeEmailProof(email);
       try {
         if (!(await sendFreeSignupVerificationEmail(email, signupUrl(token)))) throw new Error("EMAIL_FAILED");

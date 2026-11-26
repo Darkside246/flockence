@@ -19,7 +19,7 @@ This review references line numbers in the two briefs supplied on November 26, 2
 | 102–107 | Partial | [Farm export](../lib/farm-export.ts) provides authorized portable data. Self-service deletion, customer privacy preferences and a full retention interface remain open. |
 | 129–169 | Partial | [Platform status](../app/api/platform/status/route.ts) is a separate diagnostic surface. An administration console for API/AI/model/DB/Redis/queue/webhook/auth/email/entitlement/cost/deployment management, job monitoring and logs remains open. |
 | 173–190 | Partial | [Platform access](../lib/platform-access.ts) checks explicitly allowed account IDs on the server independently of farm ownership and premium. Secrets stay in the server environment. Full platform role administration, secret rotation UI, comprehensive configuration audit and verified staging/production configuration separation remain open. |
-| 194–219 | In code | Core authenticated farm, pens, flocks, bird counts, mortality, feed, weight, eggs, health, expenses, sales, inventory, dashboard and reports remain part of Flockence. Verified public Free signup provisions its own farm and requires opt-in plus configured email. [Signup sender setup](SIGNUP_EMAIL.md) |
+| 194–219 | In code | Core authenticated farm, pens, flocks, bird counts, mortality, feed, weight, eggs, health, expenses, sales, inventory, dashboard and reports remain part of Flockence. Verified public Free signup provisions its own farm and requires opt-in, a verified email sender and a server-verified reCAPTCHA challenge. [Signup sender setup](SIGNUP_EMAIL.md) |
 | 220–225 | Partial | Offline entry and sync cover mortality. Remaining core records currently need connectivity. |
 | 227–247 | Partial | The plan describes hardware/AI and advanced capabilities with availability states. Camera and supported environmental integration code exists. Advanced predictions, alert automation, storage quotas and multi-farm/team administration are incomplete. |
 | 249–277 | Partial | Premium and planned availability are represented. Full label, lock, upgrade action and empty-state coverage across every entry point has yet to pass acceptance testing. |
@@ -83,5 +83,5 @@ This review references line numbers in the two briefs supplied on November 26, 2
 
 - Rehearse the schema and PostgreSQL roles on a restored VPS staging database and test login, write, export and cross-farm access with the actual runtime roles.
 - Configure and verify the private camera worker, gateway and device dependencies. Run a reboot check before treating startup recovery as verified.
-- Use the verified Resend sender to confirm a real Free verification email and optional welcome email before enabling public signup.
+- Validate the production reCAPTCHA keys, Resend delivery of a real Free confirmation email, and optional welcome email before enabling public signup.
 - Verify Premium entitlements with the deployed Oriya service and real linked accounts before public rollout.
