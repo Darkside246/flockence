@@ -15,6 +15,7 @@ import shutil
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from blinkpy import api as blink_api
 from blinkpy.auth import Auth, BlinkTwoFARequiredError
@@ -25,6 +26,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel
 
 import rtsp
+from blink_controls import BlinkChange, change_setting, night_mode, readings
 from immi import extract_transport_stream_packets, patch_liveview_auth_header
 from settings import DATA_DIR, FFMPEG, LIVE_DIR, MIN_TOKEN_LENGTH, TOKEN, client_allowed, credentials_encrypted, open_credentials, require_token, seal_credentials, slug as _slug
 from transport import DEFAULT_IMPERSONATE, CurlCffiAiohttpAdapter
@@ -180,6 +182,19 @@ async def status():
     }
 
 
+@app.get("/blink/settings")
+async def blink_settings(camera: str | None = None):
+    blink = _blink()
+    if camera is not None:
+        return {"nightVision": await night_mode(_camera(camera))}
+    return readings(blink)
+
+
+@app.post("/blink/settings")
+async def update_blink_settings(change: BlinkChange):
+    return await change_setting(_blink(), change)
+
+
 @app.post("/auth/login")
 async def login(body: Login):
     if state.session is None:
@@ -294,9 +309,12 @@ async def snapshot(name: str, fresh: bool = False):
 
 
 @app.get("/clips")
-async def clips(camera: str | None = None, since: str | None = None, pages: int = 2):
-    since = since or time.strftime("%Y/%m/%d %H:%M", time.localtime(time.time() - 7 * 86400))
-    out = rtsp.clips(camera, time.time() - 7 * 86400)
+async def clips(camera: str | None = None, since: str | None = None, pages: int = 2, period: Literal["1", "7", "30"] | None = None):
+    cutoff = time.time() - int(period or "7") * 86400
+    if period is not None:
+        since = time.strftime("%Y/%m/%d %H:%M", time.gmtime(cutoff))
+    since = since or time.strftime("%Y/%m/%d %H:%M", time.localtime(cutoff))
+    out = rtsp.clips(camera, cutoff)
     if not (state.blink and state.blink.available) or (camera and rtsp.has(camera)):
         return out
     media = await state.blink.get_videos_metadata(since=since, stop=max(2, min(pages + 1, 6)))

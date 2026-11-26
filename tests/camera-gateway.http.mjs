@@ -229,6 +229,32 @@ try {
   assert.notEqual(spareSession.id, currentSession.id);
   console.log("Session farm binding, legacy compatibility, cross-origin protection, and revocation passed.");
 
+  const customerUrl = origin + "/api/customers";
+  const customer = await fetch(customerUrl, {
+    method: "POST", headers: { Cookie: ownerA, Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Customer A", phone: "private-contact" }),
+  });
+  assert.equal(customer.status, 201);
+  const [customerA, customerB] = await Promise.all([ownerA, ownerB].map(async (cookie) => {
+    const response = await fetch(customerUrl, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 200);
+    return response.json();
+  }));
+  assert.deepEqual(customerA.map(({ name }) => name), ["Customer A"]);
+  assert.deepEqual(customerB, []);
+
+  const { currentFlockCheck } = await import("../lib/oriya.ts");
+  const { withProtectedFarmData } = await import("../lib/farm-database.ts");
+  for (const [index, farmId] of farms.entries()) {
+    await runAsFarm(farmId, () => prisma.batch.create({
+      data: { farmId, name: "Isolation flock " + index, status: "ACTIVE", initialChicks: 20 + index, chickCostMinor: 0, startDate: new Date() },
+    }));
+  }
+  const checks = await Promise.all(farms.map((farmId) => runAsFarm(farmId, () => currentFlockCheck("Test house"))));
+  assert.deepEqual(checks.map((check) => check.birds.alive), [20, 21]);
+  await assert.rejects(runAsFarm(farms[0], () => withProtectedFarmData("oriya", (tx) => tx.customer.findMany())), /permission denied|denied access/i);
+  console.log("PostgreSQL RLS isolated customer writes and Oriya summary reads.");
+
 } finally {
   app?.kill();
   for (const farmId of farms) await runAsFarm(farmId, () => prisma.farm.deleteMany({ where: { id: farmId } }));

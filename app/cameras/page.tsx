@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Nav } from "@/components/nav";
+import { BlinkSettings } from "@/components/blink-settings";
 import { CameraGateways } from "@/components/camera-gateways";
 
 type Camera = { name: string; source: "blink" | "rtsp"; type: string | null; battery: string | number | null; armed: boolean | null; motionDetected: boolean | null; live: boolean; recording?: boolean };
@@ -264,18 +265,24 @@ function ImportClips({ cameras, onDone }: { cameras: Camera[]; onDone: () => voi
 }
 
 function Recordings({ cameras }: { cameras: Camera[] }) {
+  const [period, setPeriod] = useState("7");
   const [camera, setCamera] = useState(""), [clips, setClips] = useState<Clip[] | null>(null), [error, setError] = useState(""), [playing, setPlaying] = useState<Clip | null>(null), [refresh, setRefresh] = useState(0);
   useEffect(() => {
     setClips(null); setError("");
-    json<Clip[]>(api(`clips${camera ? "?camera=" + enc(camera) : ""}`)).then(setClips).catch((e) => setError(e.message));
-  }, [camera, refresh]);
+    const query = new URLSearchParams({ period, ...(camera ? { camera } : {}) });
+    let active = true;
+    json<Clip[]>(api("clips?" + query)).then((clips) => { if (active) setClips(clips); })
+      .catch((error) => { if (active) setError(error.message); });
+    return () => { active = false; };
+  }, [camera, period, refresh]);
   async function removeImported(clip: Clip) {
     if (!confirm(`Remove this imported clip from ${clip.camera}? The file is deleted from this farm's storage.`)) return;
     try { await json(api(clip.media), { method: "DELETE" }); setPlaying(null); setRefresh((n) => n + 1); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not remove the clip"); }
   }
-  return <><div className="card"><div className="section-head"><div><h3>Stored recordings</h3><p>Motion clips from the last 7 days, plus any clips you import.</p></div>
-    <select value={camera} onChange={(e) => setCamera(e.target.value)} aria-label="Camera"><option value="">All cameras</option>{cameras.map((c) => <option key={c.name}>{c.name}</option>)}</select></div>
+  return <><div className="card"><div className="section-head"><div><h3>Stored recordings</h3><p>Available Blink, network camera, and imported clips.</p></div>
+    <label>Period<select value={period} onChange={(event) => { setPlaying(null); setPeriod(event.target.value); }}><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
+    <select value={camera} onChange={(e) => { setPlaying(null); setCamera(e.target.value); }} aria-label="Camera"><option value="">All cameras</option>{cameras.map((c) => <option key={c.name}>{c.name}</option>)}</select></div>
     {error && <p role="alert">{error}</p>}
     {!clips && !error && <p>Loading recordings…</p>}
     {clips?.length === 0 && <p>No recordings in this period.</p>}
@@ -347,6 +354,7 @@ export default function CamerasPage() {
       {provider === "blink" && status?.available && !status.connected && <ConnectCard status={status} onDone={load} />}
       {(provider === "network" || provider === "wyze") && status?.available && status.networkCameras && <ManageCameras cameras={cameras} onChange={load} />}
     </>}
+    {status?.available && status.connected && <BlinkSettings owner={status.canManage} />}
     <CameraGateways brand={provider === "wyze" || provider === "network" ? provider : null} onOwner={setGatewayOwner} />
     {status?.available && <>
       {cameras.length === 0 && <>
