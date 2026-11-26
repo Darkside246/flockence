@@ -34,7 +34,7 @@ async function relay(upstream: Response) {
   return new Response(upstream.body, { status: upstream.status, headers });
 }
 
-const notConfigured = () => NextResponse.json({ error: "Camera service is not configured." }, { status: 503 });
+const notConfigured = () => NextResponse.json({ error: "The private camera connection is unavailable. Contact your Flockence administrator." }, { status: 503 });
 const notRunning = () => NextResponse.json({ error: "Camera service is not running." }, { status: 503 });
 
 const tooMany = () => NextResponse.json({ error: "Too many camera requests. Wait a minute." }, { status: 429, headers: { "retry-after": "60" } });
