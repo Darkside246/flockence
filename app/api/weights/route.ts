@@ -1,9 +1,12 @@
+import { offlineEventId } from "@/lib/offline-event";
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { calculateLiveBirdsAtDate, isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
+
+class OfflineWeightConflict extends Error {}
 
 const WEIGHT_SCOPES = ["SAMPLE", "INDIVIDUAL", "BATCH_AVERAGE"] as const;
 const WEIGHT_TYPES = ["LIVE", "DRESSED"] as const;
@@ -28,6 +31,8 @@ export async function POST(request: Request) {
     await ensureFarm();
     const input = await request.json();
     const batchId = typeof input.batchId === "string" ? input.batchId : "";
+    const syncId = input.offline === undefined ? undefined : offlineEventId(request, input.offline, session.user);
+    if (syncId === null) return NextResponse.json({ error: "Sign in as the original farm account to sync this entry." }, { status: 403 });
     const date = parseCalendarDate(input.date);
     const quantity = Number(input.quantity);
     const avgWeightKg = Number(input.avgWeightKg);
@@ -47,6 +52,9 @@ export async function POST(request: Request) {
         { error: "Batch, a current or historical date, a positive whole-bird quantity and a positive average weight are required." },
         { status: 400 },
       );
+    }
+    if (syncId && (avgWeightKg > 100 || Number(avgWeightKg.toFixed(3)) !== avgWeightKg)) {
+      return NextResponse.json({ error: "Offline live weights require kilograms to three decimal places or fewer." }, { status: 400 });
     }
     if (!(WEIGHT_SCOPES as readonly string[]).includes(scope)) {
       return NextResponse.json({ error: "Select a supported weight scope." }, { status: 400 });
@@ -71,6 +79,17 @@ export async function POST(request: Request) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
+      if (syncId) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${syncId}, 0))::text`;
+        const receipt = await tx.weightRecord.findUnique({ where: { id: syncId } });
+        if (receipt) {
+          if (receipt.batchId !== batchId || receipt.date.getTime() !== date.getTime() || receipt.scope !== scope
+            || receipt.liveOrDressed !== liveOrDressed || receipt.quantity !== quantity || !receipt.avgWeightKg.equals(avgWeightKg)) {
+            throw new OfflineWeightConflict("This offline weight was already synced with different details.");
+          }
+          return { record: receipt, updated: false };
+        }
+      }
       await lockFlockOperations(tx, [batch.id]);
 
       const [snapshot, deaths, dispatches] = await Promise.all([
@@ -113,6 +132,7 @@ export async function POST(request: Request) {
       const data = { quantity, avgWeightKg, scope, liveOrDressed };
 
       if (existing) {
+        if (syncId) throw new OfflineWeightConflict("A weight already exists for this flock, date and measurement type. Review it online.");
         return {
           record: await tx.weightRecord.update({ where: { id: existing.id }, data }),
           updated: true,
@@ -121,7 +141,7 @@ export async function POST(request: Request) {
 
       return {
         record: await tx.weightRecord.create({
-          data: { batchId: batch.id, date, ...data },
+          data: { ...(syncId ? { id: syncId } : {}), batchId: batch.id, date, ...data },
         }),
         updated: false,
       };
@@ -131,7 +151,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not record weight." },
-      { status: 400 },
+      { status: error instanceof OfflineWeightConflict ? 409 : 400 },
     );
   }
 }

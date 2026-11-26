@@ -5,7 +5,7 @@ import { boundedBody } from "@/lib/camera-gateway-http";
 
 export const maxVisionImageBytes = 8 * 1024 * 1024;
 
-type VisionCamera = { name: string; source: "blink" | "rtsp" };
+export type VisionCamera = { name: string; source: "blink" | "rtsp"; deviceKey: string };
 
 export function visionCameraRoles(): FarmAccessRole[] {
   return cameraViewRoles().filter((role) => role === "OWNER" || role === "MANAGER");
@@ -29,13 +29,16 @@ export async function visionCameras(): Promise<VisionCamera[]> {
   if (!Array.isArray(cams)) throw new Error("Camera list is unavailable.");
   return cams.slice(0, 256).flatMap((camera) => {
     if (!validVisionCameraName(camera?.name) || (camera?.source !== "blink" && camera?.source !== "rtsp")) return [];
-    return [{ name: camera.name, source: camera.source }];
+    const deviceKey = typeof camera.deviceKey === "string" && /^[a-f0-9]{64}$/.test(camera.deviceKey)
+      ? camera.deviceKey : camera.name;
+    return [{ name: camera.name, source: camera.source, deviceKey }];
   });
 }
 
 export async function captureVisionCamera(name: string) {
-  const camera = (await visionCameras()).find((entry) => entry.name === name);
-  if (!camera) return null;
+  const matching = (await visionCameras()).filter((entry) => entry.name === name);
+  if (matching.length !== 1) return null;
+  const [camera] = matching;
   const path = "/cameras/" + encodeURIComponent(camera.name) + "/snapshot?fresh=true";
   const response = await blinkFetch(path, {}, 20_000);
   if (!response.ok || response.headers.get("content-type")?.split(";")[0] !== "image/jpeg") return null;

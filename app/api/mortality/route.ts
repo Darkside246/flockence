@@ -1,18 +1,10 @@
-import { createHash } from "node:crypto";
-import { z } from "zod";
-import { isTrustedAppOrigin } from "@/lib/request-origin";
+import { offlineEventId as scopedOfflineEventId } from "@/lib/offline-event";
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { calculateLiveBirdsAtDate, isCalendarDateNotFuture, isWithinInitialFlockCount, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
-
-const offlineSchema = z.strictObject({
-  id: z.uuid(),
-  farmId: z.string().min(1).max(64),
-  userId: z.string().min(1).max(100),
-});
 
 class MortalityConflict extends Error {}
 
@@ -44,16 +36,11 @@ export async function POST(request: Request) {
     let offlineEventId: string | undefined;
     if (input.offline !== undefined) {
       isOffline = true;
-      const recorded = offlineSchema.safeParse(input.offline);
-      if (!isTrustedAppOrigin(request) || !recorded.success ||
-        recorded.data.farmId !== session.user.farmId || recorded.data.userId !== session.user.id) {
-        return NextResponse.json({ error: "Sign in as the original farm account to sync this entry." }, { status: 403 });
-      }
+      offlineEventId = scopedOfflineEventId(request, input.offline, session.user) ?? undefined;
+      if (!offlineEventId) return NextResponse.json({ error: "Sign in as the original farm account to sync this entry." }, { status: 403 });
       if ((reason?.length ?? 0) > 120 || (notes?.length ?? 0) > 1000) {
         return NextResponse.json({ error: "The offline reason or note is too long." }, { status: 400 });
       }
-      offlineEventId = "offline-" + createHash("sha256")
-        .update(JSON.stringify([session.user.farmId, session.user.id, recorded.data.id.toLowerCase()])).digest("hex");
     }
 
     if (!batchId || !date || !isCalendarDateNotFuture(date) || !Number.isSafeInteger(quantity) || quantity < 1) {

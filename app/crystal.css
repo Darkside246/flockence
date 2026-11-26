@@ -186,9 +186,9 @@ html[data-theme="crystal"] .appearance-button { background: rgba(8, 21, 34, .9) 
 .bottom-nav { display: none; }
 @media (max-width: 760px) {
   html[data-theme="crystal"] body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
-  html[data-theme="crystal"] .mobile-nav-toggle, html[data-theme="crystal"] .nav-command-trigger { display: none !important; }
+  html[data-theme="crystal"] :is(.mobile-nav-toggle, .nav-command-trigger, .shell .mobile-search-trigger) { display: none !important; }
   html[data-theme="crystal"] .bottom-nav {
-    display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+    display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
     padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: rgba(5, 10, 18, .92);
     border-top: 1px solid var(--cx-edge); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
   }

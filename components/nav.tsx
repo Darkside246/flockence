@@ -137,12 +137,14 @@ export function Nav() {
       {([["Dash", "/", "home"], ["Cameras", "/cameras", "camera"], ["Flocks", "/batches", "flock"], ["Houses", "/house", "house"]] as NavItem[]).map(([label, href, icon]) =>
         <Link key={href} href={href} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}><NavIcon name={icon}/><span>{label}</span></Link>
       )}
+      <button type="button" onClick={(event) => openSearch(event.currentTarget)} aria-label="Search Flockence"><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="7" cy="7" r="4.25"/><path d="m10.2 10.2 3.25 3.25"/></svg><span>Search</span></button>
       <button type="button" onClick={(event) => { drawerTrigger.current = event.currentTarget; setOpen(true); }} aria-label="More destinations" aria-expanded={open}>
         <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round"><circle cx="3.5" cy="8" r=".6"/><circle cx="8" cy="8" r=".6"/><circle cx="12.5" cy="8" r=".6"/></svg><span>More</span>
       </button>
     </nav>
 
     <button className="mobile-nav-toggle" aria-label="Open menu" onClick={(event) => { drawerTrigger.current = event.currentTarget; setOpen(true); }}>☰</button>
+    <button className="mobile-search-trigger" type="button" aria-label="Search Flockence" onClick={(event) => openSearch(event.currentTarget)}><svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="7" cy="7" r="4.25"/><path d="m10.2 10.2 3.25 3.25"/></svg></button>
     {open && <div className="drawer-backdrop" onClick={() => setOpen(false)} aria-hidden="true"/>}
     <aside className={`mobile-drawer${open ? " open" : ""}`} aria-label="Navigation menu" inert={!open}>
       <div className="drawer-head"><div className="brand-main"><div className="brand-mark">F</div><div><strong>Flockence</strong><p>Farmer operating system</p></div></div><button className="icon-button" aria-label="Close menu" onClick={() => { setOpen(false); drawerTrigger.current?.focus(); }}>×</button></div>

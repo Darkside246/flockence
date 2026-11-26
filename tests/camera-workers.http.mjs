@@ -168,7 +168,19 @@ try {
   assert.equal((await inspect(true, "https://other.example")).status, 403);
   assert.equal((await inspect(true, origin)).status, 502);
   assert.equal((await inspect(true, origin, "Farm A camera", penB.id)).status, 404);
-  const inspection = await inspect(true, origin, "Farm A camera", penA.id);
+  const assignCamera = (account, camera, penId, requestOrigin = origin) => fetch(origin + "/api/vision/cameras", {
+    method: "PUT", headers: { Cookie: cookies[account], Origin: requestOrigin, "Content-Type": "application/json" },
+    body: JSON.stringify({ camera, penId }),
+  });
+  assert.equal((await assignCamera(0, "Farm A camera", penA.id, "https://cross-origin.example")).status, 403);
+  assert.equal((await assignCamera(0, "Farm A camera", penB.id)).status, 404);
+  assert.equal((await assignCamera(1, "Farm A camera", penB.id)).status, 404);
+  const assigned = await assignCamera(0, "Farm A camera", penA.id);
+  assert.equal(assigned.status, 200);
+  assert.equal((await assigned.json()).pen.id, penA.id);
+  const listed = await fetch(origin + "/api/vision/cameras", { headers: { Cookie: cookies[0] } });
+  assert.equal((await listed.json())[0].pen.id, penA.id);
+  const inspection = await inspect(true, origin, "Farm A camera");
   assert.equal(inspection.status, 201);
   const saved = await inspection.json();
   assert.equal(saved.analysis.summary, "Inspection test result.");
@@ -209,6 +221,7 @@ try {
   assert.equal(report.inspections.length, 2);
   assert.equal(report.inspections[0].status, "WARNING");
   assert.equal(report.farmContext, null);
+  assert.equal((await assignCamera(0, "Farm A camera", null)).status, 200);
   assert.equal("imageUrl" in report.inspections[0], false);
   assert.equal((await signedRequest(ids[0], validBody)).status, 409);
   assert.equal((await signedRequest(ids[1], validBody)).status, 400);
@@ -235,6 +248,10 @@ try {
     return prisma.batch.create({ data: { name: "Offline test flock", startDate: new Date("2020-01-01"),
       initialChicks: 20, chickCostMinor: 0, status: "ACTIVE" } });
   });
+  const laying = await runAsFarm(ids[0], () => prisma.batch.create({ data: {
+    name: "Test layer flock", startDate: new Date("2020-01-01"), initialChicks: 12, chickCostMinor: 0,
+    status: "ACTIVE", productionType: "LAYER", layerStage: "LAYING", species: "CHICKEN",
+  } }));
   assert.equal((await list(0, ids[1])).status, 403);
   const workspace = await fetch(origin + "/api/offline/workspace", { headers: headerFor(0) }).then((response) => response.json());
   assert.equal(workspace.flocks[0].id, flock.id);
@@ -250,6 +267,47 @@ try {
   assert.equal((await submit(0, { ...mortality, quantity: 3 })).status, 409);
   assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 1);
   assert.equal(await runAsFarm(ids[0], () => prisma.birdCount.count({ where: { batchId: flock.id } })), 1);
+
+  const weight = { batchId: flock.id, date: workspace.today, quantity: 5, avgWeightKg: 1.3,
+    scope: "INDIVIDUAL", offline: { ...workspace.scope, id: randomUUID() } };
+  const submitWeight = (index, data) => fetch(origin + "/api/weights", {
+    method: "POST", headers: headerFor(index), body: JSON.stringify(data),
+  });
+  assert.equal((await submitWeight(1, weight)).status, 403);
+  const weightReceipts = await Promise.all([submitWeight(0, weight), submitWeight(0, weight)]);
+  assert.deepEqual(weightReceipts.map(response => response.status), [201, 201]);
+  const [weightA, weightB] = await Promise.all(weightReceipts.map(response => response.json()));
+  assert.equal(weightA.id, weightB.id);
+  assert.equal((await submitWeight(0, { ...weight, avgWeightKg: 1.6 })).status, 409);
+  assert.equal((await submitWeight(0, { ...weight, offline: { ...weight.offline, id: randomUUID() } })).status, 409);
+
+  const eggs = { batchId: laying.id, date: workspace.today, liveHens: 10, totalEggs: 7, saleableEggs: 6,
+    dirtyEggs: 1, crackedEggs: 0, floorEggs: 0, rejectedEggs: 0, grades: [{ grade: "UNGRADED", quantity: 6 }],
+    offline: { ...workspace.scope, id: randomUUID() },
+  };
+  const submitEggs = (index, data) => fetch(origin + "/api/egg-collections", {
+    method: "POST", headers: headerFor(index), body: JSON.stringify(data),
+  });
+  assert.equal((await submitEggs(1, eggs)).status, 403);
+  const eggReceipts = await Promise.all([submitEggs(0, eggs), submitEggs(0, eggs)]);
+  assert.deepEqual(eggReceipts.map(response => response.status), [200, 200]);
+  const [eggsA, eggsB] = await Promise.all(eggReceipts.map(response => response.json()));
+  assert.equal(eggsA.id, eggsB.id);
+  assert.equal((await submitEggs(0, { ...eggs, liveHens: 9 })).status, 409);
+  assert.equal((await submitEggs(0, { ...eggs, offline: { ...eggs.offline, id: randomUUID() } })).status, 409);
+  const previousDay = new Date(Date.parse(workspace.today) - 86400000).toISOString().slice(0, 10);
+
+  const feed = { batchId: flock.id, date: workspace.today, feedKg: 3.25, offline: { ...workspace.scope, id: randomUUID() } };
+  const submitFeed = (index, data) => fetch(origin + "/api/daily-flock-check", {
+    method: "POST", headers: headerFor(index), body: JSON.stringify(data),
+  });
+  assert.equal((await submitFeed(1, feed)).status, 403);
+  const feedResponses = await Promise.all([submitFeed(0, feed), submitFeed(0, feed)]);
+  assert.deepEqual(feedResponses.map(response => response.status), [201, 201]);
+  const [feedA, feedB] = await Promise.all(feedResponses.map(response => response.json()));
+  assert.equal(feedA.id, feedB.id);
+  assert.equal((await submitFeed(0, { ...feed, feedKg: 3.5 })).status, 409);
+  assert.equal((await submitFeed(0, { ...feed, offline: { ...feed.offline, id: randomUUID() } })).status, 409);
 
   if (process.env.FLOCKENCE_BROWSER_MODULE) {
     const { chromium } = createRequire(import.meta.url)(process.env.FLOCKENCE_BROWSER_MODULE);
@@ -269,13 +327,40 @@ try {
       await page.locator("#notes").fill("private offline fixture");
       await page.locator("#save").click();
       await page.getByText("Saved on this device. Waiting to sync.").waitFor();
+      await page.selectOption("#record-kind", "weight");
+      await page.selectOption("#flock", flock.id);
+      await page.locator("#quantity").fill("3");
+      await page.locator("#average-weight").fill("1.2");
+      await page.locator("#save").click();
+      await page.getByText(/Live weight.*Waiting to sync/).waitFor();
+      await page.selectOption("#record-kind", "eggs");
+      await page.selectOption("#flock", laying.id);
+      await page.locator("#date").fill(previousDay);
+      await page.locator("#hens").fill("10");
+      await page.locator("#saleable-eggs").fill("6");
+      await page.locator("#save").click();
+      await page.getByText(/Egg collection.*Waiting to sync/).waitFor();
+      await page.selectOption("#record-kind", "feed");
+      await page.selectOption("#flock", flock.id);
+      await page.locator("#date").fill(previousDay);
+      await page.locator("#feed-weight").fill("2.5");
+      await page.locator("#save").click();
+      await page.getByText(/Feed consumption.*Waiting to sync/).waitFor();
       await page.reload();
       await page.locator("#passphrase").fill("test-device-research-only-123");
       await page.locator("#unlock-button").click();
-      await page.getByText(/Offline test flock.*Waiting to sync/).waitFor();
+      await page.getByText(/Mortality.*Waiting to sync/).waitFor();
+      await page.getByText(/Live weight.*Waiting to sync/).waitFor();
+      await page.getByText(/Egg collection.*Waiting to sync/).waitFor();
+      await page.getByText(/Feed consumption.*Waiting to sync/).waitFor();
       await context.setOffline(false);
       await page.getByText("No entries waiting to sync.").waitFor();
       assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
+      assert.equal(await runAsFarm(ids[0], () => prisma.weightRecord.count({ where: { batchId: flock.id } })), 2);
+
+      assert.equal(await runAsFarm(ids[0], () => prisma.eggCollection.count({ where: { batchId: laying.id } })), 2);
+
+      assert.equal(await runAsFarm(ids[0], () => prisma.dailyFlockCheck.count({ where: { batchId: flock.id } })), 2);
 
       let blink = "disconnected";
       await page.route("**/api/cameras/status", (route) => route.fulfill({ json: {
@@ -320,6 +405,13 @@ try {
       await palette.getByRole("link", { name: /Cameras/i }).waitFor();
       await page.keyboard.press("Escape");
       await palette.waitFor({ state: "hidden" });
+      await page.setViewportSize({ width: 390, height: 844 });
+      const mobileSearch = page.getByRole("button", { name: "Search Flockence", exact: true });
+      await mobileSearch.click();
+      await palette.waitFor({ state: "visible" });
+      await page.keyboard.press("Escape");
+      await palette.waitFor({ state: "hidden" });
+      await page.setViewportSize({ width: 1280, height: 900 });
       const provider = page.getByLabel("Camera provider");
       await provider.selectOption("blink");
       await page.getByLabel("Blink email").fill("blink-fixture@example.test");
@@ -350,7 +442,12 @@ try {
     server.closeAllConnections();
     server.close();
   }
-  for (const farmId of ids) await runAsFarm(farmId, () => prisma.farm.deleteMany({ where: { id: farmId } }));
+  for (const farmId of ids) {
+    await runAsFarm(farmId, async () => {
+      await prisma.inventoryItem.deleteMany({ where: { product: { farmId } } });
+      await prisma.farm.deleteMany({ where: { id: farmId } });
+    });
+  }
   await prisma.$disconnect();
   await rm(visionStorage, { recursive: true, force: true });
 }

@@ -3,8 +3,7 @@
 Use an authenticated WhatsApp Operator Mode session for the linked Oriya
 business on the premium Flockence plan. In Farm Vision, a farm owner or
 manager can select an existing pen before saving a camera or uploaded
-inspection. Assign the pen when inspecting it. Past unassigned
-inspections stay unassigned.
+inspection. Camera inspections use the saved farm camera assignment when available. Past unassigned inspections stay unassigned.
 
 | Command | Result |
 | --- | --- |

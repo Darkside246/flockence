@@ -6,13 +6,13 @@
   <meta name="theme-color" content="#f7f8f4">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="stylesheet" href="/offline.css">
-  <title>Offline mortality · Flockence</title>
+  <title>Offline farm records · Flockence</title>
 </head>
 <body>
   <main>
     <header>
       <a href="/">Flockence</a>
-      <h1>Offline mortality</h1>
+      <h1>Offline farm records</h1>
       <p id="connection" aria-live="polite"></p>
     </header>
     <section>
@@ -27,16 +27,45 @@
         <h2 id="farm"></h2>
         <p id="last-sync"></p>
         <form id="entry">
+          <label for="record-kind">Record type</label>
+          <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option><option value="feed">Feed consumption</option></select>
           <label for="flock">Flock</label>
           <select name="batchId" id="flock" required></select>
           <label for="date">Date</label>
           <input name="date" id="date" type="date" required>
-          <label for="quantity">Birds lost</label>
+          <div id="bird-fields">
+          <label for="quantity" id="quantity-label">Birds lost</label>
           <input name="quantity" id="quantity" type="number" min="1" max="2147483647" inputmode="numeric" required>
+          </div>
+          <div id="weight-fields" hidden>
+            <label for="average-weight">Average weight per bird (kg)</label>
+            <input name="avgWeightKg" id="average-weight" type="number" min="0.001" max="100" step="0.001" inputmode="decimal" disabled>
+          </div>
+          <div id="feed-fields" hidden>
+            <label for="feed-weight">Feed consumed (kg)</label>
+            <input name="feedKg" id="feed-weight" type="number" min="0" max="999999999" step="0.001" inputmode="decimal" disabled>
+          </div>
+          <fieldset id="egg-fields" hidden disabled>
+            <legend>Daily collection</legend>
+            <label for="hens">Live hens</label>
+            <input id="hens" name="liveHens" type="number" min="1" max="2147483647" inputmode="numeric" required>
+            <label for="saleable-eggs">Saleable eggs (recorded as ungraded)</label>
+            <input id="saleable-eggs" name="saleableEggs" type="number" min="0" max="2147483647" inputmode="numeric" required>
+            <label for="dirty-eggs">Dirty eggs</label>
+            <input id="dirty-eggs" name="dirtyEggs" type="number" min="0" max="2147483647" inputmode="numeric" value="0" required>
+            <label for="cracked-eggs">Cracked eggs</label>
+            <input id="cracked-eggs" name="crackedEggs" type="number" min="0" max="2147483647" inputmode="numeric" value="0" required>
+            <label for="floor-eggs">Floor eggs</label>
+            <input id="floor-eggs" name="floorEggs" type="number" min="0" max="2147483647" inputmode="numeric" value="0" required>
+            <label for="rejected-eggs">Rejected eggs</label>
+            <input id="rejected-eggs" name="rejectedEggs" type="number" min="0" max="2147483647" inputmode="numeric" value="0" required>
+          </fieldset>
+          <div id="mortality-fields">
           <label for="reason">Reason (optional)</label>
           <input name="reason" id="reason" maxlength="120">
           <label for="notes">Notes (optional)</label>
           <textarea name="notes" id="notes" maxlength="1000" rows="2"></textarea>
+          </div>
           <button id="save" type="submit">Save on this device</button>
         </form>
         <h2>Pending entries</h2>

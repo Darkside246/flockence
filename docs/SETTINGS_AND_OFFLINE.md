@@ -13,7 +13,7 @@ The production schema still needs its reviewed migration baseline.
 | Account and team | Existing account and session tools. Owners manage membership. Settings link to those tools. |
 | Farm preferences | Owners and managers can edit. Existing roles can read. The server saves only the allowed fields in a transaction and rejects a stale form. |
 | Platform | Separate, read-only diagnostics. Access requires an exact application user ID in server-only `FLOCKENCE_PLATFORM_ADMIN_IDS`. Farm roles and plans grant no platform access. Global configuration changes still use the VPS and Oriya administration. |
-| Free | Farm operations, basic reports and offline mortality recording use existing server roles without a premium check. |
+| Free | Farm operations, basic reports and offline mortality, live weights, egg collection and feed consumption use existing server roles without a premium check. |
 | Premium | Camera routes, gateway and video evidence access, new AI vision inspections and thermometer intake use a shared server gate. Free members cannot call those APIs directly. Farm exports and past inspection records remain available according to farm roles. |
 | Linked plan | Oriya’s signed entitlement check is the source of truth. It verifies the ready farm link in the business scope. Results are cached per link in server memory for up to 30 seconds. No provider secrets or billing records reach the browser. |
 
@@ -37,7 +37,7 @@ This slice introduces no new Prisma schema changes. Its base still contains
 the assessment migration from PR #13 and must follow that release's staging
 procedure.
 
-## Offline mortality
+## Offline mortality, live weights, egg collection and feed consumption
 
 Open Storage & Sync online to prepare the browser using a strong, separate
 device passphrase. The service worker caches a generic public HTML shell and
@@ -70,7 +70,7 @@ and browser storage limits. The staging workflow must use disposable
 accounts and a protected restoration of production schema when rehearsing
 deployment.
 
-Extend the outbox to independent feed, weight, egg and inspection events next.
+Live weights sync as sample measurements. A retried event is idempotent, and an existing measurement for the same flock, date and type remains in place for human review. Offline egg collections save saleable eggs as ungraded and retain the existing layer-stage, withdrawal and inventory checks. A pre-existing collection for the same day remains in place. Offline feed consumption can create the first daily check for a flock and date. Existing checks or feed records are held for review. Offline inspection events are still outstanding.
 Add controlled reconciliation before queuing shared inventory or financial
 updates. Add attachments, secure recovery/import and additional farm context
 after testing quotas and shared devices. Keep the same authenticated
