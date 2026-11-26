@@ -4,7 +4,8 @@ import { Nav } from "@/components/nav";
 
 type Camera = { name: string; source: "blink" | "rtsp"; type: string | null; battery: string | number | null; armed: boolean | null; motionDetected: boolean | null; live: boolean; recording?: boolean };
 type Clip = { id: string; camera: string; source: "blink" | "rtsp" | "import"; createdAt: string; media: string; thumbnail: string | null };
-type Status = { connected: boolean; pending2fa: boolean; ffmpeg: boolean };
+type Status = { available: boolean; canManage: boolean; networkCameras: boolean; connected?: boolean; pending2fa?: boolean; ffmpeg?: boolean };
+type Provider = "blink" | "wyze" | "network";
 type Tab = "live" | "stills" | "recordings";
 
 const api = (p: string) => `/api/cameras/${p}`;
@@ -17,12 +18,12 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
   return d as T;
 }
 
-function ConnectCard({ status, onDone }: { status: Status; onDone: () => void }) {
+function ConnectCard({ status, onDone }: { status: Status; onDone: () => Promise<void> }) {
   const [username, setUsername] = useState(""), [password, setPassword] = useState(""), [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const post = async (path: string, body: object) => {
     setBusy(true); setError("");
-    try { await json(api(path), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); setPassword(""); setPin(""); onDone(); }
+    try { await json(api(path), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); await onDone(); }
     catch (e) {
       const message = e instanceof Error ? e.message : "Failed";
       // A verification error can mean the sidecar cleared an MFA challenge
@@ -35,7 +36,7 @@ function ConnectCard({ status, onDone }: { status: Status; onDone: () => void })
         setError(message);
       }
     }
-    finally { setBusy(false); }
+    finally { setPassword(""); setPin(""); setBusy(false); }
   };
   return <div className="card"><div className="section-head"><div><h3>Connect Blink</h3><p>Owner only. Your Blink password is sent once to the local camera service and is not stored; only a session token is kept.</p></div></div>
     {status.pending2fa
@@ -316,30 +317,47 @@ function ManageCameras({ cameras, onChange }: { cameras: Camera[]; onChange: () 
 
 export default function CamerasPage() {
   const [status, setStatus] = useState<Status | null>(null), [cameras, setCameras] = useState<Camera[]>([]), [error, setError] = useState(""), [tab, setTab] = useState<Tab>("live"), [selected, setSelected] = useState("");
+  const [provider, setProvider] = useState<Provider | null>(null);
   const load = useCallback(async () => {
     try {
       const s = await json<Status>(api("status")); setStatus(s); setError("");
+      if (!s.available) { setCameras([]); return; }
+      if (s.pending2fa) setProvider("blink");
       const c = await json<Camera[]>(api("cameras")); setCameras(c); const wanted = new URLSearchParams(window.location.search).get("camera"); setSelected((cur) => cur || (wanted && c.some((x) => x.name === wanted) ? wanted : c[0]?.name) || "");
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to reach the camera service."); }
+    } catch (e) { setStatus(null); setCameras([]); setError(e instanceof Error ? e.message : "Unable to reach the camera service."); }
   }, []);
   useEffect(() => { load(); }, [load]);
   return <div className="shell"><header className="topbar"><div className="brand"><div><div className="hero-kicker">Site security</div><h1>Cameras</h1><p>Live view, latest pictures and recordings from Blink and local network cameras.</p></div><span className="badge">LIVE · STILLS · RECORDINGS</span></div></header><Nav /><main className="main">
-    {error && <div className="card" role="alert"><p>{error}</p><p>Start the camera service from services/blink (see its README) and set BLINK_SIDECAR_TOKEN.</p></div>}
-    {status && <>
-      {!status.connected && <ConnectCard status={status} onDone={load} />}
+    {error && <div className="card" role="alert"><p>{error}</p></div>}
+    {status?.canManage && <>
+      <section className="card" aria-label="Camera brand">
+        <div className="section-head"><div><h2>Connect a camera</h2><p>Choose the brand or connection type for this farm.</p></div></div>
+        <div className="segmented">
+          {([["blink", "Blink"], ["wyze", "Wyze"], ["network", "Other network cameras"]] as const).map(([id, label]) =>
+            <button key={id} type="button" aria-pressed={provider === id} className={provider === id ? "selected" : ""} onClick={() => setProvider(id)}>{label}</button>
+          )}
+        </div>
+        {provider === "blink" && !status.available && <p>Blink setup is waiting for this farm’s private camera service.</p>}
+        {provider === "blink" && status.connected && <p>Blink is connected to this farm.</p>}
+        {provider === "wyze" && <p>Wyze cloud connection is unavailable. Check Wyze’s <a href="https://support.wyze.com/hc/en-us/articles/360026245231-Wyze-Cam-RTSP" target="_blank" rel="noopener noreferrer">camera model and RTSP instructions</a> for a network connection.</p>}
+        {provider === "network" && !status.networkCameras && <p>A network camera needs a private gateway for this farm.</p>}
+      </section>
+      {provider === "blink" && status.available && !status.connected && <ConnectCard status={status} onDone={load} />}
+      {(provider === "network" || provider === "wyze") && status.available && status.networkCameras && <ManageCameras cameras={cameras} onChange={load} />}
+    </>}
+    {status?.available && <>
       {cameras.length === 0 && <>
-        <div className="card"><p>No cameras are connected yet. Connect your Blink account above, add a local RTSP camera below, or import clips you downloaded from the Blink app.</p></div>
+        <div className="card"><p>No cameras are connected yet. A farm owner can connect a camera or add recordings.</p></div>
         <div style={{ marginTop: 16 }}><Recordings cameras={cameras} /></div>
       </>}
       {cameras.length > 0 && <>
         <div className="segmented" style={{ marginBottom: 18 }}>{(["live", "stills", "recordings"] as Tab[]).map((t) => <button key={t} className={tab === t ? "selected" : ""} onClick={() => setTab(t)}>{t === "live" ? "Live" : t === "stills" ? "Pictures" : "Recordings"}</button>)}</div>
         {tab === "live" && <>
           <label>Camera<select value={selected} onChange={(e) => setSelected(e.target.value)}>{cameras.map((c) => <option key={c.name}>{c.name}</option>)}</select></label>
-          {selected && <LiveView key={selected} camera={selected} source={cameras.find((c) => c.name === selected)?.source ?? "rtsp"} ffmpeg={status.ffmpeg} />}</>}
+          {selected && <LiveView key={selected} camera={selected} source={cameras.find((c) => c.name === selected)?.source ?? "rtsp"} ffmpeg={Boolean(status.ffmpeg)} />}</>}
         {tab === "stills" && <Stills cameras={cameras} />}
         {tab === "recordings" && <Recordings cameras={cameras} />}
       </>}
-      <ManageCameras cameras={cameras} onChange={load} />
     </>}
   </main></div>;
 }

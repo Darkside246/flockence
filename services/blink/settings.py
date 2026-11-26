@@ -81,17 +81,17 @@ def credentials_encrypted() -> bool:
     return _credentials_key() is not None
 
 
-def seal_credentials(attrs: dict) -> str:
+def seal_credentials(attrs: dict, *, purpose: bytes = b"flockence-blink-credentials-v1") -> str:
     key = _credentials_key()
     if key is None:
         return json.dumps(attrs)
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     nonce = os.urandom(12)
-    sealed = AESGCM(key).encrypt(nonce, json.dumps(attrs).encode(), b"flockence-blink-credentials-v1")
+    sealed = AESGCM(key).encrypt(nonce, json.dumps(attrs).encode(), purpose)
     return "v1:" + base64.b64encode(nonce + sealed).decode()
 
 
-def open_credentials(text: str) -> tuple[dict, bool]:
+def open_credentials(text: str, *, purpose: bytes = b"flockence-blink-credentials-v1") -> tuple[dict, bool]:
     """The saved login, and whether it was stored in plain text (so the caller can rewrite it encrypted)."""
     text = text.strip()
     if not text.startswith("v1:"):
@@ -101,7 +101,7 @@ def open_credentials(text: str) -> tuple[dict, bool]:
         raise RuntimeError("The saved Blink login is encrypted but BLINK_CREDENTIALS_KEY is not set")
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     blob = base64.b64decode(text[3:])
-    plain = AESGCM(key).decrypt(blob[:12], blob[12:], b"flockence-blink-credentials-v1")
+    plain = AESGCM(key).decrypt(blob[:12], blob[12:], purpose)
     return json.loads(plain), False
 
 

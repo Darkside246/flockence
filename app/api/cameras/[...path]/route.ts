@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
-import { blinkConfigured, blinkFetch } from "@/lib/blink-sidecar";
-import { auditCameraAction, cameraRequestAllowed, camerasBelongToThisFarm, cameraViewRoles, hardenCameraHeaders } from "@/lib/camera-guard";
+import { blinkFetch, cameraWorker } from "@/lib/blink-sidecar";
+import { auditCameraAction, cameraRequestAllowed, cameraViewRoles, hardenCameraHeaders } from "@/lib/camera-guard";
 
 // Allow-listed pass-through to the camera sidecar. Anything not matched here is a 404,
 // so the sidecar's surface is never exposed wholesale.
@@ -37,15 +37,33 @@ const tooMany = () => NextResponse.json({ error: "Too many camera requests. Wait
 export async function GET(request: Request, ctx: Ctx) {
   const session = await currentUserOrRoleResponse(request, cameraViewRoles());
   if (session.response) return session.response;
-  if (!camerasBelongToThisFarm()) return Response.json({ error: "Cameras are not set up for this farm yet." }, { status: 403, headers: { "Cache-Control": "no-store, private" } });
   if (!cameraRequestAllowed(session.user.id)) return tooMany();
   const segments = (await ctx.params).path;
   const path = segments.join("/");
   if (!matches(VIEW_GET, path)) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  if (!blinkConfigured()) return notConfigured();
+  const worker = cameraWorker();
+  if (!worker) {
+    if (path === "status" && session.user.role === "OWNER") {
+      return NextResponse.json({ available: false, canManage: true, networkCameras: false }, {
+        headers: { "Cache-Control": "no-store, private" },
+      });
+    }
+    return notConfigured();
+  }
   const range = request.headers.get("range");
   try {
-    return relay(await blinkFetch(`/${segments.map(encodeURIComponent).join("/")}${new URL(request.url).search}`, { headers: range ? { range } : {} }));
+    const upstream = await blinkFetch(`/${segments.map(encodeURIComponent).join("/")}${new URL(request.url).search}`, { headers: range ? { range } : {} });
+    if (path === "status" && upstream.ok) {
+      const status = await upstream.json();
+      const canManage = session.user.role === "OWNER";
+      return NextResponse.json({
+        available: true, canManage, networkCameras: worker.networkCameras,
+        connected: status.connected === true,
+        pending2fa: canManage && status.pending2fa === true,
+        ffmpeg: status.ffmpeg === true,
+      }, { headers: { "Cache-Control": "no-store, private" } });
+    }
+    return relay(upstream);
   } catch {
     return notRunning();
   }
@@ -58,9 +76,20 @@ async function mutate(request: Request, ctx: Ctx, method: "POST" | "DELETE", own
   if (!owner && !matches(manageList, path)) return NextResponse.json({ error: "Not found." }, { status: 404 });
   const session = await currentUserOrRoleResponse(request, owner ? ["OWNER"] : ["OWNER", "MANAGER"]);
   if (session.response) return session.response;
-  if (!camerasBelongToThisFarm()) return Response.json({ error: "Cameras are not set up for this farm yet." }, { status: 403, headers: { "Cache-Control": "no-store, private" } });
   if (!cameraRequestAllowed(session.user.id)) return tooMany();
-  if (!blinkConfigured()) return notConfigured();
+  const worker = cameraWorker();
+  if (!worker) return notConfigured();
+  if (path.startsWith("rtsp/") && !worker.networkCameras) {
+    return NextResponse.json({ error: "Network cameras require a private farm gateway." }, { status: 403 });
+  }
+  if (path.startsWith("auth/")) {
+    const origin = process.env.APP_URL;
+    let trustedOrigin: string | undefined;
+    try { trustedOrigin = origin ? new URL(origin).origin : undefined; } catch { /* reject invalid configuration */ }
+    if (!trustedOrigin || request.headers.get("origin") !== trustedOrigin) {
+      return NextResponse.json({ error: "Camera sign-in must come from Flockence." }, { status: 403 });
+    }
+  }
   const live = /^cameras\/([^/]+)\/live\/(start|stop)$/.exec(path);
   if (live) await auditCameraAction(session.user.id, `CAMERA_LIVE_${live[2].toUpperCase()}`, decodeURIComponent(live[1]));
   else if (path === "imports/clips" || method === "DELETE") await auditCameraAction(session.user.id, method === "DELETE" ? "CAMERA_CLIP_DELETE" : "CAMERA_CLIP_IMPORT", path);
