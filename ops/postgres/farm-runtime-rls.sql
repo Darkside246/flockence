@@ -25,7 +25,7 @@ GRANT SELECT ("id", "batchId", "sentQuantity", "date", "createdAt") ON public."S
 GRANT SELECT ("id", "farmId", "batchId", "bagSizeKg", "quantityBags") ON public."FeedPurchase" TO flockence_oriya_reader;
 GRANT SELECT ("id", "batchId", "quantityKg", "date") ON public."FeedUsage" TO flockence_oriya_reader;
 GRANT SELECT ("id", "farmId", "status") ON public."HealthCase" TO flockence_oriya_reader;
-GRANT SELECT ("id", "farmId", "sensor", "readAt", "temperatureC", "humidityPercent") ON public."ThermometerReading" TO flockence_oriya_reader;
+GRANT SELECT ("id", "farmId", "sensor", "readAt", "temperatureC", "humidityPercent", "source") ON public."ThermometerReading" TO flockence_oriya_reader;
 
 DO $policies$
 DECLARE

@@ -10,6 +10,7 @@ import { auditCameraAction, cameraRequestAllowed, cameraViewRoles, hardenCameraH
 // so the sidecar's surface is never exposed wholesale.
 const VIEW_GET = [
   /^status$/, /^blink\/settings$/, /^cameras$/, /^cameras\/[^/]+\/snapshot$/, /^clips$/,
+  /^archives$/, /^archives\/[a-f0-9]{64}\.mp4$/,
   /^media\/(clip|thumb)$/, /^live\/[A-Za-z0-9_]+\/[A-Za-z0-9_.-]+$/,
   /^recordings\/[A-Za-z0-9_]+\/[0-9]{8}-[0-9]{6}\.mp4$/,
   /^imports\/[A-Za-z0-9_]+\/[0-9]{8}-[0-9]{6}-[0-9a-f]{6}\.mp4$/,
@@ -24,7 +25,7 @@ const matches = (list: RegExp[], p: string) => list.some((r) => r.test(p));
 
 async function relay(upstream: Response) {
   const headers = new Headers();
-  for (const h of ["content-type", "content-range", "accept-ranges", "content-length"]) {
+  for (const h of ["content-type", "content-range", "accept-ranges", "content-length", "content-disposition"]) {
     const v = upstream.headers.get(h);
     if (v) headers.set(h, v);
   }

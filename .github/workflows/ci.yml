@@ -83,6 +83,7 @@ jobs:
           psql -X "$DATABASE_URL" --file tests/farm-rls.sql
           node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/camera-workers.mjs
           python3 -m compileall -q services/blink
+          python3 -m unittest discover -s services/blink/tests -p test_clip_archive.py
 
       - name: Type check
         run: |
@@ -103,6 +104,7 @@ jobs:
           CAMERA_GATEWAY_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
           DEVICE_GATEWAY_DATABASE_URL: postgresql://flockence_device_gateway:device-ci-only@localhost:5432/flockence_ci_test
           DEVICE_GATEWAY_KEY: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBE
+          FARM_RLS_DATABASE_URL: postgresql://flockence_tenant:tenant-ci-only@localhost:5432/flockence_ci_test
           CUSTOMER_RLS_DATABASE_URL: postgresql://flockence_customer_runtime:customer-ci-only@localhost:5432/flockence_ci_test
           ORIYA_RLS_DATABASE_URL: postgresql://flockence_oriya_reader:oriya-ci-only@localhost:5432/flockence_ci_test
         run: |
@@ -113,6 +115,9 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_customer_runtime LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'customer-ci-only'"
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_oriya_reader LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'oriya-ci-only'"
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/farm-runtime-rls.sql
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_tenant LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'tenant-ci-only'"
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/farm-tenant-access.sql
+          node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/farm-isolation.db.mjs
           node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-gateway.http.mjs
           python3 -m py_compile scripts/push-camera-frame.py scripts/push-device-gateway.py
           python3 tests/device_gateway_edge.py
