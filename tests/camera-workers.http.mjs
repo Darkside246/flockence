@@ -1,0 +1,91 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { createServer } from "node:http";
+import { setTimeout as sleep } from "node:timers/promises";
+
+const db = new URL(process.env.DATABASE_URL ?? "postgresql://localhost");
+assert.ok(db.hostname === "localhost" || db.hostname === "127.0.0.1");
+assert.match(db.pathname, /^\/[A-Za-z0-9_]+_test$/);
+
+const { prisma } = await import("../lib/prisma.ts");
+const { runAsFarm } = await import("../lib/farm-scope.ts");
+const { createSession, SESSION_COOKIE } = await import("../lib/auth.ts");
+
+const origin = "http://127.0.0.1:3100";
+const ids = ["camera-ci-a", "camera-ci-b", "camera-ci-unconfigured"];
+const servers = [];
+let app;
+
+async function worker(label, token) {
+  const server = createServer((req, res) => {
+    res.setHeader("Content-Type", "application/json");
+    if (req.headers["x-sidecar-token"] !== token) {
+      res.writeHead(401).end("{}");
+      return;
+    }
+    if (req.url === "/cameras") {
+      res.end(JSON.stringify([{ name: label }]));
+    } else if (req.method === "POST" && req.url === "/auth/login") {
+      req.resume();
+      res.end(JSON.stringify({ connected: false, pending2fa: true }));
+    } else {
+      res.writeHead(404).end("{}");
+    }
+  });
+  servers.push(server);
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  return { url: "http://127.0.0.1:" + server.address().port, token };
+}
+
+try {
+  const cookies = await Promise.all(ids.map((farmId, index) => runAsFarm(farmId, async () => {
+    await prisma.farm.create({ data: { id: farmId, name: farmId } });
+    const user = await prisma.user.create({
+      data: { farmId, name: "Test farm owner", email: "camera-ci-" + index + "@example.test", role: "OWNER" },
+    });
+    const { token } = await createSession(user.id);
+    return SESSION_COOKIE + "=" + encodeURIComponent(token);
+  })));
+  const a = await worker("Farm A camera", "a".repeat(48));
+  const b = await worker("Farm B camera", "b".repeat(48));
+  app = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], {
+    stdio: "inherit",
+    env: { ...process.env, APP_URL: origin, FLOCKENCE_CAMERA_WORKERS: JSON.stringify({ [ids[0]]: a, [ids[1]]: b }) },
+  });
+  let ready = false;
+  for (let n = 0; n < 25; n++) {
+    const response = await fetch(origin + "/login", { signal: AbortSignal.timeout(1000) }).catch(() => null);
+    if (response?.ok) { ready = true; break; }
+    await sleep(500);
+  }
+  assert.ok(ready, "Flockence failed to start");
+  const list = (index, spoofedFarm) => fetch(origin + "/api/cameras/cameras", {
+    headers: { Cookie: cookies[index], "X-Flockence-Farm": spoofedFarm },
+  });
+  const results = await Promise.all([list(0, ids[1]), list(1, ids[0]), list(2, ids[0])]);
+  assert.deepEqual(results.map((response) => response.status), [200, 200, 503]);
+  assert.deepEqual(await results[0].json(), [{ name: "Farm A camera" }]);
+  assert.deepEqual(await results[1].json(), [{ name: "Farm B camera" }]);
+  assert.equal((await fetch(origin + "/api/cameras/cameras")).status, 401);
+
+  const login = (requestOrigin) => fetch(origin + "/api/cameras/auth/login", {
+    method: "POST",
+    headers: { Cookie: cookies[0], Origin: requestOrigin, "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "test@example.test", password: "disposable" }),
+  });
+  assert.equal((await login("https://cross-origin.example")).status, 403);
+  const challenge = await login(origin);
+  assert.equal(challenge.status, 200);
+  assert.equal((await challenge.json()).pending2fa, true);
+  console.log("Camera HTTP checks passed for two private workers and an unconfigured farm.");
+} finally {
+  app?.kill();
+  for (const server of servers) {
+    server.closeAllConnections();
+    server.close();
+  }
+  for (const farmId of ids) await runAsFarm(farmId, () => prisma.farm.deleteMany({ where: { id: farmId } }));
+  await prisma.$disconnect();
+}

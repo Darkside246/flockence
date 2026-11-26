@@ -78,6 +78,12 @@ jobs:
           set -o pipefail
           node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/farm-isolation.db.mjs 2>&1 | tee ci-farm-isolation.log
 
+      - name: Database row security and camera worker isolation
+        run: |
+          psql -X "$DATABASE_URL" --file tests/farm-rls.sql
+          node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/camera-workers.mjs
+          python3 -m compileall -q services/blink
+
       - name: Type check
         run: |
           set -o pipefail
@@ -87,6 +93,9 @@ jobs:
         run: |
           set -o pipefail
           npm run build 2>&1 | tee ci-build.log
+
+      - name: Exercise camera routing across signed-in farms
+        run: node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-workers.http.mjs
 
       - name: Upload diagnostics
         if: always()

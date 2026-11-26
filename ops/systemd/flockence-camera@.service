@@ -1,0 +1,29 @@
+[Unit]
+Description=Private Flockence camera worker on loopback port %i
+After=network.target
+
+[Service]
+Type=exec
+DynamicUser=yes
+User=flockcam-%i
+WorkingDirectory=/opt/flockence-camera-runtime/services/blink
+EnvironmentFile=/etc/flockence/camera-workers/%i.env
+Environment=BLINK_REQUIRE_ENCRYPTION=1
+Environment=BLINK_DISABLE_NETWORK_CAMERAS=1
+Environment=BLINK_DATA_DIR=/var/lib/flockence-camera-%i
+StateDirectory=flockence-camera-%i
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/opt/flockence-camera-runtime/venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port %i
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=10.0.0.0/8 100.64.0.0/10 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 fc00::/7 fe80::/10
+
+[Install]
+WantedBy=multi-user.target

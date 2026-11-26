@@ -107,6 +107,11 @@ async def lifespan(_: FastAPI):
     if len(TOKEN) < MIN_TOKEN_LENGTH:
         log.error("BLINK_SIDECAR_TOKEN is shorter than %d characters; replace it with a long random value", MIN_TOKEN_LENGTH)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    has_encryption = credentials_encrypted()
+    if os.environ.get("BLINK_REQUIRE_ENCRYPTION") == "1" and not has_encryption:
+        raise RuntimeError("A farm camera service requires BLINK_CREDENTIALS_KEY")
+    if has_encryption:
+        rtsp.protect_saved_addresses()
     # One persistent session covers OAuth, MFA, token refresh and camera calls.
     # Recreating it between steps would lose the cookies/session state Blink expects.
     state.session = CurlCffiAiohttpAdapter(impersonate=BLINK_IMPERSONATE)
@@ -267,7 +272,6 @@ async def cameras():
             "temperature": a.get("temperature"),
             "armed": a.get("motion_enabled"),
             "motionDetected": a.get("motion_detected"),
-            "thumbnail": a.get("thumbnail"),
             "live": name in state.lives,
         })
     return out
