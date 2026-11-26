@@ -442,7 +442,12 @@ try {
     server.closeAllConnections();
     server.close();
   }
-  for (const farmId of ids) await runAsFarm(farmId, () => prisma.farm.deleteMany({ where: { id: farmId } }));
+  for (const farmId of ids) {
+    await runAsFarm(farmId, async () => {
+      await prisma.inventoryItem.deleteMany({ where: { product: { farmId } } });
+      await prisma.farm.deleteMany({ where: { id: farmId } });
+    });
+  }
   await prisma.$disconnect();
   await rm(visionStorage, { recursive: true, force: true });
 }
