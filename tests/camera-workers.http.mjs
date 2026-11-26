@@ -248,6 +248,10 @@ try {
     return prisma.batch.create({ data: { name: "Offline test flock", startDate: new Date("2020-01-01"),
       initialChicks: 20, chickCostMinor: 0, status: "ACTIVE" } });
   });
+  const laying = await runAsFarm(ids[0], () => prisma.batch.create({ data: {
+    name: "Test layer flock", startDate: new Date("2020-01-01"), initialChicks: 12, chickCostMinor: 0,
+    status: "ACTIVE", productionType: "LAYER", layerStage: "LAYING", species: "CHICKEN",
+  } }));
   assert.equal((await list(0, ids[1])).status, 403);
   const workspace = await fetch(origin + "/api/offline/workspace", { headers: headerFor(0) }).then((response) => response.json());
   assert.equal(workspace.flocks[0].id, flock.id);
@@ -277,6 +281,22 @@ try {
   assert.equal((await submitWeight(0, { ...weight, avgWeightKg: 1.6 })).status, 409);
   assert.equal((await submitWeight(0, { ...weight, offline: { ...weight.offline, id: randomUUID() } })).status, 409);
 
+  const eggs = { batchId: laying.id, date: workspace.today, liveHens: 10, totalEggs: 7, saleableEggs: 6,
+    dirtyEggs: 1, crackedEggs: 0, floorEggs: 0, rejectedEggs: 0, grades: [{ grade: "UNGRADED", quantity: 6 }],
+    offline: { ...workspace.scope, id: randomUUID() },
+  };
+  const submitEggs = (index, data) => fetch(origin + "/api/egg-collections", {
+    method: "POST", headers: headerFor(index), body: JSON.stringify(data),
+  });
+  assert.equal((await submitEggs(1, eggs)).status, 403);
+  const eggReceipts = await Promise.all([submitEggs(0, eggs), submitEggs(0, eggs)]);
+  assert.deepEqual(eggReceipts.map(response => response.status), [200, 200]);
+  const [eggsA, eggsB] = await Promise.all(eggReceipts.map(response => response.json()));
+  assert.equal(eggsA.id, eggsB.id);
+  assert.equal((await submitEggs(0, { ...eggs, liveHens: 9 })).status, 409);
+  assert.equal((await submitEggs(0, { ...eggs, offline: { ...eggs.offline, id: randomUUID() } })).status, 409);
+  const previousDay = new Date(Date.parse(workspace.today) - 86400000).toISOString().slice(0, 10);
+
   if (process.env.FLOCKENCE_BROWSER_MODULE) {
     const { chromium } = createRequire(import.meta.url)(process.env.FLOCKENCE_BROWSER_MODULE);
     const browser = await chromium.launch();
@@ -301,15 +321,25 @@ try {
       await page.locator("#average-weight").fill("1.2");
       await page.locator("#save").click();
       await page.getByText(/Live weight.*Waiting to sync/).waitFor();
+      await page.selectOption("#record-kind", "eggs");
+      await page.selectOption("#flock", laying.id);
+      await page.locator("#date").fill(previousDay);
+      await page.locator("#hens").fill("10");
+      await page.locator("#saleable-eggs").fill("6");
+      await page.locator("#save").click();
+      await page.getByText(/Egg collection.*Waiting to sync/).waitFor();
       await page.reload();
       await page.locator("#passphrase").fill("test-device-research-only-123");
       await page.locator("#unlock-button").click();
       await page.getByText(/Mortality.*Waiting to sync/).waitFor();
       await page.getByText(/Live weight.*Waiting to sync/).waitFor();
+      await page.getByText(/Egg collection.*Waiting to sync/).waitFor();
       await context.setOffline(false);
       await page.getByText("No entries waiting to sync.").waitFor();
       assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
       assert.equal(await runAsFarm(ids[0], () => prisma.weightRecord.count({ where: { batchId: flock.id } })), 2);
+
+      assert.equal(await runAsFarm(ids[0], () => prisma.eggCollection.count({ where: { batchId: laying.id } })), 2);
 
       let blink = "disconnected";
       await page.route("**/api/cameras/status", (route) => route.fulfill({ json: {

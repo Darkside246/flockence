@@ -53,6 +53,9 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (syncId && (avgWeightKg > 100 || Number(avgWeightKg.toFixed(3)) !== avgWeightKg)) {
+      return NextResponse.json({ error: "Offline live weights require kilograms to three decimal places or fewer." }, { status: 400 });
+    }
     if (!(WEIGHT_SCOPES as readonly string[]).includes(scope)) {
       return NextResponse.json({ error: "Select a supported weight scope." }, { status: 400 });
     }
@@ -81,7 +84,7 @@ export async function POST(request: Request) {
         const receipt = await tx.weightRecord.findUnique({ where: { id: syncId } });
         if (receipt) {
           if (receipt.batchId !== batchId || receipt.date.getTime() !== date.getTime() || receipt.scope !== scope
-            || receipt.liveOrDressed !== liveOrDressed || receipt.quantity !== quantity || receipt.avgWeightKg !== avgWeightKg) {
+            || receipt.liveOrDressed !== liveOrDressed || receipt.quantity !== quantity || !receipt.avgWeightKg.equals(avgWeightKg)) {
             throw new OfflineWeightConflict("This offline weight was already synced with different details.");
           }
           return { record: receipt, updated: false };

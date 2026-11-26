@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { offlineEventId } from "@/lib/offline-event";
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
@@ -58,6 +60,8 @@ export async function POST(request: Request) {
   try {
     await ensureFarm();
     const input = await request.json();
+    const syncId = input.offline === undefined ? undefined : offlineEventId(request, input.offline, session.user);
+    if (syncId === null) return NextResponse.json({ error: "Sign in as the original farm account to sync this entry." }, { status: 403 });
     const batchId = String(input.batchId ?? "").trim();
     if (!batchId) return NextResponse.json({ error: "Select a layer flock." }, { status: 400 });
 
@@ -76,28 +80,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "The collection date cannot be before this flock was placed." }, { status: 400 });
     }
     const endOfCollectionDay = new Date(date.getTime() + 86400000);
-    const [stageEventOnDate, nextStageEvent, anyStageEvents] = await Promise.all([
-      prisma.layerStageEvent.findFirst({
-        where: { farmId: currentFarmId(), batchId, date: { lt: endOfCollectionDay } },
-        orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-        select: { toStage: true },
-      }),
-      prisma.layerStageEvent.findFirst({
-        where: { farmId: currentFarmId(), batchId, date: { gte: endOfCollectionDay } },
-        orderBy: [{ date: "asc" }, { createdAt: "asc" }],
-        select: { fromStage: true },
-      }),
-      prisma.layerStageEvent.count({ where: { farmId: currentFarmId(), batchId } }),
-    ]);
-    const stageOnCollectionDate = stageEventOnDate?.toStage ??
-      nextStageEvent?.fromStage ??
-      (anyStageEvents === 0 ? batch.layerStage : null);
-    if (stageOnCollectionDate !== "LAYING") {
-      return NextResponse.json({
-        error: stageOnCollectionDate
-          ? `This flock was in the ${stageOnCollectionDate.replaceAll("_", " ").toLowerCase()} stage on the selected date. Egg collection is only available during the Laying stage.`
-          : "No recorded Laying stage covers this collection date. Check the flock stage history before saving.",
-      }, { status: 409 });
+    if (!syncId) {
+      const [stageEventOnDate, nextStageEvent, anyStageEvents] = await Promise.all([
+        prisma.layerStageEvent.findFirst({
+          where: { farmId: currentFarmId(), batchId, date: { lt: endOfCollectionDay } },
+          orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+          select: { toStage: true },
+        }),
+        prisma.layerStageEvent.findFirst({
+          where: { farmId: currentFarmId(), batchId, date: { gte: endOfCollectionDay } },
+          orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+          select: { fromStage: true },
+        }),
+        prisma.layerStageEvent.count({ where: { farmId: currentFarmId(), batchId } }),
+      ]);
+      const stageOnCollectionDate = stageEventOnDate?.toStage ??
+        nextStageEvent?.fromStage ??
+        (anyStageEvents === 0 ? batch.layerStage : null);
+      if (stageOnCollectionDate !== "LAYING") {
+        return NextResponse.json({
+          error: stageOnCollectionDate
+            ? `This flock was in the ${stageOnCollectionDate.replaceAll("_", " ").toLowerCase()} stage on the selected date. Egg collection is only available during the Laying stage.`
+            : "No recorded Laying stage covers this collection date. Check the flock stage history before saving.",
+        }, { status: 409 });
+      }
     }
 
     const validation = validateEggCollectionInput(input);
@@ -109,7 +115,18 @@ export async function POST(request: Request) {
       floorEggs, rejectedEggs, averageEggWeightG, notes, grades: gradeCounts,
     } = validation.value;
 
+    const receiptKey = syncId ? "OFFLINE_EGG_RECEIPT::" + syncId : null;
+    const payloadHash = receiptKey ? createHash("sha256")
+      .update(JSON.stringify([batchId, date.toISOString(), validation.value])).digest("hex") : null;
     const saved = await prisma.$transaction(async (tx) => {
+      if (receiptKey) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${receiptKey}, 0))::text`;
+        const receipt = await tx.setting.findUnique({ where: { farmId_key: { farmId: currentFarmId(), key: receiptKey } } });
+        if (receipt) {
+          if (receipt.value !== payloadHash) throw new Error("OFFLINE_EGG_CONFLICT: This entry already synced with different details.");
+          return { id: syncId };
+        }
+      }
       await lockFlockOperations(tx, [batchId]);
 
       const [currentBatch, currentStageEvent, nextStageEvent, currentStageEventCount] = await Promise.all([
@@ -154,6 +171,7 @@ export async function POST(request: Request) {
         where: { batchId_date: { batchId, date } },
         include: { grades: { include: { inventoryItem: true } } },
       });
+      if (syncId && existing) throw new Error("OFFLINE_EGG_CONFLICT: This flock already has a collection for that date. Review both records online.");
       // Once an egg collection is blocked by a withdrawal, it must never become
       // saleable again merely because a treatment was later marked completed.
       const applicableWithdrawals = withdrawalTreatments.filter((treatment) =>
@@ -171,7 +189,7 @@ export async function POST(request: Request) {
             data: { liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
           })
         : await tx.eggCollection.create({
-            data: { farmId: currentFarmId(), batchId, date, liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
+            data: { ...(syncId ? { id: syncId } : {}), farmId: currentFarmId(), batchId, date, liveHens, totalEggs, saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, withdrawalBlocked, withdrawalNotes, averageEggWeightG, notes },
           });
 
       const oldGrades = new Map((existing?.grades ?? []).map((row) => [row.grade as EggGrade, row]));
@@ -275,6 +293,9 @@ export async function POST(request: Request) {
         }
       }
 
+      if (receiptKey && payloadHash) {
+        await tx.setting.create({ data: { farmId: currentFarmId(), key: receiptKey, value: payloadHash } });
+      }
       return tx.eggCollection.findUniqueOrThrow({
         where: { id: collection.id },
         include: { batch: true, grades: { include: { inventoryItem: { include: { product: true } } }, orderBy: { grade: "asc" } } },
@@ -284,7 +305,7 @@ export async function POST(request: Request) {
     return NextResponse.json(saved, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save egg collection.";
-    const conflict = message.startsWith("EGG_STOCK_CORRECTION_BLOCKED") || message.startsWith("LAYER_STAGE_CONFLICT");
-    return NextResponse.json({ error: message }, { status: conflict ? 409 : 400 });
+    const conflict = message.startsWith("EGG_STOCK_CORRECTION_BLOCKED") || message.startsWith("LAYER_STAGE_CONFLICT") || message.startsWith("OFFLINE_EGG_CONFLICT:");
+    return NextResponse.json({ error: message.replace(/^OFFLINE_EGG_CONFLICT: /, "") }, { status: conflict ? 409 : 400 });
   }
 }
