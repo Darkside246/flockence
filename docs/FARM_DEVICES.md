@@ -14,13 +14,13 @@ The device database role is restricted to device gateway settings for the transa
 
 ## Link a farm gateway
 
-Keep the Home Assistant token in a separate mode-600 file on the farm. Use a dedicated Home Assistant account with only the access it needs, and keep the network hop private. The connector makes GET requests for the selected entities and does not forward Home Assistant credentials, entity attributes, or provider API keys to Flockence.
+Keep the Home Assistant token in a separate mode-600 file on the farm. Use a dedicated Home Assistant account with only the access it needs, and keep the network hop private. Connect over validated HTTPS across the LAN. A gateway and Home Assistant on the same host can use HTTP on loopback. The connector makes GET requests for the selected entities and does not forward Home Assistant credentials, entity attributes, or provider API keys to Flockence.
 
 Create a mode-600 devices.json file with the private IP of Home Assistant and only the chosen entities.
 
 ```json
 {
-  "home_assistant": "http://192.168.10.20:8123",
+  "home_assistant": "http://127.0.0.1:8123",
   "devices": [
     { "id": "barn-temp", "name": "Barn temperature", "kind": "temperature", "entity": "sensor.barn_temperature" },
     { "id": "water-leak", "name": "Water leak sensor", "kind": "leak", "entity": "binary_sensor.barn_leak" }

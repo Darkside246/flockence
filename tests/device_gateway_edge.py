@@ -28,7 +28,7 @@ class DeviceGatewayTest(unittest.TestCase):
     def test_provider_token_and_entity_details_stay_local(self):
         opener = Opener()
         config = {
-            "home_assistant": "http://192.168.10.20:8123",
+            "home_assistant": "https://192.168.10.20:8123",
             "devices": [{"id": "barn", "name": "Barn", "kind": "temperature", "entity": "sensor.private_barn_temperature"}],
         }
         devices = gateway.collect(config, "private-ha-token", opener)
@@ -36,7 +36,7 @@ class DeviceGatewayTest(unittest.TestCase):
         token = "dg1.farm-one." + "a" * 32 + "." + "b" * 43
         gateway.push(token, devices, opener)
         source, destination = opener.requests
-        self.assertEqual(source.full_url, "http://192.168.10.20:8123/api/states/sensor.private_barn_temperature")
+        self.assertEqual(source.full_url, "https://192.168.10.20:8123/api/states/sensor.private_barn_temperature")
         self.assertEqual(source.get_method(), "GET")
         self.assertEqual(source.get_header("Authorization"), "Bearer private-ha-token")
         self.assertTrue(destination.full_url.startswith("https://flockence.com/api/device-gateways/"))
@@ -47,7 +47,7 @@ class DeviceGatewayTest(unittest.TestCase):
         self.assertEqual(json.loads(destination.data)["devices"], devices)
 
     def test_external_hosts_and_mismatched_entities_are_rejected(self):
-        for address in ("https://example.test", "http://192.168.10.20/bad", "http://user@192.168.10.20"):
+        for address in ("https://example.test", "http://192.168.10.20", "https://192.168.10.20/bad", "https://user@192.168.10.20", "https://@192.168.10.20"):
             with self.assertRaises(ValueError):
                 gateway.ha_origin(address)
         opener = Opener()

@@ -12,7 +12,7 @@ import stat
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 PRIVATE_NETS = tuple(map(ip_network, ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7")))
 TOKEN = re.compile(r"dg1\.[A-Za-z0-9_-]{3,64}\.([a-f0-9]{32})\.[A-Za-z0-9_-]{43}")
@@ -43,11 +43,12 @@ def ha_origin(raw):
     url = urlsplit(raw)
     address = ip_address(url.hostname or "")
     if (
-        url.scheme not in ("http", "https") or url.username or url.password
+        url.scheme not in ("http", "https") or url.username is not None or url.password is not None
+        or (url.scheme == "http" and not address.is_loopback)
         or url.path not in ("", "/") or url.query or url.fragment
         or not (address.is_loopback or any(address in network for network in PRIVATE_NETS))
     ):
-        raise ValueError("Use a private Home Assistant IP address and optional port.")
+        raise ValueError("Use HTTPS for Home Assistant on the farm LAN. HTTP is allowed on the gateway loopback interface.")
     return f"{url.scheme}://{url.netloc}"
 
 
@@ -128,7 +129,7 @@ def main():
     config = json.loads(private_text(args.config, 12 * 1024))
     ha_token = private_text(args.ha_token, 4096)
     upload_token = private_text(args.upload_token, 256)
-    opener = build_opener(NoRedirect())
+    opener = build_opener(ProxyHandler({}), NoRedirect())
     push(upload_token, collect(config, ha_token, opener), opener)
 
 

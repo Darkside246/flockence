@@ -126,7 +126,7 @@ export default function DevicesPage() {
             <div className="section-head">
               <div><h3>{link.name}</h3>
                 {!link.observedAt && <p>Waiting for the first readings.</p>}
-                {link.observedAt && <p>{stale ? "Readings are stale. " : ""}Last update <time dateTime={link.observedAt}>{new Date(link.observedAt).toLocaleString()}</time></p>}
+                {link.observedAt && <p>{stale ? "Readings are stale. " : ""}Gateway last checked <time dateTime={link.observedAt}>{new Date(link.observedAt).toLocaleString()}</time></p>}
               </div>
               {registry.owner && <button className="button" type="button" disabled={busy} onClick={() => void disconnect(link)}>Disconnect gateway</button>}
             </div>
