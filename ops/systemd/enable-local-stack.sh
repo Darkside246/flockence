@@ -13,8 +13,8 @@ pid=$(systemctl show "$service" --property=MainPID --value)
 [[ $(systemctl show "$service" --property=User --value) == flockence ]]
 [[ $pid =~ ^[1-9][0-9]*$ ]] || { echo "Start the existing Flockence service before attaching its dependencies." >&2; exit 1; }
 
-# The database URL can come from systemd or Next's environment files. Return only the local port.
-port=$(/usr/local/bin/node - "$pid" "$app" <<'JS'
+# The database URL can come from systemd or Next's environment files. Return only its local address.
+address=$(/usr/local/bin/node - "$pid" "$app" <<'JS'
 const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const { parseEnv } = require("node:util");
@@ -32,13 +32,16 @@ try {
   if (!["postgres:", "postgresql:"].includes(url.protocol)
     || !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
     || url.searchParams.has("host")) throw new Error();
-  process.stdout.write(url.port || "5432");
+  process.stdout.write(url.hostname.replace(/^\[|\]$/g, "") + " " + (url.port || "5432"));
 } catch {
   console.error("The active release does not declare a supported local PostgreSQL address.");
   process.exit(1);
 }
 JS
 )
+read -r host port <<< "$address"
+[[ $host == localhost || $host == 127.0.0.1 || $host == ::1 ]]
+[[ $port =~ ^[0-9]+$ && -x /usr/bin/pg_isready ]]
 mapfile -t clusters < <(pg_lsclusters --no-header | awk -v port="$port" '$3 == port { print $1 ":" $2 }')
 if [[ ${#clusters[@]} != 1 || ! ${clusters[0]} =~ ^([0-9]+):([a-zA-Z0-9_]+)$ ]]; then
   echo "Could not identify one local PostgreSQL cluster for the active database port." >&2
@@ -58,21 +61,82 @@ if ! grep -Fxq "Wants=$camera" "/etc/systemd/system/$service.d/blink.conf" ||
   exit 1
 fi
 
-folder="/etc/systemd/system/$service.d"
-dropin="$folder/local-postgresql.conf"
-install -d -m 0755 "$folder"
-tmp=$(mktemp)
-trap 'rm -f -- "$tmp"' EXIT
-printf '[Unit]\nRequires=%s\nAfter=%s\n' "$postgres" "$postgres" > "$tmp"
-if [[ -L $dropin ]] || { [[ -e $dropin ]] && ! cmp -s -- "$tmp" "$dropin"; }; then
-  echo "A different local database startup policy is already installed." >&2
-  exit 1
-fi
-if [[ ! -e $dropin ]]; then
-  install -m 0644 "$tmp" "$dropin"
-fi
+folder="/etc/systemd/system"
+app_dropin="$folder/$service.d/local-postgresql.conf"
+camera_dropin="$folder/$camera.d/flockence-recovery.conf"
+postgres_dropin="$folder/$postgres.d/flockence-recovery.conf"
+tmp=$(mktemp -d)
+trap 'rm -f -- "$tmp/app" "$tmp/legacy" "$tmp/camera" "$tmp/postgres"; rmdir -- "$tmp"' EXIT
+printf '[Unit]\nRequires=%s\nAfter=%s\n' "$postgres" "$postgres" > "$tmp/legacy"
+
+# PostgreSQL owns its retry cycle. Keep the app running across a brief database
+# outage, and check readiness before each new app process.
+cat > "$tmp/app" <<EOF
+[Unit]
+Wants=$postgres
+After=$postgres
+StartLimitIntervalSec=0
+
+[Service]
+ExecStartPre=/usr/bin/pg_isready -q -h $host -p $port -d postgres -t 3
+Restart=always
+RestartSec=10s
+EOF
+
+cat > "$tmp/camera" <<'EOF'
+[Unit]
+StartLimitIntervalSec=0
+
+[Service]
+Restart=always
+RestartSec=10s
+EOF
+
+cat > "$tmp/postgres" <<'EOF'
+[Unit]
+StartLimitIntervalSec=0
+
+[Service]
+Restart=on-failure
+RestartSec=15s
+EOF
+
+check_dropin() {
+  local destination=$1 desired=$2 prior=${3:-}
+  if [[ -L $destination ]] || { [[ -e $destination ]] &&
+     ! cmp -s -- "$desired" "$destination" &&
+     { [[ -z $prior ]] || ! cmp -s -- "$prior" "$destination"; }; }; then
+    printf 'A different startup policy is already installed at %s.\n' "$destination" >&2
+    exit 1
+  fi
+}
+
+write_dropin() {
+  local destination=$1 desired=$2
+  if ! cmp -s -- "$desired" "$destination"; then
+    install -D -m 0644 "$desired" "$destination"
+  fi
+}
+
+check_dropin "$app_dropin" "$tmp/app" "$tmp/legacy"
+check_dropin "$camera_dropin" "$tmp/camera"
+check_dropin "$postgres_dropin" "$tmp/postgres"
+write_dropin "$app_dropin" "$tmp/app"
+write_dropin "$camera_dropin" "$tmp/camera"
+write_dropin "$postgres_dropin" "$tmp/postgres"
 
 systemctl daemon-reload
+for service_policy in "$postgres:on-failure" "$camera:always" "$service:always"; do
+  unit=${service_policy%:*}
+  policy=${service_policy##*:}
+  interval=$(systemctl show "$unit" --property=StartLimitIntervalUSec --value)
+  if [[ $(systemctl show "$unit" --property=Restart --value) != "$policy" ||
+        ! $interval =~ ^0(us|ms|s)?$ ]]; then
+    printf 'Check systemd overrides for %s. The recovery policy was not applied.\n' "$unit" >&2
+    exit 1
+  fi
+done
+
 systemctl enable --now "$service"
 systemctl start "$camera"
 for unit in "$postgres" "$camera" "$service"; do
