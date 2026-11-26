@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { Nav } from "@/components/nav";
+import { SettingsCameraProviders } from "@/components/settings-camera-providers";
 import { useSession } from "@/components/auth-gate";
 import { useTheme } from "@/components/theme-provider";
 import { themes } from "@/lib/theme-registry";
@@ -13,6 +14,7 @@ const sections = [
   ["operations", "Farm operations"],
   ["team", "Team & permissions"],
   ["devices", "Devices & plan"],
+  ["cameras", "Camera connections"],
   ["appearance", "Appearance"],
   ["storage", "Storage & sync"],
 ] as const;
@@ -157,8 +159,10 @@ export default function SettingsPage() {
       {section === "devices" && <section className="section card">
         <h2>Devices &amp; plan</h2>
         <p>Farm records, basic reports and offline mortality capture are included.</p>
-        <Link href="/settings/plan" className="button">View plan and devices</Link>
+        <div className="quick"><Link href="/settings/plan" className="button">View plan and devices</Link><a href="#cameras" className="button">Set up cameras</a></div>
       </section>}
+
+      {section === "cameras" && <SettingsCameraProviders />}
 
       {section === "appearance" && <>
         <section className="section card">

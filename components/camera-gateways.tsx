@@ -15,7 +15,7 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export function CameraGateways({ brand, onOwner }: { brand: Brand | null; onOwner: (owner: boolean) => void }) {
+export function CameraGateways({ brand, onOwner, filterByBrand = false }: { brand: Brand | null; onOwner?: (owner: boolean) => void; filterByBrand?: boolean }) {
   const [setup, setSetup] = useState<Setup | null>(null);
   const [name, setName] = useState("");
   const [token, setToken] = useState("");
@@ -26,12 +26,12 @@ export function CameraGateways({ brand, onOwner }: { brand: Brand | null; onOwne
     try {
       const data = await api<Setup>(endpoint);
       setSetup(data);
-      onOwner(data.owner);
+      onOwner?.(data.owner);
       setError("");
     } catch (error) {
       setSetup(null);
       setToken("");
-      onOwner(false);
+      onOwner?.(false);
       setError(error instanceof Error ? error.message : "Could not load private camera feeds.");
     }
   }, [onOwner]);
@@ -72,13 +72,15 @@ export function CameraGateways({ brand, onOwner }: { brand: Brand | null; onOwne
     }
   }
 
-  if (!setup?.enabled && !(brand && setup?.owner) && !error) return null;
+  const feeds = setup?.feeds.filter((feed) => !filterByBrand || feed.brand === brand) ?? [];
+  if (!setup?.enabled && !(brand && setup?.owner) && !error && !filterByBrand) return null;
   return <section className="card" aria-label="Private camera feeds">
     <div className="section-head"><div><h2>Private camera snapshots</h2><p>Latest pictures sent from a gateway on your farm.</p></div>
       {setup?.enabled && <button className="button" type="button" onClick={() => void load()}>Refresh snapshots</button>}
     </div>
     {error && <p role="alert">{error}</p>}
-    {!setup?.enabled && <p>Snapshot gateway setup is unavailable.</p>}
+    {!setup && !error && <p role="status">Loading snapshot feeds…</p>}
+    {setup && !setup.enabled && <p>Snapshot gateway setup is unavailable.</p>}
     {setup?.enabled && setup.owner && brand && <form className="form" onSubmit={add}>
       <label>Camera name<input required maxLength={48} value={name} onChange={(event) => setName(event.target.value)} placeholder={brand === "wyze" ? "Wyze barn camera" : "Barn camera"} /></label>
       <button type="submit" className="button" disabled={busy || !name.trim()}>Create snapshot feed</button>
@@ -88,15 +90,15 @@ export function CameraGateways({ brand, onOwner }: { brand: Brand | null; onOwne
       <label>Upload credential<textarea readOnly value={token} onFocus={(event) => event.target.select()} rows={3} spellCheck={false} autoComplete="off" /></label>
       <button className="button" type="button" onClick={() => setToken("")}>Hide credential</button>
     </div>}
-    {setup?.enabled && setup.feeds.length === 0 && <p>No snapshot feeds yet.</p>}
-    {!!setup?.feeds.length && <div className="grid2">
-      {setup.feeds.map((feed) => <article className="card" key={feed.id}>
+    {setup?.enabled && feeds.length === 0 && <p>No snapshot feeds yet.</p>}
+    {feeds.length > 0 && <div className="grid2">
+      {feeds.map((feed) => <article className="card" key={feed.id}>
         <h3>{feed.name}</h3>
         {feed.capturedAt
           ? <><img src={frameUrl(feed.id) + "?at=" + encodeURIComponent(feed.capturedAt)} alt={"Latest camera snapshot from " + feed.name} loading="lazy" style={{ width: "100%", height: "auto" }} />
-              <p><time dateTime={feed.capturedAt}>{new Date(feed.capturedAt).toLocaleString()}</time></p></>
+              <p>Last snapshot <time dateTime={feed.capturedAt}>{new Date(feed.capturedAt).toLocaleString()}</time></p></>
           : <p>Waiting for the first picture from your gateway.</p>}
-        {setup.owner && <button className="button" type="button" disabled={busy} onClick={() => void remove(feed)}>Remove feed</button>}
+        {setup?.owner && <button className="button" type="button" disabled={busy} onClick={() => void remove(feed)}>Remove feed</button>}
       </article>)}
     </div>}
   </section>;
