@@ -5,15 +5,19 @@ import { PrismaClient } from "@prisma/client";
 
 const adminUrl = new URL(process.env.DATABASE_URL);
 const gatewayUrl = new URL(process.env.CAMERA_GATEWAY_DATABASE_URL);
+const deviceUrl = new URL(process.env.DEVICE_GATEWAY_DATABASE_URL);
 assert.match(adminUrl.pathname, /^\/[A-Za-z0-9_]+_test$/);
 assert.equal(adminUrl.hostname, "localhost");
 assert.equal(gatewayUrl.host + gatewayUrl.pathname, adminUrl.host + adminUrl.pathname);
 assert.equal(gatewayUrl.username, "flockence_camera_gateway");
+assert.equal(deviceUrl.host + deviceUrl.pathname, adminUrl.host + adminUrl.pathname);
+assert.equal(deviceUrl.username, "flockence_device_gateway");
 
 const { prisma } = await import("../lib/prisma.ts");
 const { runAsFarm } = await import("../lib/farm-scope.ts");
 const { createSession, SESSION_COOKIE } = await import("../lib/auth.ts");
 const restricted = new PrismaClient({ datasourceUrl: gatewayUrl.toString() });
+const deviceDb = new PrismaClient({ datasourceUrl: deviceUrl.toString() });
 const origin = "http://127.0.0.1:3101";
 const farms = ["gateway-ci-a", "gateway-ci-b"];
 let app;
@@ -111,8 +115,63 @@ try {
   assert.equal((await fetch(frame(a), { method: "DELETE", headers: { Cookie: ownerA, Origin: origin } })).status, 200);
   assert.equal((await push(a, a.token)).status, 401);
   console.log("Gateway isolation, encrypted snapshots, owner permissions and revocation passed.");
+
+  // The same already-authenticated farm sessions can use the Devices workspace.
+  const devicesUrl = origin + "/api/device-gateways";
+  const deviceHeaders = (cookie) => ({ Cookie: cookie, Origin: origin, "Content-Type": "application/json" });
+  assert.equal((await fetch(origin + "/devices", { headers: { Cookie: ownerA } })).status, 200);
+  assert.equal((await fetch(devicesUrl)).status, 401);
+  const link = (cookie) => fetch(devicesUrl, {
+    method: "POST", headers: deviceHeaders(cookie), body: JSON.stringify({ name: "Barn devices" }),
+  });
+  assert.equal((await link(worker)).status, 403);
+  const created = await link(ownerA);
+  assert.equal(created.status, 201);
+  const edge = await created.json();
+  assert.equal(typeof edge.token, "string");
+  const edgePath = devicesUrl + "/" + edge.id;
+  const data = {
+    observedAt: new Date().toISOString(),
+    devices: [
+      { id: "barn-temp", name: "Barn temperature", kind: "temperature", value: 27.3 },
+      { id: "water-leak", name: "Water leak sensor", kind: "leak", value: "off" },
+    ],
+  };
+  const send = (token, reading = data) => fetch(edgePath, {
+    method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(reading),
+  });
+  assert.equal((await send(edge.token.replace("gateway-ci-a", "gateway-ci-b"))).status, 401);
+  assert.equal((await send(edge.token, { ...data, devices: [...data.devices, data.devices[0]] })).status, 400);
+  assert.equal((await send(edge.token)).status, 201);
+  assert.equal((await send(edge.token)).status, 409);
+
+  const listDevices = async (cookie) => {
+    const response = await fetch(devicesUrl, { headers: { Cookie: cookie, "X-Flockence-Farm": farms[0] } });
+    assert.equal(response.status, 200);
+    return response.json();
+  };
+  const [devicesA, devicesB] = await Promise.all([listDevices(ownerA), listDevices(ownerB)]);
+  assert.deepEqual(devicesA.links[0].devices, data.devices);
+  assert.deepEqual(devicesB.links, []);
+  assert.equal(JSON.stringify(devicesA).includes(edge.token), false);
+  assert.deepEqual(await deviceDb.setting.findMany(), []);
+  const ownRows = await deviceDb.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT set_config('app.farm_id', ${farms[0]}, true)`;
+    return tx.setting.findMany();
+  });
+  assert.deepEqual(ownRows.map(({ key }) => key), ["SMART_DEVICE_GATEWAY::" + edge.id]);
+  assert.equal(ownRows[0].value.includes(edge.token), false);
+  assert.equal(ownRows[0].value.includes("Barn temperature"), false);
+  await assert.rejects(deviceDb.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT set_config('app.farm_id', ${farms[0]}, true)`;
+    await tx.setting.create({ data: { farmId: farms[0], key: "CAMERA_GATEWAY::blocked", value: "Forbidden" } });
+  }), /row-level security policy/i);
+  assert.equal((await fetch(edgePath, { method: "DELETE", headers: deviceHeaders(ownerB) })).status, 404);
+  assert.equal((await fetch(edgePath, { method: "DELETE", headers: deviceHeaders(ownerA) })).status, 200);
+  assert.equal((await send(edge.token)).status, 401);
+  console.log("Shared sessions, smart device isolation, encrypted state, and revocation passed.");
 } finally {
   app?.kill();
   for (const farmId of farms) await runAsFarm(farmId, () => prisma.farm.deleteMany({ where: { id: farmId } }));
-  await Promise.all([prisma.$disconnect(), restricted.$disconnect()]);
+  await Promise.all([prisma.$disconnect(), restricted.$disconnect(), deviceDb.$disconnect()]);
 }

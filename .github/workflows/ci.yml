@@ -97,15 +97,20 @@ jobs:
       - name: Exercise camera routing across signed-in farms
         run: node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-workers.http.mjs
 
-      - name: Exercise private camera gateways with the restricted database connection
+      - name: Exercise private camera and smart device gateways with restricted database roles
         env:
           CAMERA_GATEWAY_DATABASE_URL: postgresql://flockence_camera_gateway:gateway-ci-only@localhost:5432/flockence_ci_test
           CAMERA_GATEWAY_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          DEVICE_GATEWAY_DATABASE_URL: postgresql://flockence_device_gateway:device-ci-only@localhost:5432/flockence_ci_test
+          DEVICE_GATEWAY_KEY: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBE
         run: |
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_camera_gateway LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'gateway-ci-only'"
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/camera-gateway-role.sql
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" -c "CREATE ROLE flockence_device_gateway LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'device-ci-only'"
+          psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/device-gateway-role.sql
           node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-gateway.http.mjs
-          python3 -m py_compile scripts/push-camera-frame.py
+          python3 -m py_compile scripts/push-camera-frame.py scripts/push-device-gateway.py
+          python3 tests/device_gateway_edge.py
 
       - name: Upload diagnostics
         if: always()
