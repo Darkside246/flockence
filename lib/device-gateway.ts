@@ -98,6 +98,13 @@ export function removeDeviceLink(id: string) {
   return withDevices((tx, farmId) => tx.setting.deleteMany({ where: { farmId, key: keyFor(id) } }));
 }
 
+export function deviceUploadAllowed(id: string, token: string) {
+  return withDevices(async (tx, farmId) => {
+    const row = await tx.setting.findUnique({ where: { farmId_key: { farmId, key: keyFor(id) } } });
+    return row !== null && matches(metadata(row), token);
+  });
+}
+
 export function uploadDeviceState(id: string, token: string, observedAt: string, devices: DeviceReading[]) {
   return withDevices(async (tx, farmId) => {
     const row = await tx.setting.findUnique({ where: { farmId_key: { farmId, key: keyFor(id) } } });

@@ -1,7 +1,8 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { z } from "zod";
 import { boundedBody, gatewayResponse, isGatewayOrigin } from "@/lib/camera-gateway-http";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
-import { deviceGatewayEnabled, parseDeviceToken, removeDeviceLink, uploadDeviceState } from "@/lib/device-gateway";
+import { deviceGatewayEnabled, deviceUploadAllowed, parseDeviceToken, removeDeviceLink, uploadDeviceState } from "@/lib/device-gateway";
 import { deviceGatewayId, deviceReadings, MAX_DEVICE_BODY, validObservationTime } from "@/lib/device-readings";
 import { runAsFarm } from "@/lib/farm-scope";
 
@@ -41,15 +42,20 @@ export async function PUT(request: Request, context: Context) {
     const input = observation.safeParse(JSON.parse(raw.toString("utf8")));
     if (!input.success) return gatewayResponse({ error: "Invalid readings or observation time." }, 400);
     const { observedAt, devices } = input.data;
-    const result = await runAsFarm(credential.farmId, () => uploadDeviceState(id, credential.token, observedAt, devices));
-    if (result === "unauthorized") return unauthorized();
-    if (result === "stale") return gatewayResponse({ error: "These readings are older than the current readings." }, 409);
-    if (result === "limited") {
-      const response = gatewayResponse({ error: "Wait before sending more readings." }, 429);
-      response.headers.set("Retry-After", "60");
-      return response;
-    }
-    return gatewayResponse({ observedAt }, 201);
+    return await runAsFarm(credential.farmId, async () => {
+      if (!(await deviceUploadAllowed(id, credential.token))) return unauthorized();
+      const locked = await premiumFeatureResponse();
+      if (locked) return locked;
+      const result = await uploadDeviceState(id, credential.token, observedAt, devices);
+      if (result === "unauthorized") return unauthorized();
+      if (result === "stale") return gatewayResponse({ error: "These readings are older than the current readings." }, 409);
+      if (result === "limited") {
+        const response = gatewayResponse({ error: "Wait before sending more readings." }, 429);
+        response.headers.set("Retry-After", "60");
+        return response;
+      }
+      return gatewayResponse({ observedAt }, 201);
+    });
   } catch (error) {
     if (error instanceof SyntaxError) return gatewayResponse({ error: "Invalid device readings." }, 400);
     return unavailable();

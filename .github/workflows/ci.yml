@@ -97,8 +97,12 @@ jobs:
           set -o pipefail
           npm run build 2>&1 | tee ci-build.log
 
-      - name: Exercise camera routing across signed-in farms
-        run: node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-workers.http.mjs
+      - name: Exercise camera routing, platform access and offline browser recovery
+        run: |
+          OFFLINE_BROWSER="$RUNNER_TEMP/flockence-offline-browser"
+          npm install --prefix "$OFFLINE_BROWSER" playwright@1.56.1
+          "$OFFLINE_BROWSER/node_modules/.bin/playwright" install --with-deps chromium
+          FLOCKENCE_BROWSER_MODULE="$OFFLINE_BROWSER/node_modules/playwright" node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-workers.http.mjs
 
       - name: Exercise private camera and smart device gateways with restricted database roles
         env:

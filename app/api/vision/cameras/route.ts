@@ -1,3 +1,4 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { NextResponse } from "next/server";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
 import { visionCameraRoles, visionCameras } from "@/lib/vision-camera";
@@ -9,6 +10,8 @@ const headers = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
   const session = await currentUserOrRoleResponse(request, visionCameraRoles());
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   try {
     return NextResponse.json(await visionCameras(), { headers });
   } catch {

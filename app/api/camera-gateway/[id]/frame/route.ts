@@ -1,3 +1,4 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { cameraViewRoles, hardenCameraHeaders } from "@/lib/camera-guard";
 import { MAX_FRAME_BYTES, gatewayEnabled, gatewayIdPattern, gatewayUploadAllowed, getGatewayFrame, parseGatewayToken, removeGateway, saveGatewayFrame } from "@/lib/camera-gateway";
 import { boundedBody, gatewayResponse, isGatewayOrigin } from "@/lib/camera-gateway-http";
@@ -14,6 +15,8 @@ const denied = () => gatewayResponse({ error: "Camera upload is unauthorized." }
 export async function GET(request: Request, ctx: Context) {
   const session = await currentUserOrRoleResponse(request, cameraViewRoles());
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   const { id } = await ctx.params;
   if (!gatewayIdPattern.test(id) || !gatewayEnabled()) return notFound();
   try {
@@ -60,6 +63,8 @@ export async function PUT(request: Request, ctx: Context) {
   try {
     return await runAsFarm(credential.farmId, async () => {
       if (!(await gatewayUploadAllowed(id, credential.token))) return denied();
+      const locked = await premiumFeatureResponse();
+      if (locked) return locked;
       const limit = await checkRateLimit("camera-frame:" + credential.farmId + ":" + id, 8, 60_000);
       if (!limit.allowed) {
         const response = gatewayResponse({ error: "Camera upload limit reached." }, 429);
