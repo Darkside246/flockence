@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useSession } from "@/components/auth-gate";
 
 type NavItem = readonly [string, string, string];
@@ -43,6 +43,37 @@ export function Nav() {
   const [open, setOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const searchTrigger = useRef<HTMLElement | null>(null);
+  const drawerTrigger = useRef<HTMLElement | null>(null);
+
+  const openSearch = useCallback((trigger: HTMLElement | null) => {
+    searchTrigger.current = trigger;
+    setCommandOpen(true);
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setCommandOpen(false);
+    searchTrigger.current?.focus();
+    searchTrigger.current = null;
+  }, []);
+
+  function searchKeys(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const links = [...event.currentTarget.querySelectorAll<HTMLAnchorElement>(".command-results a")];
+    const input = event.currentTarget.querySelector("input");
+    const last = links.at(-1) ?? input;
+    const focused = document.activeElement;
+    if (event.key === "Tab" && (event.shiftKey ? focused === input : focused === last)) {
+      event.preventDefault();
+      (event.shiftKey ? last : input)?.focus();
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (!links.length) return;
+      event.preventDefault();
+      const index = links.findIndex((link) => link === focused);
+      const next = event.key === "ArrowDown" ? links[index + 1] ?? input : index < 0 ? last : links[index - 1] ?? input;
+      next?.focus();
+    }
+  }
   const session = useSession();
   const canManage = session?.role === "OWNER" || session?.role === "MANAGER";
   const visibleGroups = useMemo(() => canManage ? [...groups, teamGroup] : groups, [canManage]);
@@ -71,13 +102,17 @@ export function Nav() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setCommandOpen(value => !value);
+        if (commandOpen) closeSearch();
+        else openSearch(document.activeElement instanceof HTMLElement ? document.activeElement : null);
       }
-      if (event.key === "Escape") { setCommandOpen(false); setOpen(false); }
+      if (event.key === "Escape") {
+        if (commandOpen) closeSearch();
+        else if (open) { setOpen(false); drawerTrigger.current?.focus(); }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [commandOpen, open, openSearch, closeSearch]);
 
   useEffect(() => { setCommandOpen(false); setQuery(""); }, [pathname]);
 
@@ -89,7 +124,7 @@ export function Nav() {
 
   return <>
     <div className="nav-command-trigger">
-      <button type="button" onClick={() => setCommandOpen(true)} aria-label="Search Flockence"><span className="nav-command-icon">⌕</span><span>Find anything</span><kbd>⌘K</kbd></button>
+      <button type="button" onClick={(event) => openSearch(event.currentTarget)} aria-label="Search Flockence"><span className="nav-command-icon">⌕</span><span>Find anything</span><kbd>⌘K</kbd></button>
     </div>
 
     <nav className="nav" aria-label="Main navigation">
@@ -102,22 +137,22 @@ export function Nav() {
       {([["Dash", "/", "home"], ["Cameras", "/cameras", "camera"], ["Flocks", "/batches", "flock"], ["Houses", "/house", "house"]] as NavItem[]).map(([label, href, icon]) =>
         <Link key={href} href={href} className={isActive(href) ? "active" : ""} aria-current={isActive(href) ? "page" : undefined}><NavIcon name={icon}/><span>{label}</span></Link>
       )}
-      <button type="button" onClick={() => setOpen(true)} aria-label="More destinations" aria-expanded={open}>
+      <button type="button" onClick={(event) => { drawerTrigger.current = event.currentTarget; setOpen(true); }} aria-label="More destinations" aria-expanded={open}>
         <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.45" strokeLinecap="round"><circle cx="3.5" cy="8" r=".6"/><circle cx="8" cy="8" r=".6"/><circle cx="12.5" cy="8" r=".6"/></svg><span>More</span>
       </button>
     </nav>
 
-    <button className="mobile-nav-toggle" aria-label="Open menu" onClick={() => setOpen(true)}>☰</button>
+    <button className="mobile-nav-toggle" aria-label="Open menu" onClick={(event) => { drawerTrigger.current = event.currentTarget; setOpen(true); }}>☰</button>
     {open && <div className="drawer-backdrop" onClick={() => setOpen(false)} aria-hidden="true"/>}
-    <aside className={`mobile-drawer${open ? " open" : ""}`} aria-label="Navigation menu">
-      <div className="drawer-head"><div className="brand-main"><div className="brand-mark">F</div><div><strong>Flockence</strong><p>Farmer operating system</p></div></div><button className="icon-button" aria-label="Close menu" onClick={() => setOpen(false)}>×</button></div>
-      <button className="drawer-search" type="button" onClick={() => { setOpen(false); setCommandOpen(true); }}><span>⌕</span> Find anything <kbd>⌘K</kbd></button>
+    <aside className={`mobile-drawer${open ? " open" : ""}`} aria-label="Navigation menu" inert={!open}>
+      <div className="drawer-head"><div className="brand-main"><div className="brand-mark">F</div><div><strong>Flockence</strong><p>Farmer operating system</p></div></div><button className="icon-button" aria-label="Close menu" onClick={() => { setOpen(false); drawerTrigger.current?.focus(); }}>×</button></div>
+      <button className="drawer-search" type="button" onClick={() => { setOpen(false); openSearch(drawerTrigger.current); }}><span>⌕</span> Find anything <kbd>⌘K</kbd></button>
       {visibleGroups.map(group => <div className="drawer-group" key={group.label}><div className="drawer-group-label">{group.label}</div><div className="drawer-links">{links(group.items, true)}</div></div>)}
       <div className="drawer-group"><div className="drawer-group-label">Workspace</div><div className="drawer-links">{links([settings], true)}</div>{process.env.NODE_ENV !== "development" && <><button className="nav-signout" type="button" onClick={() => { setOpen(false); void signOut(); }} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>{signOutError && <p className="nav-signout-error" role="alert">{signOutError}</p>}</>}</div>
     </aside>
 
-    {commandOpen && <div className="command-backdrop" role="presentation" onMouseDown={() => setCommandOpen(false)}>
-      <div className="command-palette" role="dialog" aria-modal="true" aria-label="Flockence search" onMouseDown={event => event.stopPropagation()}>
+    {commandOpen && <div className="command-backdrop" role="presentation" onMouseDown={closeSearch}>
+      <div className="command-palette" role="dialog" aria-modal="true" aria-label="Flockence search" onKeyDown={searchKeys} onMouseDown={event => event.stopPropagation()}>
         <div className="command-input-wrap"><span>⌕</span><input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="Search batches, operations, inventory, reports…" aria-label="Search Flockence" /><kbd>ESC</kbd></div>
         <div className="command-section-label">{query ? "Results" : "Jump to"}</div>
         <div className="command-results">

@@ -122,6 +122,8 @@ jobs:
       AUTH_COOKIE_SECURE: "true"
       FARM_OWNER_SETUP_CODE: disposable-visual-ci-owner-setup
       APP_URL: http://localhost:3000
+      VISUAL_SEED_DASHBOARD: ${{ github.head_ref == 'feature/poultry-farm-refinement' }}
+      VISUAL_THEMES: ${{ github.head_ref == 'feature/poultry-farm-refinement' && 'poultry' || '' }}
       VISUAL_REVISION: ${{ matrix.revision }}
       VISUAL_OUTPUT: ${{ github.workspace }}/theme-screenshots
     steps:

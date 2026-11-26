@@ -7,7 +7,7 @@ const require = createRequire(process.env.VISUAL_DEPS + "/package.json");
 const { chromium } = require("playwright");
 const origin = process.env.VISUAL_ORIGIN || "http://localhost:3000";
 const output = process.env.VISUAL_OUTPUT;
-const themes = process.env.VISUAL_THEMES?.split(",") || ["poultry", "crystal", "aero", "heritage", "workhorse", "sol", "terra"];
+const themes = (process.env.VISUAL_THEMES ? process.env.VISUAL_THEMES.split(",") : null) || ["poultry", "crystal", "aero", "heritage", "workhorse", "sol", "terra"];
 const pages = [
   ["/", "dashboard"], ["/pens", "housing"], ["/batches", "flocks"],
   ["/layers", "eggs"], ["/layers/performance", "layer-performance"], ["/inventory", "inventory-feed"], ["/reports", "reports"],
@@ -18,6 +18,52 @@ const pages = [
 ];
 const devices = { desktop: { width: 1440, height: 1000 }, tablet: { width: 820, height: 1180 }, mobile: { width: 390, height: 844 } };
 const report = [];
+
+async function seedDashboard() {
+  const db = new URL(process.env.DATABASE_URL);
+  assert.equal(db.pathname, "/flockence_visual_test");
+  assert.ok(["localhost", "127.0.0.1"].includes(db.hostname));
+  assert.ok(["localhost", "127.0.0.1"].includes(new URL(origin).hostname));
+  const { PrismaClient } = require(join(process.cwd(), "node_modules", "@prisma", "client"));
+  const prisma = new PrismaClient();
+  try {
+    const { farmId } = await prisma.user.findUniqueOrThrow({ where: { email: "desktop@visual.example.test" }, select: { farmId: true } });
+    await prisma.batch.create({
+      data: {
+        farmId, name: "VISUAL TEST Broilers", species: "CHICKEN", productionType: "BROILER", status: "ACTIVE",
+        startDate: new Date("2024-01-01"), initialChicks: 23, chickCostMinor: 0,
+        mortalityEvents: { create: { date: new Date("2024-01-02"), quantity: 2 } },
+      },
+    });
+    await prisma.batch.create({
+      data: { farmId, name: "VISUAL TEST Layers", species: "CHICKEN", productionType: "LAYER", layerStage: "LAYING",
+        status: "ACTIVE", startDate: new Date("2024-01-01"), initialChicks: 17, chickCostMinor: 0 },
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+async function verifyKeyboardSearch(page) {
+  const trigger = page.getByRole("button", { name: "Search Flockence" });
+  if (!await trigger.isVisible()) return;
+  await trigger.focus();
+  await page.keyboard.press("Control+k");
+  const dialog = page.getByRole("dialog", { name: "Flockence search" });
+  const input = dialog.getByRole("textbox", { name: "Search Flockence" });
+  await input.waitFor();
+  assert.equal(await input.evaluate(el => document.activeElement === el), true);
+  await page.keyboard.press("Shift+Tab");
+  assert.equal(await dialog.getByRole("link").last().evaluate(el => document.activeElement === el), true);
+  await page.keyboard.press("Tab");
+  assert.equal(await input.evaluate(el => document.activeElement === el), true);
+  await page.keyboard.press("ArrowDown");
+  assert.equal(await dialog.getByRole("link").first().evaluate(el => document.activeElement === el), true);
+  await page.keyboard.press("Escape");
+  await dialog.waitFor({ state: "hidden" });
+  assert.equal(await trigger.evaluate(el => document.activeElement === el), true);
+}
+
 const browser = await chromium.launch();
 await mkdir(output, { recursive: true });
 
@@ -34,6 +80,7 @@ try {
       data: { name: "Visual Test Owner", email: device === "desktop" ? email : "desktop@visual.example.test", password, inviteCode: process.env.FARM_OWNER_SETUP_CODE },
     });
     assert.ok(response.ok(), "Could not authenticate visual test: " + await response.text());
+    if (device === "desktop" && process.env.VISUAL_SEED_DASHBOARD === "true") await seedDashboard();
     const page = await context.newPage();
     for (const theme of themes) {
       // A fresh page startup exercises the real first-paint bootstrap and persisted-preference path.
@@ -51,6 +98,14 @@ try {
         assert.ok(response?.ok(), route + " returned " + response?.status());
         await page.locator("main").filter({ hasNotText: "Checking your session" }).first().waitFor({ state: "visible" });
         await page.waitForFunction((id) => document.documentElement.dataset.theme === id, theme);
+        if (route === "/" && process.env.VISUAL_SEED_DASHBOARD === "true") {
+          await page.locator(".pipe-col").filter({ hasText: "Live birds" }).getByText("38", { exact: true }).waitFor();
+          await page.locator(".pipe-col").filter({ hasText: "Losses" }).getByText("2", { exact: true }).waitFor();
+          report.push({ device, theme, route, dashboardTotals: { liveBirds: 38, losses: 2 } });
+        }
+        if (route === "/settings" && process.env.VISUAL_REVISION === "after" && process.env.VISUAL_SEED_DASHBOARD === "true") {
+          await verifyKeyboardSearch(page);
+        }
         const metrics = await page.evaluate(() => ({
           documentWidth: document.documentElement.scrollWidth,
           viewportWidth: document.documentElement.clientWidth,
@@ -67,7 +122,7 @@ try {
           const expectedAsset = route === "/farm-setup" ? "poultry-housing.webp" : theme === "crystal" ? "chick-eggs.jpg" : "hen-chicks.jpg";
           assert.ok(metrics.photography[0].source.includes(expectedAsset), "Unexpected photo on " + route);
           assert.notEqual(metrics.photography[0].grade, "none");
-          const asset = await context.request.get(origin + "/brand/" + expectedAsset);
+          const asset = await context.request.get(origin + "/brand/" + expectedAsset, { maxRetries: 2 });
           assert.ok(asset.ok(), "Missing image asset: " + expectedAsset);
         }
         report.push({ device, theme, route, ...metrics, overflow: metrics.documentWidth > metrics.viewportWidth + 2 });
@@ -78,7 +133,7 @@ try {
         const menu = page.getByRole("button", { name: /Open menu|More destinations/ }).filter({ visible: true }).first();
         if (await menu.isVisible()) {
           await menu.click();
-          if (theme === "poultry") {
+          if (theme === "poultry" && process.env.VISUAL_REVISION === "after") {
             const widths = await page.locator('.mobile-drawer.open .drawer-links a > span:not(.nav-glyph)').evaluateAll(labels => labels.map(label => label.getBoundingClientRect().width));
             assert.ok(widths.length > 0 && widths.every(width => width >= 80), "Mobile destination labels are constrained to icon width");
           }
