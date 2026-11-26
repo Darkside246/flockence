@@ -30,7 +30,7 @@ Return ONLY valid JSON with this exact shape:
 {
   "summary": "one concise sentence",
   "confidence": "LOW|MEDIUM|HIGH",
-  "severity": "LOW|MEDIUM|HIGH|URGENT",
+  "severity": "LOW|MODERATE|HIGH|URGENT",
   "observations": [{"title":"", "detail":"", "confidence":"LOW|MEDIUM|HIGH"}],
   "concerns": [{"title":"", "whyItMatters":""}],
   "checks": ["practical next check 1", "practical next check 2"],

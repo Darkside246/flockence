@@ -5,7 +5,7 @@ export const assessmentCategories = [
 ] as const;
 
 const confidence = z.enum(["LOW", "MEDIUM", "HIGH"]);
-const severity = z.enum(["LOW", "MODERATE", "HIGH", "URGENT"]);
+const severity = z.enum(["LOW", "MEDIUM", "MODERATE", "HIGH", "URGENT"]);
 const label = z.string().trim().min(1).max(160);
 const detail = z.string().trim().max(700);
 const category = z.enum(assessmentCategories);
@@ -63,9 +63,11 @@ export function createVisionAssessment(result: VisionResult, input: {
       { category: categoryName, state: "NOT_OBSERVED" });
   });
   const rank = new Set(signals.map((entry) => entry.state));
-  const status = rank.has("CRITICAL") || result.severity === "URGENT" ? "CRITICAL"
-    : rank.has("WARNING") || result.severity === "HIGH" ? "WARNING"
-    : rank.has("ATTENTION") || result.escalate ? "ATTENTION"
+  const hasEvidence = signals.some((entry) => entry.state !== "NOT_OBSERVED")
+    || result.observations.some((entry) => entry.detail.length > 0);
+  const status = rank.has("CRITICAL") || (hasEvidence && result.severity === "URGENT") ? "CRITICAL"
+    : rank.has("WARNING") || (hasEvidence && result.severity === "HIGH") ? "WARNING"
+    : rank.has("ATTENTION") || (hasEvidence && result.escalate) ? "ATTENTION"
     : rank.has("NOT_OBSERVED") || !result.confidence || result.confidence === "LOW" ? "INSUFFICIENT_EVIDENCE"
     : "GOOD";
   return {

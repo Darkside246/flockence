@@ -6,7 +6,7 @@ const camera = { kind: "CAMERA", name: "Pen camera", provider: "rtsp" };
 const metadata = { model: "fixture-model", source: camera, inspectionCategory: "PEN", evidenceId: "image-1" };
 
 test("an unseen area stays unknown and serious evidence overrides missing categories", () => {
-  const missing = createVisionAssessment(visionResultSchema.parse({ summary: "Limited view", confidence: "HIGH" }), metadata);
+  const missing = createVisionAssessment(visionResultSchema.parse({ summary: "Limited view", confidence: "HIGH", severity: "HIGH" }), metadata);
   assert.equal(missing.status, "INSUFFICIENT_EVIDENCE");
   assert.ok(missing.signals.every(({ state }) => state === "NOT_OBSERVED"));
   const urgent = createVisionAssessment(visionResultSchema.parse({
