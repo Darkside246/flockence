@@ -7,6 +7,9 @@ Run:  .venv/Scripts/python -m uvicorn app:app --host 127.0.0.1 --port 8765
 Env:  BLINK_SIDECAR_TOKEN (required), BLINK_IMPERSONATE (optional), FFMPEG_PATH (optional), BLINK_DATA_DIR (optional)
 """
 import asyncio
+import csv
+from datetime import datetime, timedelta, timezone
+import io
 import json
 import logging
 import os
@@ -27,6 +30,7 @@ from pydantic import BaseModel
 
 import rtsp
 from blink_controls import BlinkChange, change_setting, night_mode, readings
+from clip_archive import ClipArchive, configured_archive
 from immi import extract_transport_stream_packets, patch_liveview_auth_header
 from settings import DATA_DIR, FFMPEG, LIVE_DIR, MIN_TOKEN_LENGTH, TOKEN, client_allowed, credentials_encrypted, open_credentials, require_token, seal_credentials, slug as _slug
 from transport import DEFAULT_IMPERSONATE, CurlCffiAiohttpAdapter
@@ -47,6 +51,9 @@ class State:
 
 
 state = State()
+archive_storage = ClipArchive(DATA_DIR / "archives", set())
+reading_lock = asyncio.Lock()
+last_temperature_sample = None
 
 
 class Live:
@@ -102,6 +109,18 @@ async def _try_resume():
         log.exception("Could not resume saved Blink session; log in again")
 
 
+async def archive_loop(archive):
+    while True:
+        try:
+            if state.blink and state.blink.available and state.session:
+                await archive.sync(state.blink, state.session)
+            else:
+                archive.prune(datetime.now(timezone.utc))
+        except Exception as exc:
+            log.warning("Blink archive sync interrupted (%s)", type(exc).__name__)
+        await asyncio.sleep(300)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     if not TOKEN:
@@ -119,14 +138,19 @@ async def lifespan(_: FastAPI):
     state.session = CurlCffiAiohttpAdapter(impersonate=BLINK_IMPERSONATE)
     await _try_resume()
     supervisor = asyncio.create_task(rtsp.supervise())
+    archive = None
+    try:
+        archive = configured_archive(archive_storage.root)
+    except (ValueError, TypeError):
+        log.warning("Blink archive configuration is invalid. Automatic copying is disabled.")
+    archiver = asyncio.create_task(archive_loop(archive)) if archive else None
     try:
         yield
     finally:
-        supervisor.cancel()
-        try:
-            await supervisor
-        except asyncio.CancelledError:
-            pass
+        tasks = [supervisor] + ([archiver] if archiver else [])
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         await rtsp.shutdown()
         for name in list(state.lives):
             await _stop_live(name)
@@ -203,6 +227,8 @@ async def login(body: Login):
     blink = Blink(session=state.session)
     blink.auth = Auth({"username": body.username, "password": body.password}, no_prompt=True, session=state.session)
     state.blink = blink
+    global last_temperature_sample
+    last_temperature_sample = None
     try:
         ok = await blink.start()
     except BlinkTwoFARequiredError:
@@ -265,6 +291,8 @@ async def logout():
     for name in list(state.lives):
         await _stop_live(name)
     state.blink, state.pending_2fa = None, False
+    global last_temperature_sample
+    last_temperature_sample = None
     CRED_FILE.unlink(missing_ok=True)
     return {"connected": False}
 
@@ -308,6 +336,62 @@ async def snapshot(name: str, fresh: bool = False):
     return Response(await resp.read(), media_type="image/jpeg", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/blink/temperature-sample")
+async def temperature_sample():
+    global last_temperature_sample
+    async with reading_lock:
+        blink = _blink()
+        now = datetime.now(timezone.utc)
+        if last_temperature_sample and now - last_temperature_sample[0] < timedelta(minutes=10):
+            return last_temperature_sample[1]
+        if not await blink.refresh() or state.blink is not blink:
+            return {"observedAt": None, "cameras": []}
+        sample = {
+            "observedAt": datetime.now(timezone.utc).isoformat(),
+            "cameras": [
+                {"name": row["name"], "temperatureC": row["temperatureC"]} for row in readings(blink)["cameras"]
+                if row["temperatureC"] is not None and -20 <= row["temperatureC"] <= 70
+            ],
+        }
+        last_temperature_sample = (now, sample)
+        return sample
+
+
+@app.get("/archives")
+async def archived_index(format: Literal["json", "csv"] = "json"):
+    rows = archive_storage.rows()
+    if format == "csv":
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "camera", "captured_at_utc", "bytes", "media"])
+        for row in rows:
+            name = row["camera"]
+            if name.lstrip().startswith(("=", "+", "-", "@")) or name.startswith((chr(9), chr(13), chr(10))):
+                name = "'" + name
+            writer.writerow([row["id"], name, row["createdAt"], row["bytes"], row["media"]])
+        body = output.getvalue()
+        filename = "flockence-blink-archive.csv"
+        media_type = "text/csv"
+    else:
+        body = json.dumps({"schemaVersion": 1, "clips": rows}, indent=2, ensure_ascii=False)
+        filename = "flockence-blink-archive.json"
+        media_type = "application/json"
+    return Response(body, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.get("/archives/{clip_id}.mp4")
+async def archived_clip(clip_id: str, download: bool = False):
+    try:
+        path = archive_storage.path(clip_id)
+    except FileNotFoundError:
+        raise HTTPException(404, "Archive clip not found.") from None
+    return FileResponse(
+        path, media_type="video/mp4",
+        filename=path.name if download else None,
+        content_disposition_type="attachment" if download else "inline",
+    )
+
+
 @app.get("/clips")
 async def clips(camera: str | None = None, since: str | None = None, pages: int = 2, period: Literal["1", "7", "30"] | None = None):
     cutoff = time.time() - int(period or "7") * 86400
@@ -315,6 +399,8 @@ async def clips(camera: str | None = None, since: str | None = None, pages: int 
         since = time.strftime("%Y/%m/%d %H:%M", time.gmtime(cutoff))
     since = since or time.strftime("%Y/%m/%d %H:%M", time.localtime(cutoff))
     out = rtsp.clips(camera, cutoff)
+    saved = archive_storage.rows(datetime.fromtimestamp(cutoff, timezone.utc))
+    out.extend(clip for clip in saved[:300] if not camera or clip["camera"] == camera)
     if not (state.blink and state.blink.available) or (camera and rtsp.has(camera)):
         return out
     media = await state.blink.get_videos_metadata(since=since, stop=max(2, min(pages + 1, 6)))

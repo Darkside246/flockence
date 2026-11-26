@@ -83,6 +83,9 @@ class CurlCffiAiohttpAdapter:
     async def post(self, url: str, **kwargs: Any) -> CurlCffiResponse:
         return CurlCffiResponse(await self._session.post(url, **kwargs))
 
+    def stream_clip(self, url: str, headers: dict):
+        return self._session.stream("GET", url, headers=headers, allow_redirects=False, timeout=25)
+
     async def close(self) -> None:
         if not self._closed:
             self._closed = True

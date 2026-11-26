@@ -243,7 +243,19 @@ try {
   assert.deepEqual(customerA.map(({ name }) => name), ["Customer A"]);
   assert.deepEqual(customerB, []);
 
-  const { currentFlockCheck } = await import("../lib/oriya.ts");
+  const exportFarm = (cookie) => fetch(origin + "/api/export?type=farm", { headers: { Cookie: cookie } });
+  assert.equal((await exportFarm(worker)).status, 403);
+  const [exportA, exportB] = await Promise.all([ownerA, ownerB].map(async (cookie) => {
+    const response = await exportFarm(cookie);
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get("cache-control"), /no-store/);
+    return response.json();
+  }));
+  assert.equal(exportA.records.customer[0].phone, "private-contact");
+  assert.deepEqual(exportB.records.customer, []);
+  assert.equal(exportA.records.setting, undefined);
+
+  const { collectOriyaCameraTemperatures, currentClimate, currentFlockCheck } = await import("../lib/oriya.ts");
   const { withProtectedFarmData } = await import("../lib/farm-database.ts");
   for (const [index, farmId] of farms.entries()) {
     await runAsFarm(farmId, () => prisma.batch.create({
@@ -254,6 +266,50 @@ try {
   assert.deepEqual(checks.map((check) => check.birds.alive), [20, 21]);
   await assert.rejects(runAsFarm(farms[0], () => withProtectedFarmData("oriya", (tx) => tx.customer.findMany())), /permission denied|denied access/i);
   console.log("PostgreSQL RLS isolated customer writes and Oriya summary reads.");
+
+  const { DEFAULT_FARM_ID } = await import("../lib/farm-scope.ts");
+  const { ensureFarm } = await import("../lib/operations.ts");
+  const env = {
+    ORIYA_BLINK_TEMPERATURES: "on", ORIYA_CAMERAS: "ci-pen=CI camera,ci-invalid=Bad sensor",
+    BLINK_SIDECAR_TOKEN: "T".repeat(32), BLINK_SIDECAR_URL: "http://127.0.0.1:18987",
+  };
+  const previous = Object.fromEntries(Object.keys(env).map((key) => [key, process.env[key]]));
+  const fetchOriginal = globalThis.fetch;
+  const observedAt = new Date();
+  try {
+    Object.assign(process.env, env);
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, env.BLINK_SIDECAR_URL + "/blink/temperature-sample");
+      assert.equal(options.headers.get("X-Sidecar-Token"), env.BLINK_SIDECAR_TOKEN);
+      return Response.json({ observedAt, cameras: [
+        { name: "CI camera", temperatureC: 26.4 },
+        { name: "Other camera", temperatureC: 28 },
+        { name: "Bad sensor", temperatureC: 999 },
+      ] });
+    };
+    assert.equal(await runAsFarm(farms[0], collectOriyaCameraTemperatures), 0);
+    await runAsFarm(DEFAULT_FARM_ID, async () => {
+      await ensureFarm();
+      assert.equal(await collectOriyaCameraTemperatures(), 1);
+      assert.equal(await collectOriyaCameraTemperatures(), 0);
+      const readings = await currentClimate(observedAt);
+      assert.deepEqual(readings.filter(({ sensor }) => sensor.startsWith("Blink camera")).map(
+        ({ sensor, temperatureC }) => [sensor, temperatureC],
+      ), [["Blink camera ci-pen", 26.4]]);
+      process.env.ORIYA_BLINK_TEMPERATURES = "off";
+      assert.ok((await currentClimate(observedAt)).every(({ sensor }) => !sensor.startsWith("Blink camera")));
+    });
+  } finally {
+    globalThis.fetch = fetchOriginal;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    await runAsFarm(DEFAULT_FARM_ID, () => prisma.thermometerReading.deleteMany({
+      where: { sensor: "Blink camera ci-pen", readAt: observedAt },
+    }));
+  }
+  console.log("Blink temperature storage, allowlist, deduplication and Oriya opt-out passed.");
 
 } finally {
   app?.kill();

@@ -5,7 +5,7 @@ import { BlinkSettings } from "@/components/blink-settings";
 import { CameraGateways } from "@/components/camera-gateways";
 
 type Camera = { name: string; source: "blink" | "rtsp"; type: string | null; battery: string | number | null; armed: boolean | null; motionDetected: boolean | null; live: boolean; recording?: boolean };
-type Clip = { id: string; camera: string; source: "blink" | "rtsp" | "import"; createdAt: string; media: string; thumbnail: string | null };
+type Clip = { id: string; camera: string; source: "blink" | "rtsp" | "import" | "archive"; createdAt: string; media: string; thumbnail: string | null };
 type Status = { available: boolean; canManage: boolean; networkCameras: boolean; connected?: boolean; pending2fa?: boolean; ffmpeg?: boolean };
 type Provider = "blink" | "wyze" | "network";
 type Tab = "live" | "stills" | "recordings";
@@ -284,16 +284,18 @@ function Recordings({ cameras }: { cameras: Camera[] }) {
     <label>Period<select value={period} onChange={(event) => { setPlaying(null); setPeriod(event.target.value); }}><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
     <select value={camera} onChange={(e) => { setPlaying(null); setCamera(e.target.value); }} aria-label="Camera"><option value="">All cameras</option>{cameras.map((c) => <option key={c.name}>{c.name}</option>)}</select></div>
     {error && <p role="alert">{error}</p>}
+    <p><a href={api("archives?format=csv")} download>Download archive index (CSV)</a></p>
     {!clips && !error && <p>Loading recordings…</p>}
     {clips?.length === 0 && <p>No recordings in this period.</p>}
     {playing && <div style={{ marginBottom: 16 }}>
       <video src={playing.source === "blink" ? api(`media/clip?path=${enc(playing.media)}`) : api(playing.media)} controls autoPlay playsInline style={{ width: "100%", maxHeight: 520, background: "#000" }} />
       <p>{playing.camera} · {new Date(playing.createdAt).toLocaleString()}{playing.source === "import" ? " · imported" : ""}</p>
+      {playing.source === "archive" && <a className="button" href={api(`${playing.media}?download=true`)} download>Download MP4</a>}
       {playing.source === "import" && <button className="button" onClick={() => void removeImported(playing)}>Remove this imported clip</button>}</div>}
     <div className="grid2">{clips?.map((c) => <button key={c.id} className="button" onClick={() => setPlaying(c)} style={{ textAlign: "left" }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {c.thumbnail ? <img src={api(`media/thumb?path=${enc(c.thumbnail)}`)} alt="" style={{ width: "100%" }} loading="lazy" /> : <div aria-hidden="true" style={{ aspectRatio: "16/9", background: "#000", opacity: 0.6 }} />}
-      <div>{c.camera}</div><small>{c.source === "import" ? "Imported · " : ""}{new Date(c.createdAt).toLocaleString()}</small></button>)}</div></div>
+      <div>{c.camera}</div><small>{c.source === "import" ? "Imported · " : c.source === "archive" ? "Archived · " : ""}{new Date(c.createdAt).toLocaleString()}</small></button>)}</div></div>
     <ImportClips cameras={cameras} onDone={() => setRefresh((n) => n + 1)} /></>;
 }
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { prisma } from "@/lib/prisma";
+import { rateLimitDatabase } from "@/lib/prisma";
 
 function hashKey(key: string) {
   return createHash("sha256").update(key).digest("hex");
@@ -16,7 +16,7 @@ export async function checkRateLimit(key: string, limit: number, windowMs: numbe
   const resetAt = new Date(now + windowMs);
   const keyHash = hashKey(key);
 
-  const rows = await prisma.$queryRaw<Array<{ count: number; resetAt: Date }>>`
+  const rows = await rateLimitDatabase.$queryRaw<Array<{ count: number; resetAt: Date }>>`
     INSERT INTO "RateLimitBucket" ("keyHash", "count", "resetAt")
     VALUES (${keyHash}, 1, ${resetAt})
     ON CONFLICT ("keyHash") DO UPDATE
@@ -34,7 +34,7 @@ export async function checkRateLimit(key: string, limit: number, windowMs: numbe
 
   if (now - lastCleanupAt > 10 * 60 * 1000) {
     lastCleanupAt = now;
-    void prisma.$executeRaw`DELETE FROM "RateLimitBucket" WHERE "resetAt" < NOW() - INTERVAL '1 hour'`.catch(() => undefined);
+    void rateLimitDatabase.$executeRaw`DELETE FROM "RateLimitBucket" WHERE "resetAt" < NOW() - INTERVAL '1 hour'`.catch(() => undefined);
   }
 
   const row = rows[0];
