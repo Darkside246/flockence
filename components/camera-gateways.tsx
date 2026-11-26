@@ -98,7 +98,7 @@ export function CameraGateways({ brand, onOwner, filterByBrand = false }: { bran
           ? <><img src={frameUrl(feed.id) + "?at=" + encodeURIComponent(feed.capturedAt)} alt={"Latest camera snapshot from " + feed.name} loading="lazy" style={{ width: "100%", height: "auto" }} />
               <p>Last snapshot <time dateTime={feed.capturedAt}>{new Date(feed.capturedAt).toLocaleString()}</time></p></>
           : <p>Waiting for the first picture from your gateway.</p>}
-        {setup.owner && <button className="button" type="button" disabled={busy} onClick={() => void remove(feed)}>Remove feed</button>}
+        {setup?.owner && <button className="button" type="button" disabled={busy} onClick={() => void remove(feed)}>Remove feed</button>}
       </article>)}
     </div>}
   </section>;
