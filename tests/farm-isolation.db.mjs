@@ -230,3 +230,25 @@ test("signup welcome uses the mail provider only when configured", async (t) => 
     else process.env.RESEND_FROM = previousFrom;
   }
 });
+
+
+test("verified email proof is single-use and creates an isolated Free farm", async () => {
+  const { issueFreeEmailProof, completeVerifiedFreeSignup, discardFreeEmailProof } = await import("../lib/free-email-proof.ts");
+  const { randomUUID } = await import("node:crypto");
+  const email = randomUUID() + "@example.test";
+  const farmName = "Verified " + randomUUID();
+  const token = await issueFreeEmailProof(email);
+  const form = { ownerName: "Verified owner", farmName, password: "Flockence-Verified!23" };
+  try {
+    await assert.rejects(() => completeVerifiedFreeSignup(token, { ...form, password: "" }), /INVALID_FREE_REGISTRATION/);
+    const attempts = await Promise.allSettled([completeVerifiedFreeSignup(token, form), completeVerifiedFreeSignup(token, form)]);
+    assert.equal(attempts.filter((attempt) => attempt.status === "fulfilled").length, 1);
+    const account = await runUnscoped(() => prisma.user.findUnique({ where: { email } }));
+    assert.ok(account?.farmId.startsWith("free-"));
+    assert.equal(await runAsFarm(B, () => prisma.user.findUnique({ where: { email } })), null);
+    await assert.rejects(() => completeVerifiedFreeSignup(token, form), /INVALID_SIGNUP_PROOF/);
+  } finally {
+    await discardFreeEmailProof(token);
+    await runUnscoped(() => prisma.farm.deleteMany({ where: { name: farmName } }));
+  }
+});
