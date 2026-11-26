@@ -4,15 +4,17 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Nav } from "@/components/nav";
 import { useSession } from "@/components/auth-gate";
-import { barbadosParishes, operationLabels, housingLabels, type FarmSetup, type SetupPen } from "@/lib/farm-setup";
+import { barbadosParishes, operationLabels, housingLabels, setupLayerStages, type FarmSetup, type SetupPen, type SetupFlock } from "@/lib/farm-setup";
 import "./setup.css";
 
-const stages = ["Your farm", "Location", "Housing", "Review"];
-const initial: FarmSetup = { name: "", operation: "", country: "Barbados", parish: "", community: "", unit: "ft", pens: [] };
+const stages = ["Your farm", "Location", "Housing", "Flocks", "Review"];
+const initial: FarmSetup = { name: "", operation: "", country: "Barbados", parish: "", community: "", unit: "ft", pens: [], flocks: [] };
 
 export default function FarmSetupPage() {
   const session = useSession();
   const [profile, setProfile] = useState(initial);
+  const [existingPens, setExistingPens] = useState<{ id: string; name: string }[]>([]);
+  const availablePens = [...existingPens, ...profile.pens.filter((pen) => !existingPens.some(({ id }) => id === pen.id))];
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -31,6 +33,7 @@ export default function FarmSetupPage() {
         if (!response.ok) throw new Error();
         const data = await response.json();
         setProfile(data.draft ?? data.profile);
+        setExistingPens(data.existingPens ?? []);
       })
       .catch(() => { if (!controller.signal.aborted) setLoadError(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -80,13 +83,28 @@ export default function FarmSetupPage() {
       : { id, name: "", length: 0, width: 0, unit: current.unit, housingMode: "OPEN_SIDED_HOT", status: "EMPTY", capacity: null, occupants: null, notes: "" }] }));
   }
 
+  function addFlock() {
+    const id = crypto.randomUUID();
+    setProfile((current) => ({
+      ...current,
+      flocks: [...current.flocks, {
+        id, name: "", birds: 0, productionType: current.operation === "LAYER" ? "LAYER" : "BROILER",
+        layerStage: null, breed: "", approximateAgeWeeks: null, placementDate: "", penId: "",
+      }],
+    }));
+  }
+
+  function updateFlock(id: string, fields: Partial<SetupFlock>) {
+    setProfile((current) => ({ ...current, flocks: current.flocks.map((flock) => flock.id === id ? { ...flock, ...fields } : flock) }));
+  }
+
   function next(event: FormEvent) {
     event.preventDefault();
     if (step === 0 && (profile.name.trim().length < 2 || !profile.operation)) {
       setError("Enter a farm name and choose a production type.");
       return;
     }
-    void save(step === 3 ? "finish" : "draft", step < 3);
+    void save(step === 4 ? "finish" : "draft", step < 4);
   }
 
   return <div className="shell">
@@ -99,10 +117,10 @@ export default function FarmSetupPage() {
       </header>
       {loading ? <section className="card setup-panel" aria-busy="true"><p>Loading farm profile…</p></section>
         : loadError ? <section className="card setup-panel"><p role="alert">{session?.role === "OWNER" || session?.role === "MANAGER" ? "We couldn’t load your farm profile." : "A farm owner or manager can set up this farm."}</p><button type="button" className="button" onClick={() => { setLoadError(false); setLoading(true); setRetry(retry + 1); }}>Try again</button></section>
-        : finished ? <section className="card setup-panel"><h2 ref={heading} tabIndex={-1}>Your farm profile is saved</h2><p>Add pens and flocks when you’re ready.</p><div className="setup-actions"><Link href="/" className="button button-primary">Go to dashboard</Link><Link href="/pens" className="button">Manage pens</Link><Link href="/batches" className="button">Manage flocks</Link></div></section>
+        : finished ? <section className="card setup-panel"><h2 ref={heading} tabIndex={-1}>Your farm profile is saved</h2><p>Your setup records are available in Pens and Flocks.</p><div className="setup-actions"><Link href="/" className="button button-primary">Go to dashboard</Link><Link href="/pens" className="button">Manage pens</Link><Link href="/batches" className="button">Manage flocks</Link></div></section>
         : <form className="card setup-panel" onSubmit={next}>
           <ol className="setup-stages" aria-label="Setup steps">{stages.map((stage, index) => <li key={stage} aria-current={index === step ? "step" : undefined}>{stage}</li>)}</ol>
-          <h2 ref={heading} tabIndex={-1}>{["Tell us about your farm", "Where is your farm located?", "Set up your poultry housing", "Review your farm profile"][step]}</h2>
+          <h2 ref={heading} tabIndex={-1}>{["Tell us about your farm", "Where is your farm located?", "Set up your poultry housing", "What birds are you raising?", "Review your farm profile"][step]}</h2>
           <fieldset disabled={saving}>
             {step === 0 && <>
               <label>Farm name<input required maxLength={120} value={profile.name} onChange={(event) => change("name", event.target.value)} /></label>
@@ -137,15 +155,37 @@ export default function FarmSetupPage() {
                 </div>
                 <p>Floor area is a measurement. Enter your own capacity estimate. Bird numbers here describe occupancy only.</p>
                 <label>Notes (optional)<textarea maxLength={500} value={pen.notes} onChange={(event) => updatePen(pen.id, { notes: event.target.value })} /></label>
-                <div className="setup-actions"><button type="button" className="button" disabled={profile.pens.length >= 30} onClick={() => addPen(pen)}>Duplicate pen</button><button type="button" className="setup-text-button" onClick={() => setProfile((current) => ({ ...current, pens: current.pens.filter((item) => item.id !== pen.id) }))}>Remove pen</button></div>
+                <div className="setup-actions"><button type="button" className="button" disabled={profile.pens.length >= 30} onClick={() => addPen(pen)}>Duplicate pen</button><button type="button" className="setup-text-button" onClick={() => setProfile((current) => ({ ...current, pens: current.pens.filter((item) => item.id !== pen.id), flocks: current.flocks.map((flock) => flock.penId === pen.id ? { ...flock, penId: "" } : flock) }))}>Remove pen</button></div>
               </fieldset>)}
               <button type="button" className="button" disabled={profile.pens.length >= 30} onClick={() => addPen()}>Add a pen</button>
             </>}
-            {step === 3 && <dl className="setup-summary">
+            {step === 3 && <>
+              <p>Add one group for each flock. These starting counts will appear on your dashboard. You can skip this step if you have no birds yet.</p>
+              {profile.flocks.map((flock, index) => <fieldset key={flock.id} className="setup-pen">
+                <legend>Flock {index + 1}</legend>
+                <label>Flock name<input required maxLength={80} value={flock.name} onChange={(event) => updateFlock(flock.id, { name: event.target.value })} /></label>
+                <div className="setup-pen-grid">
+                  <label>Production type<select value={flock.productionType} onChange={(event) => updateFlock(flock.id, { productionType: event.target.value as SetupFlock["productionType"], layerStage: null })}><option value="BROILER">Broilers</option><option value="LAYER">Layers</option></select></label>
+                  <label>Starting live birds<input required type="number" min="1" max="1000000" value={flock.birds || ""} onChange={(event) => updateFlock(flock.id, { birds: Number(event.target.value) })} /></label>
+                  <label>Initial pen (optional)<select value={flock.penId} onChange={(event) => updateFlock(flock.id, { penId: event.target.value })}><option value="">Unassigned</option>{availablePens.map((pen) => <option key={pen.id} value={pen.id}>{pen.name}</option>)}{flock.penId && !availablePens.some((pen) => pen.id === flock.penId) && <option value={flock.penId}>Pen no longer available</option>}</select></label>
+                </div>
+                {flock.productionType === "LAYER" && <label>Current laying stage<select required value={flock.layerStage ?? ""} onChange={(event) => updateFlock(flock.id, { layerStage: (event.target.value || null) as SetupFlock["layerStage"] })}><option value="">Choose a stage</option>{Object.entries(setupLayerStages).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
+                <div className="setup-pen-grid">
+                  <label>Breed (optional)<input maxLength={80} value={flock.breed} onChange={(event) => updateFlock(flock.id, { breed: event.target.value })} /></label>
+                  <label>Approximate age in weeks (optional)<input type="number" min="0" max="520" value={flock.approximateAgeWeeks ?? ""} onChange={(event) => updateFlock(flock.id, { approximateAgeWeeks: event.target.value === "" ? null : Number(event.target.value) })} /></label>
+                  <label>Placement date (optional)<input type="date" value={flock.placementDate} onChange={(event) => updateFlock(flock.id, { placementDate: event.target.value })} /></label>
+                </div>
+                <button type="button" className="setup-text-button" onClick={() => setProfile((current) => ({ ...current, flocks: current.flocks.filter((item) => item.id !== flock.id) }))}>Remove flock</button>
+              </fieldset>)}
+              <button type="button" className="button" disabled={profile.flocks.length >= 30} onClick={addFlock}>Add a flock</button>
+            </>}
+            {step === 4 && <dl className="setup-summary">
               <div><dt>Farm name</dt><dd>{profile.name}</dd></div>
               <div><dt>Production</dt><dd>{profile.operation ? operationLabels[profile.operation] : "Not selected"}</dd></div>
               <div><dt>Location</dt><dd>{[profile.community, profile.parish, profile.country].filter(Boolean).join(", ") || "Not shared"}</dd></div>
               <div><dt>Pens to add</dt><dd>{profile.pens.length ? profile.pens.map((pen) => pen.name + " · " + pen.length + " × " + pen.width + " " + pen.unit).join("; ") : "None"}</dd></div>
+              <div><dt>Flocks to add</dt><dd>{profile.flocks.length ? profile.flocks.map((flock) => flock.name + " · " + flock.birds + " birds").join("; ") : "None"}</dd></div>
+              <div><dt>Starting birds</dt><dd>{profile.flocks.reduce((total, flock) => total + flock.birds, 0).toLocaleString()}</dd></div>
               <div><dt>Measurements</dt><dd>{profile.unit === "ft" ? "Feet" : "Metres"}</dd></div>
             </dl>}
           </fieldset>
@@ -154,7 +194,7 @@ export default function FarmSetupPage() {
           <div className="setup-actions">
             {step > 0 && <button type="button" className="button" disabled={saving} onClick={() => { setStep(step - 1); setError(""); }}>Back</button>}
             <button type="button" className="setup-text-button" disabled={saving} onClick={() => void save("draft")}>Save and continue later</button>
-            <button type="submit" className="button button-primary" disabled={saving}>{saving ? "Saving…" : step === 3 ? "Finish setting up my farm" : "Continue"}</button>
+            <button type="submit" className="button button-primary" disabled={saving}>{saving ? "Saving…" : step === 4 ? "Finish setting up my farm" : "Continue"}</button>
           </div>
         </form>}
     </main>
