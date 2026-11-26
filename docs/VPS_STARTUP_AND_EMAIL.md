@@ -16,11 +16,16 @@ existing managed setup keeps its credentials and recordings. A conflicting
 custom setup needs review. The helper performs no database schema changes
 or application release switch.
 
-After setup, systemd can start the local stack on boot. Starting Flockence
-brings up its database and camera dependencies in order. The camera keeps
-its own restart policy so a camera or provider outage does not take down
-the main app. Oriya runs separately and is needed only for its linked
-services.
+After setup, the enabled Flockence unit starts the local stack on boot.
+Systemd starts PostgreSQL and the private camera worker before launching
+the app. Each app launch also checks that PostgreSQL is accepting
+connections. Flockence and the camera worker restart after an unexpected
+exit. PostgreSQL restarts after a failed process. Retries are spaced
+10 seconds apart for the app and camera and 15 seconds apart for the
+database. A camera outage leaves the main app available, and an
+administrator can still intentionally stop a unit. Existing setup can be
+upgraded by running the helper again. Oriya and the public HTTPS proxy
+retain their own service management.
 
 ## Where to enter an email
 
