@@ -37,3 +37,10 @@ export async function sendWelcomeEmail(to: string, userId: string) {
     text: `Your Flockence account is ready. Sign in to open your farm workspace.\n\n${login.href}`,
   }, "flockence-welcome-" + userId);
 }
+
+export function sendFreeSignupVerificationEmail(to: string, url: string) {
+  return sendEmail(to, {
+    subject: "Verify your email for Flockence",
+    text: `Confirm this email address to create your Free Flockence farm. This single-use link expires after 30 minutes.\n\n${url}`,
+  });
+}

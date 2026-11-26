@@ -124,12 +124,11 @@ export function Nav() {
   );
 
   return <>
-    <div className="nav-command-trigger">
-      <button type="button" onClick={(event) => openSearch(event.currentTarget)} aria-label="Search Flockence"><span className="nav-command-icon">⌕</span><span>Find anything</span><kbd>⌘K</kbd></button>
-    </div>
-
     <nav className="nav" aria-label="Main navigation">
       <div className="nav-brand-block"><div className="nav-brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div>
+      <div className="nav-command-trigger">
+        <button type="button" onClick={(event) => openSearch(event.currentTarget)} aria-label="Search Flockence"><span className="nav-command-icon" aria-hidden="true">⌕</span><span>Search</span><kbd>⌘K</kbd></button>
+      </div>
       {visibleGroups.map(group => <div className="nav-group" key={group.label}><div className="nav-group-label">{group.label}</div>{links(group.items)}</div>)}
       <div className="nav-bottom">{links([settings])}<div className="nav-footer-status"><i /> Farm workspace</div>{process.env.NODE_ENV !== "development" && <><button className="nav-signout" type="button" onClick={() => void signOut()} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>{signOutError && <p className="nav-signout-error" role="alert">{signOutError}</p>}</>}</div>
     </nav>

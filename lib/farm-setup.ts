@@ -25,6 +25,32 @@ const setupPenSchema = z.object({
 export type SetupPen = z.infer<typeof setupPenSchema>;
 export const metres = (dimension: number, unit: SetupPen["unit"]) => unit === "ft" ? dimension * 0.3048 : dimension;
 
+export const setupLayerStages = {
+  CHICK: "Chick", GROWER: "Grower", PULLET: "Pullet", PRE_LAY: "Pre-lay",
+  LAYING: "Laying", MOLT: "Molt", SPENT: "Spent",
+} as const;
+
+const setupFlockSchema = z.object({
+  id: z.uuid(),
+  name: z.string().trim().min(1).max(80),
+  productionType: z.enum(["BROILER", "LAYER"]),
+  layerStage: z.enum(["CHICK", "GROWER", "PULLET", "PRE_LAY", "LAYING", "MOLT", "SPENT"]).nullable(),
+  birds: z.number().int().positive().max(1000000),
+  breed: z.string().trim().max(80),
+  approximateAgeWeeks: z.number().int().min(0).max(520).nullable(),
+  placementDate: z.iso.date().or(z.literal("")),
+  penId: z.uuid().or(z.literal("")),
+}).strict().superRefine((flock, ctx) => {
+  if (flock.productionType === "LAYER" && !flock.layerStage) {
+    ctx.addIssue({ code: "custom", path: ["layerStage"], message: "Choose the current stage for the layer flock." });
+  }
+  if (flock.placementDate && flock.placementDate > new Date().toISOString().slice(0, 10)) {
+    ctx.addIssue({ code: "custom", path: ["placementDate"], message: "Placement date cannot be in the future." });
+  }
+});
+
+export type SetupFlock = z.infer<typeof setupFlockSchema>;
+
 export const farmSetupSchema = z.object({
   name: z.string().trim().max(120),
   operation: z.enum(["", "BROILER", "LAYER", "BOTH", "OTHER"]),
@@ -33,6 +59,7 @@ export const farmSetupSchema = z.object({
   community: z.string().trim().max(120),
   unit: z.enum(["ft", "m"]),
   pens: z.array(setupPenSchema).max(30).default([]),
+  flocks: z.array(setupFlockSchema).max(30).default([]),
 }).strict().superRefine((profile, ctx) => {
   if (profile.country.toLowerCase() === "barbados" && profile.parish
     && !barbadosParishes.some((parish) => parish === profile.parish)) {
@@ -41,6 +68,9 @@ export const farmSetupSchema = z.object({
   if (new Set(profile.pens.map((pen) => pen.id)).size !== profile.pens.length
     || new Set(profile.pens.map((pen) => pen.name.toLowerCase())).size !== profile.pens.length) {
     ctx.addIssue({ code: "custom", path: ["pens"], message: "Each pen needs a unique name." });
+  }
+  if (new Set(profile.flocks.map((flock) => flock.id)).size !== profile.flocks.length) {
+    ctx.addIssue({ code: "custom", path: ["flocks"], message: "Each flock must have its own setup entry." });
   }
   if (!profile.country && (profile.parish || profile.community)) {
     ctx.addIssue({ code: "custom", path: ["country"], message: "Enter a country for this location." });

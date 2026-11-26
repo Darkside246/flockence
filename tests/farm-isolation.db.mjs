@@ -198,3 +198,63 @@ test("portable farm export retains the operation records for the selected farm o
   assert.deepEqual(b.configuration.pens, []);
   assert.equal(a.configuration.preferences.default_feed_bag_price, "42.00");
 });
+
+test("onboarding creates separate flocks and starting counts, and safely retries", async () => {
+  const { createSetupFlocks } = await import("../lib/farm-setup-flocks.ts");
+  const { farmSetupSchema } = await import("../lib/farm-setup.ts");
+  const { randomUUID } = await import("node:crypto");
+  const pen = randomUUID();
+  const userId = randomUUID();
+  const base = { name: "Starter flock " + randomUUID(), productionType: "BROILER", layerStage: null, birds: 23,
+    breed: "", approximateAgeWeeks: 3, placementDate: "", penId: pen };
+  const profile = { name: "Example farm", operation: "BOTH", country: "", parish: "", community: "", unit: "ft" };
+  const flock = { ...base, id: randomUUID() };
+  const layers = { ...base, id: randomUUID(), name: base.name + " layers", birds: 17, productionType: "LAYER", layerStage: "LAYING" };
+  assert.equal(farmSetupSchema.safeParse({ ...profile, flocks: [{ ...layers, layerStage: null }] }).success, false);
+  assert.equal(farmSetupSchema.safeParse({ ...profile, flocks: [{ ...flock, placementDate: "2999-01-01" }] }).success, false);
+  assert.equal(farmSetupSchema.parse(profile).flocks.length, 0);
+
+  const key = "PEN::" + userId + "::" + pen;
+  await runAsFarm(A, () => prisma.setting.create({ data: { key, value: JSON.stringify({ name: "Test housing" }) } }));
+  const add = (farm, entries) => runAsFarm(farm, () => prisma.$transaction((tx) => createSetupFlocks(tx, farm, userId, entries)));
+  await assert.rejects(() => add(B, [flock]), /SETUP_PEN_NOT_FOUND/);
+  await add(A, [flock, layers]);
+  await add(A, [flock, layers]);
+  const where = { name: { startsWith: base.name } };
+  const created = await runAsFarm(A, () => prisma.batch.findMany({ where, include: { birdCounts: true, layerStageEvents: true } }));
+  try {
+    assert.equal(created.length, 2);
+    assert.deepEqual(created.map((batch) => batch.birdCounts[0].liveCount).sort(), [17, 23]);
+    assert.equal(created.find((batch) => batch.productionType === "LAYER").layerStageEvents[0].toStage, "LAYING");
+    assert.match(created[0].placementNotes, /Initial pen: Test housing/);
+    assert.equal(await runAsFarm(B, () => prisma.batch.count({ where })), 0);
+    await assert.rejects(() => add(A, [{ ...flock, id: randomUUID(), penId: "" }, { ...layers, id: randomUUID(), penId: randomUUID() }]), /SETUP_PEN_NOT_FOUND/);
+    assert.equal(await runAsFarm(A, () => prisma.batch.count({ where })), 2);
+  } finally {
+    await runAsFarm(A, () => prisma.batch.deleteMany({ where }));
+  }
+});
+
+
+
+test("verified email proof is single-use and creates an isolated Free farm", async () => {
+  const { issueFreeEmailProof, completeVerifiedFreeSignup, discardFreeEmailProof } = await import("../lib/free-email-proof.ts");
+  const { randomUUID } = await import("node:crypto");
+  const email = randomUUID() + "@example.test";
+  const farmName = "Verified " + randomUUID();
+  const token = await issueFreeEmailProof(email);
+  const form = { ownerName: "Verified owner", farmName, password: "Flockence-Verified!23" };
+  try {
+    await assert.rejects(() => completeVerifiedFreeSignup(token, { ...form, password: "" }), /INVALID_FREE_REGISTRATION/);
+    const attempts = await Promise.allSettled([completeVerifiedFreeSignup(token, form), completeVerifiedFreeSignup(token, form)]);
+    assert.equal(attempts.filter((attempt) => attempt.status === "fulfilled").length, 1);
+    const account = await runUnscoped(() => prisma.user.findUnique({ where: { email } }));
+    assert.ok(account?.farmId.startsWith("free-"));
+    assert.equal(await runAsFarm(B, () => prisma.user.findUnique({ where: { email } })), null);
+    await assert.rejects(() => completeVerifiedFreeSignup(token, form), /INVALID_SIGNUP_PROOF/);
+  } finally {
+    await discardFreeEmailProof(token);
+    await runUnscoped(() => prisma.farm.deleteMany({ where: { name: farmName } }));
+  }
+});
+

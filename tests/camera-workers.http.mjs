@@ -279,6 +279,22 @@ try {
         ],
       } }));
       await page.goto(origin + "/settings#cameras");
+      await page.setViewportSize({ width: 1280, height: 900 });
+      const search = page.getByRole("navigation", { name: "Main navigation" })
+        .getByRole("button", { name: "Search Flockence", exact: true });
+      await search.waitFor({ state: "visible" });
+      const before = await search.boundingBox();
+      assert.ok(before && before.height <= 36, "Desktop search should be compact");
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      const after = await search.boundingBox();
+      assert.ok(after && Math.abs(before.y - after.y) <= 1, "Desktop search should stay pinned as the page scrolls");
+      await search.click();
+      const palette = page.getByRole("dialog", { name: "Flockence search" });
+      await palette.waitFor({ state: "visible" });
+      await palette.getByRole("textbox", { name: "Search Flockence" }).fill("cameras");
+      await palette.getByRole("link", { name: /Cameras/i }).waitFor();
+      await page.keyboard.press("Escape");
+      await palette.waitFor({ state: "hidden" });
       const provider = page.getByLabel("Camera provider");
       await provider.selectOption("blink");
       await page.getByLabel("Blink email").fill("blink-fixture@example.test");

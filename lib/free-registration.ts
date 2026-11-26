@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { createSession, hashPassword, normalizeEmail, validatePassword } from "@/lib/auth";
 import { runAsFarm } from "@/lib/farm-scope";
@@ -11,7 +12,7 @@ type VerifiedRegistration = {
 };
 
 /** Called only after the registration flow proves possession of verifiedEmail. */
-export async function provisionFreeFarm(registration: VerifiedRegistration) {
+export async function provisionFreeFarm(registration: VerifiedRegistration, transaction?: Prisma.TransactionClient) {
   const email = normalizeEmail(registration.verifiedEmail);
   const name = registration.ownerName.trim();
   const farmName = registration.farmName.trim();
@@ -24,7 +25,7 @@ export async function provisionFreeFarm(registration: VerifiedRegistration) {
   const farmId = "free-" + randomUUID();
   const passwordHash = await hashPassword(registration.password);
 
-  return runAsFarm(farmId, () => prisma.$transaction(async (tx) => {
+  const write = async (tx: Prisma.TransactionClient) => {
     await tx.farm.create({ data: { id: farmId, name: farmName } });
     const owner = await tx.user.create({
       data: { farmId, name, email, role: "OWNER" },
@@ -40,5 +41,6 @@ export async function provisionFreeFarm(registration: VerifiedRegistration) {
     });
     const session = await createSession(owner.id, undefined, tx);
     return { owner, session };
-  }));
+  };
+  return runAsFarm(farmId, () => transaction ? write(transaction) : prisma.$transaction(write));
 }
