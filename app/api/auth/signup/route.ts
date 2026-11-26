@@ -1,10 +1,12 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { createSession, hashPassword, setSessionCookie, normalizeEmail, validatePassword } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { DEFAULT_FARM_ID, runAsFarm } from "@/lib/farm-scope";
+
+import { sendSignupWelcomeEmail } from "@/lib/mail";
 
 const inviteHash = (value: string) => createHash("sha256").update(value).digest("hex");
 const validRoles = ["OWNER", "MANAGER", "WORKER", "READ_ONLY"] as const;
@@ -105,6 +107,13 @@ async function signup(request: Request) {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
     }, { status: 201 });
     response.headers.set("Set-Cookie", setSessionCookie(session.token));
+    after(async () => {
+      try {
+        if (!(await sendSignupWelcomeEmail(user.email))) console.warn("[auth/signup] welcome email unavailable");
+      } catch {
+        console.warn("[auth/signup] welcome email unavailable");
+      }
+    });
     return response;
   } catch (error) {
     const code = error instanceof Error ? error.message : "";
