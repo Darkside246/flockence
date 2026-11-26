@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { blinkFetch, cameraWorker } from "@/lib/blink-sidecar";
 import { auditCameraAction, cameraRequestAllowed, cameraViewRoles, hardenCameraHeaders } from "@/lib/camera-guard";
 
@@ -88,6 +89,13 @@ async function mutate(request: Request, ctx: Ctx, method: "POST" | "DELETE", own
     try { trustedOrigin = origin ? new URL(origin).origin : undefined; } catch { /* reject invalid configuration */ }
     if (!trustedOrigin || request.headers.get("origin") !== trustedOrigin) {
       return NextResponse.json({ error: "Camera sign-in must come from Flockence." }, { status: 403 });
+    }
+    if (path !== "auth/logout") {
+      const limit = await checkRateLimit("camera-provider:" + session.user.farmId + ":" + path, 8, 10 * 60_000).catch(() => null);
+      if (!limit) return NextResponse.json({ error: "Camera sign-in is temporarily unavailable." }, { status: 503 });
+      if (!limit.allowed) return NextResponse.json({ error: "Too many camera sign-in attempts. Try again shortly." }, {
+        status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds), "Cache-Control": "no-store" },
+      });
     }
   }
   const live = /^cameras\/([^/]+)\/live\/(start|stop)$/.exec(path);

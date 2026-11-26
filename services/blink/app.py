@@ -272,7 +272,6 @@ async def cameras():
             "temperature": a.get("temperature"),
             "armed": a.get("motion_enabled"),
             "motionDetected": a.get("motion_detected"),
-            "thumbnail": a.get("thumbnail"),
             "live": name in state.lives,
         })
     return out

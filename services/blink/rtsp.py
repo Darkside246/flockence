@@ -23,12 +23,15 @@ from settings import (DATA_DIR, FFMPEG, RECORD_KEEP_DAYS, RECORDINGS_DIR, SEGMEN
                       open_credentials, require_token, seal_credentials, slug)
 
 STORE = DATA_DIR / "rtsp_cameras.json"
+NETWORK_CAMERAS_ENABLED = os.environ.get("BLINK_DISABLE_NETWORK_CAMERAS") != "1"
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{0,39}$")
 recorders: dict[str, asyncio.subprocess.Process] = {}
 router = APIRouter(dependencies=[Depends(require_token)])
 
 
 def _load() -> dict[str, dict]:
+    if not NETWORK_CAMERAS_ENABLED:
+        return {}
     try:
         data, _ = open_credentials(STORE.read_text(), purpose=b"flockence-rtsp-config-v1")
     except FileNotFoundError:
@@ -53,6 +56,8 @@ def _save(data: dict[str, dict]):
 
 
 def protect_saved_addresses():
+    if not NETWORK_CAMERAS_ENABLED:
+        return
     try:
         raw = STORE.read_text()
     except FileNotFoundError:
@@ -209,6 +214,8 @@ class NewCamera(BaseModel):
 
 @router.post("/rtsp/cameras")
 async def add_camera(body: NewCamera):
+    if not NETWORK_CAMERAS_ENABLED:
+        raise HTTPException(403, "Network cameras require a private farm gateway")
     name = body.name.strip()
     if not NAME_RE.match(name):
         raise HTTPException(400, "Name must be 1-40 letters, numbers, spaces, dashes or underscores")
