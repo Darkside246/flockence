@@ -46,6 +46,7 @@ export const visionAssessmentSchema = z.object({
   summary: detail.min(1),
   checks: z.array(detail.min(1)).max(12),
   evidenceId: label,
+  pen: z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string().min(1).max(120) }).optional(),
 });
 
 type VisionResult = z.infer<typeof visionResultSchema>;
@@ -53,7 +54,7 @@ type VisionAssessment = z.infer<typeof visionAssessmentSchema>;
 type AssessmentRecord = { id: string; batchId: string | null; observedAt: Date; visionAssessment: unknown };
 
 export function createVisionAssessment(result: VisionResult, input: {
-  model: string; source: VisionAssessment["source"]; inspectionCategory: string; evidenceId: string;
+  model: string; source: VisionAssessment["source"]; inspectionCategory: string; evidenceId: string; pen?: VisionAssessment["pen"];
 }): VisionAssessment {
   const signals = assessmentCategories.map((categoryName) => {
     const candidates = result.signals.filter((row) => row.category === categoryName);
@@ -86,7 +87,7 @@ export function compareVisionAssessments(a: AssessmentRecord, b: AssessmentRecor
   if (older.id === newer.id || older.observedAt.getTime() === newer.observedAt.getTime()
     || x.source.kind !== "CAMERA" || y.source.kind !== "CAMERA"
     || x.source.name !== y.source.name || x.source.provider !== y.source.provider
-    || x.model !== y.model || x.inspectionCategory !== y.inspectionCategory || older.batchId !== newer.batchId) return null;
+    || x.pen?.id !== y.pen?.id || x.model !== y.model || x.inspectionCategory !== y.inspectionCategory || older.batchId !== newer.batchId) return null;
   const changes = assessmentCategories.flatMap((name) => {
     const before = x.signals.find((entry) => entry.category === name);
     const after = y.signals.find((entry) => entry.category === name);

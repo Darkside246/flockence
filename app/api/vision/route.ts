@@ -8,6 +8,7 @@ import { captureVisionCamera, maxVisionImageBytes, validVisionCameraName, vision
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
+import { visionPens } from "@/lib/vision-pens";
 import { createVisionAssessment, visionResultSchema } from "@/lib/vision-assessment";
 import { safeJson, visionPrompt, VISION_MODEL, visionCategories, type VisionCategory } from "@/lib/vision";
 
@@ -52,6 +53,18 @@ export async function POST(request: Request) {
     const batchIdRaw = String(form.get("batchId") || "");
     const notes = String(form.get("notes") || "").trim().slice(0, 2000);
 
+    const penId = form.get("penId");
+    let pen: { id: string; name: string } | undefined;
+    if (penId !== null && penId !== "") {
+      if (session.user.role !== "OWNER" && session.user.role !== "MANAGER") {
+        return NextResponse.json({ error: "Only owners and managers can assign an inspection to a pen." }, { status: 403 });
+      }
+      if (typeof penId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(penId)) {
+        return NextResponse.json({ error: "Invalid pen." }, { status: 400 });
+      }
+      [pen] = await visionPens(penId);
+      if (!pen) return NextResponse.json({ error: "Pen not found." }, { status: 404 });
+    }
     const cameraName = form.get("camera");
     if (cameraName !== null) {
       if (!isTrustedAppOrigin(request) || !visionCameraRoles().includes(session.user.role)) {
@@ -164,6 +177,7 @@ export async function POST(request: Request) {
       const imageUrl = `/api/vision/media/${media.id}`;
       const visionAssessment = createVisionAssessment(parsed, {
         model: VISION_MODEL, inspectionCategory: categoryRaw, evidenceId: media.id,
+        ...(pen ? { pen } : {}),
         source: capture ? { kind: "CAMERA", name: capture.camera.name, provider: capture.camera.source } : { kind: "UPLOAD" },
       });
       const observation = await tx.healthObservation.create({

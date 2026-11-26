@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -66,11 +67,22 @@ try {
     const { token } = await createSession(user.id);
     return SESSION_COOKIE + "=" + encodeURIComponent(token);
   })));
+  const { saveFarmLink } = await import("../lib/oriya-farm-link.ts");
+  const { signOriyaBody } = await import("../lib/oriya-link.mjs");
+  const secret = "p".repeat(44);
+  const penA = await runAsFarm(ids[0], async () => {
+    assert.equal(await saveFarmLink({ keyId: "cop_" + "s".repeat(24), secret }), true);
+    return prisma.setting.create({ data: { key: "PEN::fixture-owner::test-a", value: JSON.stringify({ name: "Test pen" }) } });
+  });
+  const penB = await runAsFarm(ids[1], async () => {
+    assert.equal(await saveFarmLink({ keyId: "cop_" + "v".repeat(24), secret: "v".repeat(44) }), true);
+    return prisma.setting.create({ data: { key: "PEN::fixture-owner::test-b", value: JSON.stringify({ name: "Other farm pen" }) } });
+  });
   const a = await worker("Farm A camera", "a".repeat(48), "blink");
   const b = await worker("Farm B camera", "b".repeat(48), "rtsp");
   app = spawn(process.execPath, ["--import", "./tests/support/mock-vision-provider.mjs", "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], {
     stdio: "inherit",
-    env: { ...process.env, APP_URL: origin, CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
+    env: { ...process.env, APP_URL: origin, ORIYA_URL: "https://oriya.si", CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
       CHICKENVERSE_RESEARCH_REPORT: researchReport, VISION_STORAGE_DIR: visionStorage, FLOCKENCE_CAMERA_VISION: "on", OPENAI_API_KEY: "ci-only-unused", FLOCKENCE_CAMERA_WORKERS: JSON.stringify({ [ids[0]]: a, [ids[1]]: b }) },
   });
   let ready = false;
@@ -115,9 +127,10 @@ try {
   assert.deepEqual(await visionList(0), [{ name: "Farm A camera", source: "blink" }]);
   assert.deepEqual(await visionList(1), [{ name: "Farm B camera", source: "rtsp" }]);
   assert.deepEqual(await visionList(2), []);
-  const inspect = (consent, requestOrigin, camera = "Farm B camera") => {
+  const inspect = (consent, requestOrigin, camera = "Farm B camera", penId = "") => {
     const form = new FormData();
     form.set("camera", camera);
+    if (penId) form.set("penId", penId);
     if (consent) form.set("shareCameraImage", "yes");
     return fetch(origin + "/api/vision", {
       method: "POST", headers: { Cookie: cookies[0], Origin: requestOrigin }, body: form,
@@ -126,7 +139,8 @@ try {
   assert.equal((await inspect(false, origin)).status, 400);
   assert.equal((await inspect(true, "https://other.example")).status, 403);
   assert.equal((await inspect(true, origin)).status, 502);
-  const inspection = await inspect(true, origin, "Farm A camera");
+  assert.equal((await inspect(true, origin, "Farm A camera", penB.id)).status, 404);
+  const inspection = await inspect(true, origin, "Farm A camera", penA.id);
   assert.equal(inspection.status, 201);
   const saved = await inspection.json();
   assert.equal(saved.analysis.summary, "Inspection test result.");
@@ -138,7 +152,7 @@ try {
   assert.equal(ownImage.status, 200);
   assert.deepEqual([...new Uint8Array(await ownImage.arrayBuffer())], [255, 216, 255, 217]);
   assert.equal((await fetch(media, { headers: { Cookie: cookies[1] } })).status, 404);
-  const repeated = await inspect(true, origin, "Farm A camera");
+  const repeated = await inspect(true, origin, "Farm A camera", penA.id);
   assert.equal(repeated.status, 201);
   const later = await repeated.json();
   const query = new URLSearchParams({ earlier: saved.observation.id, later: later.observation.id });
@@ -148,6 +162,29 @@ try {
   assert.deepEqual((await comparable.json()).changes.map(({ category }) => category), ["LITTER"]);
   assert.equal((await fetch(comparisonUrl, { headers: { Cookie: cookies[1] } })).status, 404);
   assert.equal((await fetch(comparisonUrl)).status, 401);
+  const requestId = "oriya-" + randomUUID();
+  const penBody = (farmId, pen) => JSON.stringify({ purpose: "flockence.pen-report.v1", farmId, requestId, pen });
+  const signedRequest = (farmId, raw) => {
+    const now = Math.floor(Date.now() / 1000);
+    return fetch(origin + "/api/integrations/oriya/pen-report", {
+      method: "POST", body: raw, headers: {
+        "Content-Type": "application/json", "X-Flockence-Farm": farmId, "X-Oriya-Timestamp": String(now),
+        "X-Oriya-Signature": signOriyaBody(secret, now, raw),
+      },
+    });
+  };
+  const validBody = penBody(ids[0], "Test pen");
+  const linked = await signedRequest(ids[0], validBody);
+  assert.equal(linked.status, 200);
+  const report = await linked.json();
+  assert.equal(report.pen.id, penA.id);
+  assert.equal(report.inspections.length, 2);
+  assert.equal(report.inspections[0].status, "WARNING");
+  assert.equal(report.farmContext, null);
+  assert.equal("imageUrl" in report.inspections[0], false);
+  assert.equal((await signedRequest(ids[0], validBody)).status, 409);
+  assert.equal((await signedRequest(ids[1], validBody)).status, 400);
+  assert.equal((await signedRequest(ids[1], penBody(ids[1], "Other farm pen"))).status, 401);
   const reportUrl = origin + "/api/vision/research";
   const research = await fetch(reportUrl, { headers: { Cookie: cookies[0] } });
   assert.equal(research.status, 200);

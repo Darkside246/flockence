@@ -28,7 +28,7 @@ const score = (ratio: number) => (ratio * 100).toFixed(1) + "%";
 type VisionCamera = { name: string; source: "blink" | "rtsp" };
 type Batch = { id: string; name: string };
 type VisionResult = { summary?: string; confidence?: string; severity?: string; observations?: { title?: string; detail?: string; confidence?: string }[]; concerns?: { title?: string; whyItMatters?: string }[]; checks?: string[]; escalate?: boolean; escalationReason?: string; medicalDisclaimer?: string };
-type Assessment = { source: { kind: "UPLOAD" | "CAMERA"; name?: string }; status: string };
+type Assessment = { source: { kind: "UPLOAD" | "CAMERA"; name?: string }; status: string; pen?: { id: string; name: string } };
 type Comparison = { earlier: { at: string; status: string }; later: { at: string; status: string }; changes: { category: string; before: string; after: string; earlierEvidence: string; laterEvidence: string }[] };
 const describe = (value: string) => value.toLowerCase().replaceAll("_", " ");
 type HistoryRow = { visionAssessment?: Assessment | null; id: string; observedAt: string; imageUrl?: string; notes?: string; category?: string; severity?: string; batchId?: string };
@@ -36,6 +36,8 @@ type HistoryRow = { visionAssessment?: Assessment | null; id: string; observedAt
 export default function VisionPage() {
   const [category, setCategory] = useState("PEN");
   const [batchId, setBatchId] = useState("");
+  const [penId, setPenId] = useState("");
+  const [pens, setPens] = useState<{ id: string; name: string }[]>([]);
   const [notes, setNotes] = useState("");
   const [batches, setBatches] = useState<Batch[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -63,6 +65,8 @@ export default function VisionPage() {
   useEffect(() => {
     fetch("/api/batches", { cache: "no-store" }).then(r => r.json()).then(setBatches).catch(() => setBatches([]));
     loadHistory().catch(() => undefined);
+    fetch("/api/vision/pens", { cache: "no-store" }).then((r) => r.ok ? r.json() : [])
+      .then(setPens).catch(() => setPens([]));
     fetch("/api/vision/cameras", { cache: "no-store" }).then((r) => r.ok ? r.json() : [])
       .then(setCameras).catch(() => setCameras([]));
     fetch("/api/vision/research", { cache: "no-store" }).then((r) => r.ok ? r.json() : null)
@@ -96,6 +100,7 @@ export default function VisionPage() {
     } else if (file) form.append("image", file);
     form.append("category", category);
     form.append("batchId", batchId);
+    if (penId) form.append("penId", penId);
     form.append("notes", notes);
     try {
       const response = await fetch("/api/vision", { method: "POST", body: form });
@@ -162,6 +167,10 @@ export default function VisionPage() {
 
         <div className="grid2" style={{ marginTop: 18 }}><label>Batch<select value={batchId} onChange={e => setBatchId(e.target.value)}><option value="">Farm-wide</option>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label><label>What should the AI know?<input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Example: birds are 24 days old and feed intake dropped" /></label></div>
 
+        {pens.length > 0 && <label>Pen<select value={penId} onChange={(event) => setPenId(event.target.value)}>
+          <option value="">No pen assigned</option>
+          {pens.map((pen) => <option key={pen.id} value={pen.id}>{pen.name}</option>)}
+        </select></label>}
         <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy}>{busy ? "Analyzing photo…" : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
       </form>
 
@@ -191,7 +200,7 @@ export default function VisionPage() {
         <a className="action" href="https://doi.org/10.5281/zenodo.20672799">ChickenVerse dataset and license</a>
       </section>}
       {comparableHistory.length >= 2 && <section className="section card">
-        <div className="section-head"><div><h3>Compare camera inspections</h3><p>Choose two inspections from the same camera, batch and inspection category.</p></div></div>
+        <div className="section-head"><div><h3>Compare camera inspections</h3><p>Choose two inspections from the same camera, pen, batch and inspection category.</p></div></div>
         <form onSubmit={compare}>
           <div className="grid2">{[[earlier, setEarlier, "First inspection"], [later, setLater, "Second inspection"]].map((field) => {
             const [value, setter, title] = field as [string, (id: string) => void, string];
@@ -212,7 +221,7 @@ export default function VisionPage() {
           </li>)}</ul> : <p>No category had visible evidence in both inspections.</p>}
         </div>}
       </section>}
-      <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong>{item.visionAssessment && <span>Assessment · {describe(item.visionAssessment.status)}</span>}<span>{item.notes?.slice(0, 280) || "No notes recorded."}</span></div></article>)}</div>}</section>
+      <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong>{item.visionAssessment && <span>{item.visionAssessment.pen?.name ? item.visionAssessment.pen.name + " · " : ""}{describe(item.visionAssessment.status)}</span>}<span>{item.notes?.slice(0, 280) || "No notes recorded."}</span></div></article>)}</div>}</section>
     </main>
   </div>;
 }
