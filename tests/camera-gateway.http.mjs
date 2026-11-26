@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash, createHmac } from "node:crypto";
 import { spawn } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { PrismaClient } from "@prisma/client";
@@ -170,6 +171,64 @@ try {
   assert.equal((await fetch(edgePath, { method: "DELETE", headers: deviceHeaders(ownerA) })).status, 200);
   assert.equal((await send(edge.token)).status, 401);
   console.log("Shared sessions, smart device isolation, encrypted state, and revocation passed.");
+
+  const authUrl = origin + "/api/auth/sessions";
+  const meUrl = origin + "/api/auth/me";
+  const cookieFor = (token) => SESSION_COOKIE + "=" + encodeURIComponent(token);
+  const owner = await runAsFarm(farms[0], () => prisma.user.findUniqueOrThrow({ where: { email: "gateway-ci-0@example.test" } }));
+  const expectedExpiry = Date.now() + 15 * 60_000;
+  const issueLegacy = async (signedFarm) => {
+    const legacyBody = Buffer.from(JSON.stringify({
+      userId: owner.id, expiresAt: expectedExpiry, nonce: signedFarm ?? "legacy-compatibility",
+      ...(signedFarm ? { farmId: signedFarm } : {}),
+    })).toString("base64url");
+    const token = legacyBody + "." + createHmac("sha256", process.env.AUTH_SECRET).update(legacyBody).digest("base64url");
+    const key = "AUTH_SESSION::" + createHash("sha256").update(token).digest("hex");
+    await runAsFarm(farms[0], () => prisma.setting.create({
+      data: { key, farmId: farms[0], value: JSON.stringify({ userId: owner.id, expiresAt: new Date(expectedExpiry).toISOString() }) },
+    }));
+    return { token, key };
+  };
+
+  const legacy = await issueLegacy();
+  assert.equal((await fetch(meUrl, { headers: { Cookie: cookieFor(legacy.token) } })).status, 200);
+  const wrongFarm = await issueLegacy(farms[1]);
+  assert.equal((await fetch(meUrl, { headers: { Cookie: cookieFor(wrongFarm.token) } })).status, 401);
+  await runAsFarm(farms[0], () => prisma.setting.deleteMany({ where: { key: wrongFarm.key } }));
+  assert.equal((await fetch(meUrl, { headers: { Cookie: SESSION_COOKIE + "=%ZZ" } })).status, 401);
+
+  const spare = await runAsFarm(farms[0], () => createSession(owner.id));
+  const sessions = async (cookie) => {
+    const response = await fetch(authUrl, { headers: { Cookie: cookie } });
+    assert.equal(response.status, 200);
+    assert.ok(response.headers.get("cache-control")?.includes("no-store"));
+    return (await response.json()).sessions;
+  };
+  const listed = await sessions(ownerA);
+  assert.equal(listed.length, 3);
+  assert.equal(listed.filter(({ current }) => current).length, 1);
+  assert.equal(JSON.stringify(listed).includes(spare.token), false);
+  const spareSession = (await sessions(cookieFor(spare.token))).find(({ current }) => current);
+  const legacySession = (await sessions(cookieFor(legacy.token))).find(({ current }) => current);
+  const currentSession = listed.find(({ current }) => current);
+  const revoke = (cookie, query, requestOrigin = origin) => fetch(authUrl + query, {
+    method: "DELETE", headers: { Cookie: cookie, Origin: requestOrigin },
+  });
+  const legacySelector = "?id=" + encodeURIComponent(legacySession.id);
+  assert.equal((await revoke(ownerA, legacySelector, "https://other.example")).status, 403);
+  assert.equal((await revoke(ownerB, legacySelector)).status, 404);
+  assert.equal((await revoke(worker, legacySelector)).status, 404);
+  assert.equal((await revoke(ownerA, "?id=" + currentSession.id)).status, 404);
+  assert.equal((await revoke(ownerA, legacySelector)).status, 200);
+  assert.equal((await fetch(meUrl, { headers: { Cookie: cookieFor(legacy.token) } })).status, 401);
+  assert.equal((await revoke(ownerA, "?scope=others")).status, 200);
+  assert.equal((await fetch(meUrl, { headers: { Cookie: cookieFor(spare.token) } })).status, 401);
+  assert.deepEqual((await sessions(ownerA)).map(({ id }) => id), [currentSession.id]);
+  assert.equal((await sessions(worker)).length, 1);
+  assert.equal((await sessions(ownerB)).length, 1);
+  assert.notEqual(spareSession.id, currentSession.id);
+  console.log("Session farm binding, legacy compatibility, cross-origin protection, and revocation passed.");
+
 } finally {
   app?.kill();
   for (const farmId of farms) await runAsFarm(farmId, () => prisma.farm.deleteMany({ where: { id: farmId } }));
