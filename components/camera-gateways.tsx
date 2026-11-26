@@ -15,7 +15,7 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export function CameraGateways({ brand }: { brand: Brand | null }) {
+export function CameraGateways({ brand, onOwner }: { brand: Brand | null; onOwner: (owner: boolean) => void }) {
   const [setup, setSetup] = useState<Setup | null>(null);
   const [name, setName] = useState("");
   const [token, setToken] = useState("");
@@ -24,12 +24,17 @@ export function CameraGateways({ brand }: { brand: Brand | null }) {
 
   const load = useCallback(async () => {
     try {
-      setSetup(await api<Setup>(endpoint));
+      const data = await api<Setup>(endpoint);
+      setSetup(data);
+      onOwner(data.owner);
       setError("");
     } catch (error) {
+      setSetup(null);
+      setToken("");
+      onOwner(false);
       setError(error instanceof Error ? error.message : "Could not load private camera feeds.");
     }
-  }, []);
+  }, [onOwner]);
   useEffect(() => { void load(); }, [load]);
 
   async function add(event: FormEvent<HTMLFormElement>) {

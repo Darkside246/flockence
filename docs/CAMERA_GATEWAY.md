@@ -6,7 +6,7 @@ Use this route for compatible Wyze RTSP cameras and other cameras on a farm LAN.
 
 1. In a restored staging database, provision a PostgreSQL login named flockence_camera_gateway with no superuser, bypass-RLS, database creation, replication, or role-creation privileges. It must have no role memberships. Run ops/postgres/camera-gateway-role.sql as the Setting table owner. The normal Prisma role must still own or have explicitly verified access to Setting. Installing this policy enables RLS on Setting, so verify ordinary sign-in, reset, invitations, and integrations with the actual app role before production.
 2. Set CAMERA_GATEWAY_DATABASE_URL to the restricted role's own connection string, with TLS when the database connection leaves the host. Set CAMERA_GATEWAY_KEY to 32 random bytes encoded as unpadded base64url. Keep the key in the app's secret storage and encrypted backup. It is independent of the app session key.
-3. Sign in as an owner, go to Cameras, pick Wyze or Other network cameras, and create a snapshot feed. Put its one-time credential into a mode-600 file on the farm's gateway. Removing the feed deletes its stored snapshot and revokes the credential.
+3. Sign in as an owner, go to Cameras, pick Wyze or Other network cameras, and create a snapshot feed. Put its upload credential, displayed once, into a mode-600 file on the farm's gateway. Removing the feed deletes its stored snapshot and revokes the credential.
 
 The application rejects gateway data operations if the configured connection is not the dedicated role or the named restricting policy is missing. Other app tables and roles are unchanged by the gateway code. This does not activate production-wide RLS.
 

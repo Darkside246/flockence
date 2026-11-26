@@ -319,6 +319,7 @@ function ManageCameras({ cameras, onChange }: { cameras: Camera[]; onChange: () 
 export default function CamerasPage() {
   const [status, setStatus] = useState<Status | null>(null), [cameras, setCameras] = useState<Camera[]>([]), [error, setError] = useState(""), [tab, setTab] = useState<Tab>("live"), [selected, setSelected] = useState("");
   const [provider, setProvider] = useState<Provider | null>(null);
+  const [gatewayOwner, setGatewayOwner] = useState(false);
   const load = useCallback(async () => {
     try {
       const s = await json<Status>(api("status")); setStatus(s); setError("");
@@ -330,7 +331,7 @@ export default function CamerasPage() {
   useEffect(() => { load(); }, [load]);
   return <div className="shell"><header className="topbar"><div className="brand"><div><div className="hero-kicker">Site security</div><h1>Cameras</h1><p>Live view, latest pictures and recordings from Blink and local network cameras.</p></div><span className="badge">LIVE · STILLS · RECORDINGS</span></div></header><Nav /><main className="main">
     {error && <div className="card" role="alert"><p>{error}</p></div>}
-    {status?.canManage && <>
+    {(status?.canManage || gatewayOwner) && <>
       <section className="card" aria-label="Camera brand">
         <div className="section-head"><div><h2>Connect a camera</h2><p>Choose the brand or connection type for this farm.</p></div></div>
         <div className="segmented">
@@ -338,15 +339,15 @@ export default function CamerasPage() {
             <button key={id} type="button" aria-pressed={provider === id} className={provider === id ? "selected" : ""} onClick={() => setProvider(id)}>{label}</button>
           )}
         </div>
-        {provider === "blink" && !status.available && <p>Blink setup is waiting for this farm’s private camera service.</p>}
-        {provider === "blink" && status.connected && <p>Blink is connected to this farm.</p>}
+        {provider === "blink" && !status?.available && <p>Blink setup is waiting for this farm’s private camera service.</p>}
+        {provider === "blink" && status?.connected && <p>Blink is connected to this farm.</p>}
         {provider === "wyze" && <p><a href="https://my.wyze.com/live" target="_blank" rel="noopener noreferrer">Open Wyze Web View</a> to sign in to Wyze and watch live. To send snapshots to Flockence, check <a href="https://support.wyze.com/hc/en-us/articles/360026245231-Wyze-Cam-RTSP" target="_blank" rel="noopener noreferrer">which Wyze models support RTSP</a>.</p>}
-        {provider === "network" && !status.networkCameras && <p>Use a private farm gateway to send snapshots from a compatible camera.</p>}
+        {provider === "network" && !status?.networkCameras && <p>Use a private farm gateway to send snapshots from a compatible camera.</p>}
       </section>
-      {provider === "blink" && status.available && !status.connected && <ConnectCard status={status} onDone={load} />}
-      {(provider === "network" || provider === "wyze") && status.available && status.networkCameras && <ManageCameras cameras={cameras} onChange={load} />}
+      {provider === "blink" && status?.available && !status.connected && <ConnectCard status={status} onDone={load} />}
+      {(provider === "network" || provider === "wyze") && status?.available && status.networkCameras && <ManageCameras cameras={cameras} onChange={load} />}
     </>}
-    <CameraGateways brand={provider === "wyze" || provider === "network" ? provider : null} />
+    <CameraGateways brand={provider === "wyze" || provider === "network" ? provider : null} onOwner={setGatewayOwner} />
     {status?.available && <>
       {cameras.length === 0 && <>
         <div className="card"><p>No cameras are connected yet. A farm owner can connect a camera or add recordings.</p></div>
