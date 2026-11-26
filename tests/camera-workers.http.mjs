@@ -18,7 +18,9 @@ const { runAsFarm } = await import("../lib/farm-scope.ts");
 const { createSession, SESSION_COOKIE } = await import("../lib/auth.ts");
 
 const origin = "http://127.0.0.1:3100";
-const ids = ["camera-ci-a", "camera-ci-b", "camera-ci-unconfigured"];
+const fixture = randomUUID().slice(0, 8);
+const ids = ["camera-ci-a", "camera-ci-b", "camera-ci-unconfigured"].map((id) => id + "-" + fixture);
+const platformId = "owner-ci-" + fixture;
 const servers = [];
 const visionStorage = await mkdtemp(join(tmpdir(), "flockence-vision-ci-"));
 const researchReport = join(visionStorage, "research.json");
@@ -63,7 +65,7 @@ try {
   const cookies = await Promise.all(ids.map((farmId, index) => runAsFarm(farmId, async () => {
     await prisma.farm.create({ data: { id: farmId, name: farmId } });
     const user = await prisma.user.create({
-      data: { id: "owner-ci-" + index, farmId, name: "Test farm owner", email: "camera-ci-" + index + "@example.test", role: "OWNER" },
+      data: { ...(index === 0 ? { id: platformId } : {}), farmId, name: "Test farm owner", email: "camera-ci-" + index + "@example.test", role: "OWNER" },
     });
     const { token } = await createSession(user.id);
     return SESSION_COOKIE + "=" + encodeURIComponent(token);
@@ -83,7 +85,7 @@ try {
   const b = await worker("Farm B camera", "b".repeat(48), "rtsp");
   app = spawn(process.execPath, ["--import", "./tests/support/mock-vision-provider.mjs", "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], {
     stdio: "inherit",
-    env: { ...process.env, APP_URL: origin, FLOCKENCE_PLATFORM_ADMIN_IDS: "owner-ci-0", ORIYA_URL: "https://oriya.si", CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
+    env: { ...process.env, APP_URL: origin, FLOCKENCE_PLATFORM_ADMIN_IDS: platformId, ORIYA_URL: "https://oriya.si", CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
       CHICKENVERSE_RESEARCH_REPORT: researchReport, VISION_STORAGE_DIR: visionStorage, FLOCKENCE_CAMERA_VISION: "on", OPENAI_API_KEY: "ci-only-unused", FLOCKENCE_CAMERA_WORKERS: JSON.stringify({ [ids[0]]: a, [ids[1]]: b }) },
   });
   let ready = false;
