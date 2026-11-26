@@ -85,6 +85,7 @@ jobs:
           python3 -m compileall -q services/blink
           python3 -m unittest discover -s services/blink/tests -p test_clip_archive.py
           python3 tests/chickenverse-research.py
+          node --experimental-strip-types --test tests/vision-assessment.mjs
 
       - name: Type check
         run: |
@@ -120,6 +121,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 "$DATABASE_URL" --file ops/postgres/farm-tenant-access.sql
           node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/farm-isolation.db.mjs
           node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-gateway.http.mjs
+          node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-workers.http.mjs
           python3 -m py_compile scripts/push-camera-frame.py scripts/push-device-gateway.py
           python3 tests/device_gateway_edge.py
 

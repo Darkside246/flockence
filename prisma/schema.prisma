@@ -951,6 +951,7 @@ model HealthObservation {
   beddingIssue Boolean?
   imageUrl String?
   visionMediaId String?
+  visionAssessment Json?
   farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   visionMedia VisionMedia? @relation(fields: [visionMediaId], references: [id], onDelete: SetNull)
   batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)

@@ -28,7 +28,10 @@ const score = (ratio: number) => (ratio * 100).toFixed(1) + "%";
 type VisionCamera = { name: string; source: "blink" | "rtsp" };
 type Batch = { id: string; name: string };
 type VisionResult = { summary?: string; confidence?: string; severity?: string; observations?: { title?: string; detail?: string; confidence?: string }[]; concerns?: { title?: string; whyItMatters?: string }[]; checks?: string[]; escalate?: boolean; escalationReason?: string; medicalDisclaimer?: string };
-type HistoryRow = { id: string; observedAt: string; imageUrl?: string; notes?: string; category?: string; severity?: string; batchId?: string };
+type Assessment = { source: { kind: "UPLOAD" | "CAMERA"; name?: string }; status: string };
+type Comparison = { earlier: { at: string; status: string }; later: { at: string; status: string }; changes: { category: string; before: string; after: string; earlierEvidence: string; laterEvidence: string }[] };
+const describe = (value: string) => value.toLowerCase().replaceAll("_", " ");
+type HistoryRow = { visionAssessment?: Assessment | null; id: string; observedAt: string; imageUrl?: string; notes?: string; category?: string; severity?: string; batchId?: string };
 
 export default function VisionPage() {
   const [category, setCategory] = useState("PEN");
@@ -45,6 +48,12 @@ export default function VisionPage() {
   const [result, setResult] = useState<VisionResult | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [earlier, setEarlier] = useState("");
+  const [later, setLater] = useState("");
+  const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [comparisonError, setComparisonError] = useState("");
+  const [comparing, setComparing] = useState(false);
+  const comparableHistory = history.filter((item) => item.visionAssessment?.source.kind === "CAMERA");
 
   async function loadHistory() {
     const r = await fetch("/api/vision", { cache: "no-store" });
@@ -99,6 +108,24 @@ export default function VisionPage() {
       setMessage(error instanceof Error ? error.message : "Could not analyze photo.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function compare(event: FormEvent) {
+    event.preventDefault();
+    setComparison(null);
+    setComparisonError("");
+    setComparing(true);
+    try {
+      const query = new URLSearchParams({ earlier, later });
+      const response = await fetch("/api/vision/compare?" + query, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not compare inspections.");
+      setComparison(data);
+    } catch (error) {
+      setComparisonError(error instanceof Error ? error.message : "Could not compare inspections.");
+    } finally {
+      setComparing(false);
     }
   }
 
@@ -163,7 +190,29 @@ export default function VisionPage() {
         </>}
         <a className="action" href="https://doi.org/10.5281/zenodo.20672799">ChickenVerse dataset and license</a>
       </section>}
-      <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong><span>{item.notes?.slice(0, 280) || "No notes recorded."}</span></div></article>)}</div>}</section>
+      {comparableHistory.length >= 2 && <section className="section card">
+        <div className="section-head"><div><h3>Compare camera inspections</h3><p>Choose two inspections from the same camera, batch and inspection category.</p></div></div>
+        <form onSubmit={compare}>
+          <div className="grid2">{[[earlier, setEarlier, "First inspection"], [later, setLater, "Second inspection"]].map((field) => {
+            const [value, setter, title] = field as [string, (id: string) => void, string];
+            return <label key={title}>{title}<select required value={value} onChange={(event) => {
+              setter(event.target.value); setComparison(null); setComparisonError("");
+            }}><option value="">Choose a camera inspection</option>{comparableHistory.map((item) =>
+              <option key={item.id} value={item.id}>{item.visionAssessment?.source.name} · {new Date(item.observedAt).toLocaleString()}</option>
+            )}</select></label>;
+          })}</div>
+          <button className="button button-primary" type="submit" disabled={comparing || !earlier || !later || earlier === later}>Compare inspections</button>
+        </form>
+        {comparisonError && <p role="alert">{comparisonError}</p>}
+        {comparison && <div aria-live="polite">
+          <p>{new Date(comparison.earlier.at).toLocaleString()} to {new Date(comparison.later.at).toLocaleString()}</p>
+          {comparison.changes.length ? <ul>{comparison.changes.map((item) => <li key={item.category}>
+            <strong>{describe(item.category)}</strong> · {describe(item.before)} → {describe(item.after)}
+            <p>Earlier: {item.earlierEvidence}<br />Later: {item.laterEvidence}</p>
+          </li>)}</ul> : <p>No category had visible evidence in both inspections.</p>}
+        </div>}
+      </section>}
+      <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong>{item.visionAssessment && <span>Assessment · {describe(item.visionAssessment.status)}</span>}<span>{item.notes?.slice(0, 280) || "No notes recorded."}</span></div></article>)}</div>}</section>
     </main>
   </div>;
 }
