@@ -15,7 +15,7 @@ export function isGatewayOrigin(request: Request) {
   }
 }
 
-export async function boundedBody(request: Request, limit: number) {
+export async function boundedBody(request: Pick<Request, "headers" | "body">, limit: number) {
   const size = request.headers.get("content-length");
   if (size !== null && (!/^\d+$/.test(size) || Number(size) > limit)) return null;
   const reader = request.body?.getReader();

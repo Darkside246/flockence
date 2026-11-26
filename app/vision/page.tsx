@@ -17,6 +17,7 @@ const categories = [
 
 const moneyish = (value: unknown) => String(value ?? "");
 
+type VisionCamera = { name: string; source: "blink" | "rtsp" };
 type Batch = { id: string; name: string };
 type VisionResult = { summary?: string; confidence?: string; severity?: string; observations?: { title?: string; detail?: string; confidence?: string }[]; concerns?: { title?: string; whyItMatters?: string }[]; checks?: string[]; escalate?: boolean; escalationReason?: string; medicalDisclaimer?: string };
 type HistoryRow = { id: string; observedAt: string; imageUrl?: string; notes?: string; category?: string; severity?: string; batchId?: string };
@@ -29,6 +30,9 @@ export default function VisionPage() {
   const [history, setHistory] = useState<HistoryRow[]>([]);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState("");
+  const [cameras, setCameras] = useState<VisionCamera[]>([]);
+  const [cameraName, setCameraName] = useState("");
+  const [shareCamera, setShareCamera] = useState(false);
   const [result, setResult] = useState<VisionResult | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -41,11 +45,17 @@ export default function VisionPage() {
   useEffect(() => {
     fetch("/api/batches", { cache: "no-store" }).then(r => r.json()).then(setBatches).catch(() => setBatches([]));
     loadHistory().catch(() => undefined);
+    fetch("/api/vision/cameras", { cache: "no-store" }).then((r) => r.ok ? r.json() : [])
+      .then(setCameras).catch(() => setCameras([]));
   }, []);
+
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   function pickFile(event: ChangeEvent<HTMLInputElement>) {
     const next = event.target.files?.[0] ?? null;
     setFile(next);
+    setCameraName("");
+    setShareCamera(false);
     setResult(null);
     setMessage("");
     if (next) setPreview(URL.createObjectURL(next));
@@ -54,12 +64,16 @@ export default function VisionPage() {
 
   async function analyze(event: FormEvent) {
     event.preventDefault();
-    if (!file) { setMessage("Add a photo first."); return; }
+    if (!file && !cameraName) { setMessage("Add a photo or choose a camera first."); return; }
+    if (cameraName && !shareCamera) { setMessage("Confirm that the camera image can be shared for analysis."); return; }
     setBusy(true);
     setMessage("");
     setResult(null);
     const form = new FormData();
-    form.append("image", file);
+    if (cameraName) {
+      form.append("camera", cameraName);
+      form.append("shareCameraImage", "yes");
+    } else if (file) form.append("image", file);
     form.append("category", category);
     form.append("batchId", batchId);
     form.append("notes", notes);
@@ -89,6 +103,23 @@ export default function VisionPage() {
 
         <div className="section-head" style={{ marginTop: 24 }}><div><h3>2. Add the photo</h3><p>On a phone, this can open the camera. Maximum image size: 8 MB.</p></div></div>
         <label className="upload-zone"><input type="file" accept="image/*" capture="environment" onChange={pickFile} /><span className="upload-icon">+</span><strong>{file ? file.name : "Take photo or choose image"}</strong><small>{file ? "Ready for inspection" : "Use a clear photo with good lighting"}</small></label>
+        {cameras.length > 0 && <div className="grid2" style={{ marginTop: 18 }}>
+          <label>Farm camera<select value={cameraName} onChange={(event) => {
+            setCameraName(event.target.value);
+            setShareCamera(false);
+            setResult(null);
+            setMessage("");
+            if (event.target.value) { setFile(null); setPreview(""); }
+          }}>
+            <option value="">Choose a connected camera</option>
+            {cameras.map((camera) => <option key={camera.name} value={camera.name}>
+              {camera.name} ({camera.source === "blink" ? "Blink" : "Network camera"})
+            </option>)}
+          </select></label>
+          {cameraName && <label><input type="checkbox" checked={shareCamera} onChange={(event) => setShareCamera(event.target.checked)} />
+            Send one new camera image to the vision provider for this inspection and save it in farm history.
+          </label>}
+        </div>}
         {preview && <div className="vision-preview"><img src={preview} alt="Selected poultry inspection" /></div>}
 
         <div className="grid2" style={{ marginTop: 18 }}><label>Batch<select value={batchId} onChange={e => setBatchId(e.target.value)}><option value="">Farm-wide</option>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label><label>What should the AI know?<input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Example: birds are 24 days old and feed intake dropped" /></label></div>
