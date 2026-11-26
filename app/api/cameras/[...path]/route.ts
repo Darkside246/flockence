@@ -1,3 +1,4 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { NextResponse } from "next/server";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
 import { boundedBody, gatewayResponse } from "@/lib/camera-gateway-http";
@@ -41,6 +42,8 @@ const tooMany = () => NextResponse.json({ error: "Too many camera requests. Wait
 export async function GET(request: Request, ctx: Ctx) {
   const session = await currentUserOrRoleResponse(request, cameraViewRoles());
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   if (!cameraRequestAllowed(session.user.id)) return tooMany();
   const segments = (await ctx.params).path;
   const path = segments.join("/");
@@ -87,6 +90,8 @@ async function mutate(request: Request, ctx: Ctx, method: "POST" | "DELETE", own
   if (!owner && !matches(manageList, path)) return NextResponse.json({ error: "Not found." }, { status: 404 });
   const session = await currentUserOrRoleResponse(request, owner ? ["OWNER"] : ["OWNER", "MANAGER"]);
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   if (!cameraRequestAllowed(session.user.id)) return tooMany();
   const worker = cameraWorker();
   if (!worker) return notConfigured();
@@ -132,6 +137,8 @@ export async function POST(request: Request, ctx: Ctx) {
   if ((await ctx.params).path.join("/") !== "blink/settings") return mutate(request, ctx, "POST", OWNER_POST, MANAGE_POST);
   const session = await currentUserOrRoleResponse(request, ["OWNER"]);
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   if (!isTrustedAppOrigin(request)) return gatewayResponse({ error: "Open Cameras in Flockence to change settings." }, 403);
   if (!cameraWorker()) return notConfigured();
   if (request.headers.get("content-type") !== "application/json") return gatewayResponse({ error: "Use a JSON camera setting." }, 415);

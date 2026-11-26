@@ -1,3 +1,4 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { boundedBody, gatewayResponse, isGatewayOrigin } from "@/lib/camera-gateway-http";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
 import { createDeviceLink, deviceGatewayEnabled, listDeviceLinks } from "@/lib/device-gateway";
@@ -8,6 +9,8 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const session = await currentUserOrRoleResponse(request);
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   const owner = session.user.role === "OWNER";
   if (!deviceGatewayEnabled()) return gatewayResponse({ enabled: false, owner, links: [] });
   try {
@@ -20,6 +23,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await currentUserOrRoleResponse(request, ["OWNER"]);
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   if (!isGatewayOrigin(request)) return gatewayResponse({ error: "Open Devices in Flockence to link a gateway." }, 403);
   if (!deviceGatewayEnabled()) return gatewayResponse({ error: "Device gateway setup is unavailable." }, 503);
 

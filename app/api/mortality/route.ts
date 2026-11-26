@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { z } from "zod";
+import { isTrustedAppOrigin } from "@/lib/request-origin";
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
@@ -5,6 +8,13 @@ import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { calculateLiveBirdsAtDate, isCalendarDateNotFuture, isWithinInitialFlockCount, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 
+const offlineSchema = z.strictObject({
+  id: z.uuid(),
+  farmId: z.string().min(1).max(64),
+  userId: z.string().min(1).max(100),
+});
+
+class MortalityConflict extends Error {}
 
 export async function GET(request: Request) {
   const session = await currentUserOrResponse(request);
@@ -22,12 +32,29 @@ export async function POST(request: Request) {
   const session = await currentUserOrRoleResponse(request);
   if (session.response) return session.response;
 
+  let isOffline = false;
   try {
     await ensureFarm();
     const input = await request.json();
     const batchId = typeof input.batchId === "string" ? input.batchId : "";
     const date = parseCalendarDate(input.date);
     const quantity = Number(input.quantity);
+    const reason = typeof input.reason === "string" && input.reason.trim() ? input.reason.trim() : null;
+    const notes = typeof input.notes === "string" && input.notes.trim() ? input.notes.trim() : null;
+    let offlineEventId: string | undefined;
+    if (input.offline !== undefined) {
+      isOffline = true;
+      const recorded = offlineSchema.safeParse(input.offline);
+      if (!isTrustedAppOrigin(request) || !recorded.success ||
+        recorded.data.farmId !== session.user.farmId || recorded.data.userId !== session.user.id) {
+        return NextResponse.json({ error: "Sign in as the original farm account to sync this entry." }, { status: 403 });
+      }
+      if ((reason?.length ?? 0) > 120 || (notes?.length ?? 0) > 1000) {
+        return NextResponse.json({ error: "The offline reason or note is too long." }, { status: 400 });
+      }
+      offlineEventId = "offline-" + createHash("sha256")
+        .update(JSON.stringify([session.user.farmId, session.user.id, recorded.data.id.toLowerCase()])).digest("hex");
+    }
 
     if (!batchId || !date || !isCalendarDateNotFuture(date) || !Number.isSafeInteger(quantity) || quantity < 1) {
       return NextResponse.json(
@@ -43,11 +70,17 @@ export async function POST(request: Request) {
     if (!batch) return NextResponse.json({ error: "Batch not found." }, { status: 404 });
 
     const batchStartDate = new Date(`${batch.startDate.toISOString().slice(0, 10)}T00:00:00.000Z`);
-    if (date < batchStartDate) {
-      return NextResponse.json({ error: "Mortality cannot be recorded before the flock start date." }, { status: 400 });
-    }
-
     const event = await prisma.$transaction(async (tx) => {
+      if (offlineEventId) {
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${offlineEventId}, 0))::text`;
+        const recorded = await tx.mortalityEvent.findUnique({ where: { id: offlineEventId } });
+        if (recorded) {
+          if (recorded.batchId !== batchId || recorded.quantity !== quantity || recorded.date.getTime() !== date.getTime()
+            || recorded.reason !== reason || recorded.notes !== notes) throw new MortalityConflict("This offline entry was already synced with different details.");
+          return recorded;
+        }
+      }
+      if (date < batchStartDate) throw new MortalityConflict("Mortality cannot be recorded before the flock start date.");
       // All mortality writes for a flock serialize before checking its cumulative bird count.
       await lockFlockOperations(tx, [batch.id]);
 
@@ -95,7 +128,7 @@ export async function POST(request: Request) {
         date,
       );
       if (availableOnFarm == null || quantity > availableOnFarm) {
-        throw new Error("Deaths recorded for this date cannot exceed the reconciled birds on the farm.");
+        throw new MortalityConflict("Deaths recorded for this date cannot exceed the reconciled birds on the farm.");
       }
 
       if (!isWithinInitialFlockCount(
@@ -105,7 +138,7 @@ export async function POST(request: Request) {
         quantity,
         0,
       )) {
-        throw new Error("Deaths, slaughtered birds and condemned birds cannot exceed the flock's initial bird count.");
+        throw new MortalityConflict("Deaths, slaughtered birds and condemned birds cannot exceed the flock's initial bird count.");
       }
 
       const totalDeathsAfter = (allMortality._sum.quantity ?? 0) + quantity;
@@ -116,8 +149,9 @@ export async function POST(request: Request) {
           batchId: batch.id,
           date,
           quantity,
-          reason: typeof input.reason === "string" && input.reason.trim() ? input.reason.trim() : null,
-          notes: typeof input.notes === "string" && input.notes.trim() ? input.notes.trim() : null,
+          ...(offlineEventId ? { id: offlineEventId } : {}),
+          reason,
+          notes,
         },
       });
 
@@ -145,6 +179,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(event, { status: 201 });
   } catch (error) {
+    if (isOffline) {
+      if (error instanceof MortalityConflict) return NextResponse.json({ error: error.message }, { status: 409 });
+      return NextResponse.json({ error: "Sync is temporarily unavailable. The device can retry safely." }, { status: 503 });
+    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Invalid mortality entry." },
       { status: 400 },

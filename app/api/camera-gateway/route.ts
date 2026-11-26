@@ -1,3 +1,4 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
 import { cameraViewRoles } from "@/lib/camera-guard";
 import { createGateway, gatewayEnabled, listGateways } from "@/lib/camera-gateway";
@@ -8,6 +9,8 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   const session = await currentUserOrRoleResponse(request, cameraViewRoles());
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   const owner = session.user.role === "OWNER";
   if (!gatewayEnabled()) return gatewayResponse({ enabled: false, owner, feeds: [] });
   try {
@@ -20,6 +23,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await currentUserOrRoleResponse(request, ["OWNER"]);
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   if (!isGatewayOrigin(request)) return gatewayResponse({ error: "Use the Flockence Cameras page." }, 403);
   if (!gatewayEnabled()) return gatewayResponse({ error: "Private camera feeds are unavailable." }, 503);
   try {

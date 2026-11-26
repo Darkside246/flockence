@@ -1,3 +1,4 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { boundedBody } from "@/lib/camera-gateway-http";
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
     const config = await farmLinkConfig();
     if (!config || !verifyOriyaSignature(config.secret, request.headers.get("x-oriya-timestamp"),
       request.headers.get("x-oriya-signature"), raw).ok) return respond({ error: "LINK_UNAUTHORIZED" }, 401);
+    const locked = await premiumFeatureResponse();
+    if (locked) return locked;
 
     const limit = await checkRateLimit("oriya:pen-report:" + ask.farmId, 15, 60_000);
     if (!limit.allowed) return respond({ error: "RATE_LIMITED" }, 429);

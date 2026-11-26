@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,7 +18,9 @@ const { runAsFarm } = await import("../lib/farm-scope.ts");
 const { createSession, SESSION_COOKIE } = await import("../lib/auth.ts");
 
 const origin = "http://127.0.0.1:3100";
-const ids = ["camera-ci-a", "camera-ci-b", "camera-ci-unconfigured"];
+const fixture = randomUUID().slice(0, 8);
+const ids = ["camera-ci-a", "camera-ci-b", "camera-ci-unconfigured"].map((id) => id + "-" + fixture);
+const platformId = "owner-ci-" + fixture;
 const servers = [];
 const visionStorage = await mkdtemp(join(tmpdir(), "flockence-vision-ci-"));
 const researchReport = join(visionStorage, "research.json");
@@ -62,7 +65,7 @@ try {
   const cookies = await Promise.all(ids.map((farmId, index) => runAsFarm(farmId, async () => {
     await prisma.farm.create({ data: { id: farmId, name: farmId } });
     const user = await prisma.user.create({
-      data: { farmId, name: "Test farm owner", email: "camera-ci-" + index + "@example.test", role: "OWNER" },
+      data: { ...(index === 0 ? { id: platformId } : {}), farmId, name: "Test farm owner", email: "camera-ci-" + index + "@example.test", role: "OWNER" },
     });
     const { token } = await createSession(user.id);
     return SESSION_COOKIE + "=" + encodeURIComponent(token);
@@ -82,7 +85,7 @@ try {
   const b = await worker("Farm B camera", "b".repeat(48), "rtsp");
   app = spawn(process.execPath, ["--import", "./tests/support/mock-vision-provider.mjs", "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], {
     stdio: "inherit",
-    env: { ...process.env, APP_URL: origin, ORIYA_URL: "https://oriya.si", CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
+    env: { ...process.env, APP_URL: origin, FLOCKENCE_PLATFORM_ADMIN_IDS: platformId, ORIYA_URL: "https://oriya.si", CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
       CHICKENVERSE_RESEARCH_REPORT: researchReport, VISION_STORAGE_DIR: visionStorage, FLOCKENCE_CAMERA_VISION: "on", OPENAI_API_KEY: "ci-only-unused", FLOCKENCE_CAMERA_WORKERS: JSON.stringify({ [ids[0]]: a, [ids[1]]: b }) },
   });
   let ready = false;
@@ -191,6 +194,68 @@ try {
   assert.equal((await research.json()).report.behavior.macroF1, 0.75);
   assert.equal((await fetch(reportUrl, { headers: { Cookie: cookies[1] } })).status, 404);
   assert.equal((await fetch(reportUrl)).status, 401);
+  const headerFor = (index) => ({ Cookie: cookies[index], Origin: origin, "Content-Type": "application/json" });
+  const platform = origin + "/api/platform/status";
+  assert.equal((await fetch(platform, { headers: headerFor(1) })).status, 404);
+  assert.equal((await fetch(platform, { headers: headerFor(0) })).status, 200);
+  const settingsUrl = origin + "/api/settings";
+  const cost = (value) => fetch(settingsUrl, { method: "PUT", headers: headerFor(0), body: JSON.stringify({
+    settings: [{ key: "default_chick_cost", value, previous: null }],
+  }) });
+  assert.equal((await cost("2.95")).status, 200);
+  assert.equal((await cost("3.00")).status, 409);
+
+  const flock = await runAsFarm(ids[0], async () => {
+    await prisma.setting.create({ data: { key: "MEMBERSHIP_V1", value: "FREE" } });
+    return prisma.batch.create({ data: { name: "Offline test flock", startDate: new Date("2020-01-01"),
+      initialChicks: 20, chickCostMinor: 0, status: "ACTIVE" } });
+  });
+  assert.equal((await list(0, ids[1])).status, 403);
+  const workspace = await fetch(origin + "/api/offline/workspace", { headers: headerFor(0) }).then((response) => response.json());
+  assert.equal(workspace.flocks[0].id, flock.id);
+  const mortality = { batchId: flock.id, date: workspace.today, quantity: 2, offline: { ...workspace.scope, id: randomUUID() } };
+  const submit = (index, data) => fetch(origin + "/api/mortality", {
+    method: "POST", headers: headerFor(index), body: JSON.stringify(data),
+  });
+  assert.equal((await submit(1, mortality)).status, 403);
+  const [first, replay] = await Promise.all([submit(0, mortality), submit(0, mortality)]);
+  assert.equal(first.status, 201);
+  assert.equal(replay.status, 201);
+  assert.equal((await first.json()).id, (await replay.json()).id);
+  assert.equal((await submit(0, { ...mortality, quantity: 3 })).status, 409);
+  assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 1);
+  assert.equal(await runAsFarm(ids[0], () => prisma.birdCount.count({ where: { batchId: flock.id } })), 1);
+
+  if (process.env.FLOCKENCE_BROWSER_MODULE) {
+    const { chromium } = createRequire(import.meta.url)(process.env.FLOCKENCE_BROWSER_MODULE);
+    const browser = await chromium.launch();
+    try {
+      const context = await browser.newContext();
+      await context.addCookies([{ name: SESSION_COOKIE, value: cookies[0].slice(SESSION_COOKIE.length + 1), url: origin }]);
+      const page = await context.newPage();
+      await page.goto(origin + "/offline.html");
+      await page.locator("#passphrase").fill("test-device-research-only-123");
+      await page.locator("#unlock-button").click();
+      await page.locator("#farm").waitFor({ state: "visible" });
+      await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+      await context.setOffline(true);
+      await page.selectOption("#flock", flock.id);
+      await page.locator("#quantity").fill("1");
+      await page.locator("#notes").fill("private offline fixture");
+      await page.locator("#save").click();
+      await page.getByText("Saved on this device. Waiting to sync.").waitFor();
+      await page.reload();
+      await page.locator("#passphrase").fill("test-device-research-only-123");
+      await page.locator("#unlock-button").click();
+      await page.getByText(/Offline test flock.*Waiting to sync/).waitFor();
+      await context.setOffline(false);
+      await page.getByText("No entries waiting to sync.").waitFor();
+      assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
+    } finally {
+      await browser.close();
+    }
+  }
+
   console.log("Camera HTTP checks passed for two private workers and an unconfigured farm.");
 } finally {
   app?.kill();

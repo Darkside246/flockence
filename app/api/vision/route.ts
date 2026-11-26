@@ -1,3 +1,4 @@
+import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
@@ -33,6 +34,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await currentUserOrRoleResponse(request);
   if (session.response) return session.response;
+  const locked = await premiumFeatureResponse();
+  if (locked) return locked;
   let uploadedPath: string | null = null;
   try {
     const rate = await checkRateLimit("vision:" + session.user!.id, 6, 10 * 60 * 1000);
