@@ -14,6 +14,8 @@ import { recordFindings } from "@/lib/vision-findings";
 import { alertOnFindings } from "@/lib/vision-alerts";
 import { peopleSettings } from "@/lib/vision-people";
 import { countBirds } from "@/lib/bird-detector";
+import { gridTotal, penEstimate } from "@/lib/vision-glance-rules.mjs";
+import { countSamples } from "@/lib/vision-count-calibration";
 import { inspectionContext } from "@/lib/vision-context";
 
 /**
@@ -134,6 +136,16 @@ export async function runVisionInspection(request: InspectionRequest): Promise<I
     }
     const parsed = verified.data;
     if (counted) parsed.birdCount = { visible: counted.count, confidence: "HIGH", note: `Counted by the bird counter (${counted.model}).` };
+    // The grid count is steadier than one guess for the whole picture: when the nine cells came back, their sum is used.
+    const grid = !counted ? gridTotal(parsed.birdCount?.byArea) : null;
+    if (grid != null && parsed.birdCount) parsed.birdCount = { ...parsed.birdCount, visible: grid };
+    // What this camera usually misses, learnt from the farm's real counts (lib/vision-count-calibration.ts).
+    const cameraName = capture?.camera.name ?? null;
+    const estimate = cameraName && parsed.birdCount?.visible != null ? penEstimate(parsed.birdCount.visible, await countSamples(cameraName).catch(() => [])) : null;
+    const birds = {
+      visible: parsed.birdCount?.visible ?? null, confidence: parsed.birdCount?.confidence ?? null, estimate,
+      recorded: context.expectedLive, still: parsed.stillBirds?.length ?? 0,
+    };
 
     const fileName = `${automatic ? AUTOMATIC_MEDIA_PREFIX : ""}${randomUUID()}.${extensions[mimeType]}`;
     const uploadDir = visionStorageDir();
@@ -156,7 +168,7 @@ export async function runVisionInspection(request: InspectionRequest): Promise<I
       findingLines ? `Observations:\n${findingLines}` : "",
       concerns.length ? `Concerns:\n${concerns.map((x: {title?: string; whyItMatters?: string}) => `- ${x.title || "Concern"}: ${x.whyItMatters || ""}`).join("\n")}` : "",
       checks.length ? `Checks:\n${checks.map((x: string) => `- ${x}`).join("\n")}` : "",
-      parsed.birdCount?.visible != null ? `Birds visible: about ${parsed.birdCount.visible}${parsed.birdCount.confidence ? ` (${parsed.birdCount.confidence.toLowerCase()} confidence)` : ""}${parsed.birdCount.note ? `. ${parsed.birdCount.note}` : ""}. This is what the camera shows, not the flock total.` : "",
+      parsed.birdCount?.visible != null ? `Birds visible: about ${parsed.birdCount.visible}${parsed.birdCount.confidence ? ` (${parsed.birdCount.confidence.toLowerCase()} confidence)` : ""}${parsed.birdCount.note ? `. ${parsed.birdCount.note}` : ""}. This is what the camera shows, not the flock total.${estimate ? ` About ${estimate.estimate} in the pen, adjusted for this camera (it usually shows ${estimate.shows}% of the birds, from ${estimate.samples} of your counts).` : ""}${context.expectedLive != null ? ` Your records: ${context.expectedLive} live.` : ""}` : "",
       parsed.stillBirds?.length ? `Birds lying still (check whether they are dead or unable to move):\n${parsed.stillBirds.map((b) => `- ${b.where}${b.why ? `: ${b.why}` : ""}${b.confidence ? ` (${b.confidence.toLowerCase()} confidence)` : ""}`).join("\n")}` : "",
       parsed.notVisible?.length ? `Not in view: ${parsed.notVisible.join("; ")}` : "",
       earlier ? `Compared with the earlier picture from this camera (${earlier.minutesBefore} minutes before).` : "",
@@ -174,6 +186,7 @@ export async function runVisionInspection(request: InspectionRequest): Promise<I
       const visionAssessment = createVisionAssessment(parsed, {
         keepPeople,
         ...(counted ? { detector: { model: counted.model, count: counted.count, counts: counted.counts, still: counted.still } } : {}),
+        birds,
         model: modelUsed, inspectionCategory: category, evidenceId: media.id,
         ...(pen ? { pen } : {}),
         ...(request.requestId ? { requestId: request.requestId } : {}),

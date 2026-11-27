@@ -353,3 +353,20 @@ DETECTOR_TOKEN=<secret> DETECTOR_WEIGHTS=runs/birds/train/weights/best.pt uvicor
 ```
 
 then on the Flockence server add `VISION_DETECTOR=on`, `DETECTOR_URL` and the same `DETECTOR_TOKEN` to the settings.
+
+## Quick-to-read reports and closer bird counts (2026-11-27)
+
+- **At a glance** (`components/vision-glance.tsx`, `lib/vision-glance-rules.mjs`): after a check, and in the report
+  explorer, a status, one short line, then one line per area: Birds, Behaviour and spread, Visible health, Feed and
+  water, Litter, Heat and air, Equipment, each **OK**, **Check**, **Urgent** or **Not seen**; then the top three things
+  to do and a **Full report** link. Built from what each inspection saved, so older reports show it too.
+- **Report explorer** (`/vision/reports`): the list on the left (picture, when, camera or pen, status, birds), filtered
+  by camera or pen and status; the chosen report on the right (picture, at a glance, the full report). On a phone the
+  list comes first. `/vision/reports?id=…` opens one report. The Farm Vision page shows the last 8 checks, each opening
+  there.
+- **Grid count:** the model counts the picture as a 3 x 3 grid (birds whose body centre is in each cell, partly hidden
+  birds included, each once) and the nine cells are added up, which is steadier than one guess for the whole picture.
+- **Each camera learns from real counts:** under a camera check, "Real number of birds in the pen" + **Teach this
+  camera** keeps (Vision's count, the real count) for that camera, the last 10. From 2 counts on, that camera's counts
+  are scaled to the pen with the middle ratio (between 1.0 and 2.0), shown as "about 80 in view · about 93 in the pen
+  (this camera usually shows 86% of the birds, from 2 of your counts) · 96 in your records". Records are never changed.

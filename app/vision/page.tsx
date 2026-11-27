@@ -3,11 +3,11 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
 import { VisionSchedule } from "@/components/vision-schedule";
-import { VisionReport } from "@/components/vision-report";
 import { VisionFindings } from "@/components/vision-findings";
 import { VisionIntelligence } from "@/components/vision-intelligence";
 import { PenLayout } from "@/components/pen-layout";
 import { VisionKnown } from "@/components/vision-known";
+import { VisionGlance, type SavedInspection } from "@/components/vision-glance";
 import { useSession } from "@/components/auth-gate";
 import { shrinkPhoto, sizeLabel } from "@/lib/photo-shrink";
 import { OfflineError, queueAvailable, queueCheck, queuedChecks, sendInspection, sendQueued, uploadId } from "@/lib/vision-send";
@@ -62,6 +62,8 @@ export default function VisionPage() {
   const [captureVideo, setCaptureVideo] = useState(false);
   const [shareCamera, setShareCamera] = useState(false);
   const [result, setResult] = useState<VisionResult | null>(null);
+  // The check just made, shown at a glance; the full report opens in the report explorer (/vision/reports).
+  const [lastInspection, setLastInspection] = useState<SavedInspection | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
@@ -209,10 +211,11 @@ export default function VisionPage() {
     try {
       if (!cameraName && typeof navigator !== "undefined" && navigator.onLine === false && await keepForLater()) return;
       const sent = await sendInspection(form, id, setMessage);
-      const data = sent.body as { error?: string; analysis?: VisionResult; repeated?: boolean; pending?: boolean };
+      const data = sent.body as { error?: string; analysis?: VisionResult; repeated?: boolean; pending?: boolean; observation?: SavedInspection };
       if (data.pending) { setMessage("Still checking this photo. The result will appear in the history below."); return; }
       if (sent.httpStatus >= 300) throw new Error(data.error || "Could not analyze photo.");
       setResult(data.analysis ?? null);
+      setLastInspection(data.observation ?? null);
       setMessage(data.repeated ? "The connection dropped, but the inspection was already saved. It was not charged twice." : captureVideo ? "Live video sample analyzed and saved to the farm history." : "Photo analyzed and saved to the farm history.");
       await loadHistory();
       loadUsage();
@@ -316,7 +319,8 @@ export default function VisionPage() {
         <PenLayout pens={pens} />
       </section>
 
-      {result && <section className="section"><div className="section-head"><div><h3>Inspection result</h3><p>Visible findings only. Review the checks before taking action.</p></div><span className={`pill ${String(result.severity || "LOW").toLowerCase()}`}>{result.severity || "LOW"}</span></div>
+      {lastInspection && <section className="section card"><h3>Result</h3><VisionGlance item={lastInspection} /></section>}
+      {result && !lastInspection && <section className="section"><div className="section-head"><div><h3>Inspection result</h3><p>Visible findings only. Review the checks before taking action.</p></div><span className={`pill ${String(result.severity || "LOW").toLowerCase()}`}>{result.severity || "LOW"}</span></div>
         <div className="vision-result-grid">
           <article className="card"><span className="metric-label">Summary</span><p className="result-summary">{result.summary || "No summary returned."}</p><span className="metric-label">Confidence: {result.confidence || "UNKNOWN"}</span></article>
           <article className="card"><h3>What I can see</h3>{result.observations?.length ? <div className="finding-list">{result.observations.map((item, i) => <div className="finding" key={i}><strong>{item.title || "Observation"}</strong><span>{item.detail || ""}</span><small>{item.confidence || "UNKNOWN"} confidence</small></div>)}</div> : <p className="muted">No structured observations returned.</p>}</article>
@@ -363,7 +367,17 @@ export default function VisionPage() {
           </li>)}</ul> : <p>No category had visible evidence in both inspections.</p>}
         </div>}
       </section>}
-      <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong>{item.visionAssessment && <span>{item.visionAssessment.pen?.name ? item.visionAssessment.pen.name + " · " : ""}{describe(item.visionAssessment.status)}{item.visionAssessment.capture ? " · Video sample (3 frames)" : ""}</span>}{item.notes ? <details className="vision-history-full"><summary>{item.notes.split("\n").find(line => line.startsWith("Summary:"))?.slice(8).trim() || item.notes.slice(0, 160)} <span className="vision-read-more">Read the full report</span></summary>{item.imageUrl && <a href={item.imageUrl} target="_blank" rel="noreferrer" className="vision-full-photo">Open the photo full size</a>}<VisionReport text={item.notes} /></details> : <span>No notes recorded.</span>}</div></article>)}</div>}</section>
+      <section className="section"><div className="section-head"><div><h3>Recent checks</h3><p>Quick to scan; open one for the full report.</p></div><a className="button" href="/vision/reports">All reports</a></div>
+        {history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-recent">{history.slice(0, 8).map((item) => {
+          const a = item.visionAssessment as SavedInspection["visionAssessment"];
+          const status = a?.status ?? "INSUFFICIENT_EVIDENCE";
+          const birds = a?.birds?.estimate?.estimate ?? a?.birds?.visible ?? null;
+          return <a key={item.id} className="card vision-recent-item" href={`/vision/reports?id=${encodeURIComponent(item.id)}`}>
+            {item.imageUrl ? <img src={item.imageUrl} alt="" loading="lazy" /> : <span className="vision-explorer-noimg" aria-hidden="true" />}
+            <span><strong>{new Date(item.observedAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</strong> · {describe(status)}{birds != null ? ` · ~${birds} birds` : ""}<br /><small className="muted">{(a?.summary ?? "").slice(0, 140)}</small></span>
+          </a>;
+        })}</div>}
+      </section>
     </main>
   </div>;
 }

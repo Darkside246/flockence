@@ -984,3 +984,17 @@ test("bird counter: off unless the server and the farm switch it on; then it cou
     await runAsFarm(A, () => setDetectorForFarm(false));
   }
 });
+
+test("real bird counts: kept per camera, a correction replaces the earlier answer, last 10 only, own farm only", async () => {
+  const { addCountSample, countSamples } = await import("../lib/vision-count-calibration.ts");
+  const { penEstimate } = await import("../lib/vision-glance-rules.mjs");
+  const cam = `Count cam ${Date.now()}`;
+  await runAsFarm(A, () => addCountSample(cam, { counted: 80, actual: 90, observationId: "o1" }));
+  await runAsFarm(A, () => addCountSample(cam, { counted: 80, actual: 96, observationId: "o1" }));
+  assert.deepEqual((await runAsFarm(A, () => countSamples(cam))).map((s) => s.actual), [96], "a correction for the same check replaces it");
+  await runAsFarm(A, () => addCountSample(cam, { counted: 85, actual: 95, observationId: "o2" }));
+  assert.equal(penEstimate(80, await runAsFarm(A, () => countSamples(cam))).estimate, 93);
+  for (let i = 3; i <= 14; i++) await runAsFarm(A, () => addCountSample(cam, { counted: 80, actual: 92, observationId: `o${i}` }));
+  assert.equal((await runAsFarm(A, () => countSamples(cam))).length, 10);
+  assert.deepEqual(await runAsFarm(B, () => countSamples(cam)), [], "farm B's camera of the same name has its own counts");
+});

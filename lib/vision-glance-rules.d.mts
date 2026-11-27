@@ -1,0 +1,10 @@
+export type Level = "OK" | "CHECK" | "URGENT" | "NOT_SEEN";
+export type Row = { area: string; level: Level; text: string };
+export type CountSample = { at?: string; counted: number; actual: number };
+export type PenEstimate = { estimate: number; factor: number; samples: number; shows: number };
+export function gridTotal(byArea: unknown): number | null;
+export function cameraFactor(samples: CountSample[] | null | undefined): number | null;
+export function penEstimate(visible: number | null | undefined, samples: CountSample[] | null | undefined): PenEstimate | null;
+export function birdsLine(input: { visible?: number | null; confidence?: string | null; estimate?: PenEstimate | null; recorded?: number | null; still?: number }): Row;
+export function glance(assessment: unknown, birds?: { visible?: number | null; confidence?: string | null; estimate?: PenEstimate | null; recorded?: number | null; still?: number }): { headline: string; status: string; rows: Row[]; todo: string[]; notSeen: string[] };
+export function birdsFromNotes(notes: string | null | undefined): { visible: number | null; confidence: string | null };
