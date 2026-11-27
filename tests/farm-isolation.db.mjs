@@ -693,3 +693,46 @@ test("daily vision email: once a day to owners and managers who chose it, only t
   assert.equal(retry.sent, 1);
   assert.deepEqual(tries.slice(-1), [manager.email], "the retry goes only to the person who did not get it");
 });
+
+test("vision alerts: one email per incident to people who chose alerts, quiet on repeats, kept to their farm, logged", async () => {
+  const { recordFindings } = await import("../lib/vision-findings.ts");
+  const { alertOnFindings, recentAlerts } = await import("../lib/vision-alerts.ts");
+  const stamp = Date.now();
+  const owner = await runAsFarm(A, () => prisma.user.create({ data: { name: "Alert owner", email: `alert-owner-${stamp}@a.test`, role: "OWNER" } }));
+  const manager = await runAsFarm(A, () => prisma.user.create({ data: { name: "Alert manager", email: `alert-manager-${stamp}@a.test`, role: "MANAGER" } }));
+  await runAsFarm(A, () => prisma.setting.create({ data: { key: `ACCOUNT_PREFERENCES_V1::${owner.id}`, value: JSON.stringify({ farmAlertEmail: true, farmReportEmail: false, allowVisionImages: true }) } }));
+  await runAsFarm(A, () => prisma.setting.create({ data: { key: `ACCOUNT_PREFERENCES_V1::${manager.id}`, value: JSON.stringify({ farmAlertEmail: false, farmReportEmail: true, allowVisionImages: true }) } }));
+  const obs = await runAsFarm(A, () => prisma.healthObservation.create({ data: { observedAt: new Date(), symptom: "Farm Vision inspection", category: "VISION:PEN", affectedCount: 0, notes: "x" } }));
+  const pen = { id: `alert-pen-${stamp}`, name: "Alert Pen" };
+  const analysis = { stillBirds: [{ where: "by the feeder", why: "on its side", confidence: "HIGH" }] };
+
+  const mail = [];
+  const send = async (to, message, key) => { mail.push({ to, subject: message.subject, key }); return true; };
+  const t0 = new Date();
+  const found = await runAsFarm(A, () => recordFindings({ analysis, expectedLive: null, at: t0, pen, batchId: null, cameraName: "Alert Cam", observationId: obs.id, evidenceUrl: null }));
+  assert.ok(found.length >= 1 && found[0].created, "recordFindings reports what it created");
+  const serious = found.filter((x) => x.severity === "HIGH" || x.severity === "CRITICAL");
+  assert.ok(serious.length >= 1, "a bird on its side is a serious finding");
+  const first = await runAsFarm(A, () => alertOnFindings(found, t0, send));
+  assert.equal(first.emailed, 1);
+  assert.deepEqual(mail.map((m) => m.to), [owner.email], "only the person who chose alert emails");
+
+  const t1 = new Date(t0.getTime() + 20 * 60_000);
+  const again = await runAsFarm(A, () => recordFindings({ analysis, expectedLive: null, at: t1, pen, batchId: null, cameraName: "Alert Cam", observationId: obs.id, evidenceUrl: null }));
+  assert.equal(again[0].id, found[0].id, "the same incident");
+  assert.equal(again[0].created, false);
+  assert.equal(await runAsFarm(A, () => alertOnFindings(again, t1, send)), null, "seen again 20 minutes later: no second email");
+  assert.equal(mail.length, 1);
+
+  const log = await runAsFarm(A, () => recentAlerts());
+  assert.equal(log[0].emailed, 1);
+  assert.equal(log[0].findings[0].place, "Alert Pen");
+  assert.deepEqual(await runAsFarm(B, () => recentAlerts()), [], "farm B sees none of farm A's alerts");
+
+  // If nobody can be reached, the alert is tried again by the next inspection that sees it.
+  const other = await runAsFarm(A, () => recordFindings({ analysis: { signals: [{ category: "FEED_WATER", state: "CRITICAL", evidence: "drinker line dry" }] }, expectedLive: null, at: t1, pen, batchId: null, cameraName: "Alert Cam", observationId: obs.id, evidenceUrl: null }));
+  const down = await runAsFarm(A, () => alertOnFindings(other, t1, async () => false));
+  assert.equal(down.emailed, 0);
+  const retry = await runAsFarm(A, () => alertOnFindings(other, new Date(t1.getTime() + 60_000), send));
+  assert.equal(retry.emailed, 1, "the failed alert goes out on the next try");
+});

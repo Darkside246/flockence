@@ -10,27 +10,30 @@ import {
  * sighting of the same kind in the same pen within 48 hours updates the open incident (seen again, worst severity kept)
  * instead of adding a new alert. People confirm, dismiss or resolve them; each change is kept in the history.
  */
+/** What one inspection did to the farm's findings: each finding it created or added to, as it now stands. */
+export type RecordedFinding = { id: string; created: boolean; kind: string; title: string; detail: string | null; severity: string; state: string; penName: string | null; cameraName: string | null; evidenceUrl: string | null };
+
 export async function recordFindings(input: {
   analysis: unknown; expectedLive: number | null; at: Date;
   pen?: { id: string; name: string } | null; batchId: string | null; cameraName?: string | null;
   observationId: string; evidenceUrl: string | null;
 }) {
   const found: NewFinding[] = findingsFromAnalysis(input.analysis, { expectedLive: input.expectedLive });
-  if (!found.length) return [];
+  if (!found.length) return [] as RecordedFinding[];
   const farmId = currentFarmId();
-  const ids: string[] = [];
+  const out: RecordedFinding[] = [];
   for (const f of found) {
     const key = incidentKey(f.kind, { penId: input.pen?.id ?? null, cameraName: input.cameraName ?? null });
-    const id = await prisma.$transaction(async (tx) => {
+    const row = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${farmId + ":" + key}, 0))::text`;
       const open = await tx.visionFinding.findFirst({ where: { farmId, incidentKey: key, state: { in: OPEN_STATES } }, orderBy: { lastSeenAt: "desc" } });
       if (open && joinsIncident(open, input.at)) {
-        await tx.visionFinding.update({ where: { id: open.id }, data: {
+        const updated = await tx.visionFinding.update({ where: { id: open.id }, data: {
           lastSeenAt: input.at > open.lastSeenAt ? input.at : open.lastSeenAt, occurrences: { increment: 1 },
           severity: higher(open.severity as FindingSeverity, f.severity), detail: f.detail, confidence: f.confidence ?? open.confidence,
           observationId: input.observationId, evidenceUrl: input.evidenceUrl ?? open.evidenceUrl,
         } });
-        return open.id;
+        return { row: updated, created: false };
       }
       const created = await tx.visionFinding.create({ data: {
         farmId, kind: f.kind, title: f.title, detail: f.detail, severity: f.severity, state: f.state, confidence: f.confidence,
@@ -39,11 +42,12 @@ export async function recordFindings(input: {
         observationId: input.observationId, evidenceUrl: input.evidenceUrl,
         history: [{ at: input.at.toISOString(), from: null, to: f.state, by: "Vision", note: "" }],
       } });
-      return created.id;
+      return { row: created, created: true };
     }, { maxWait: 15_000, timeout: 15_000 });
-    ids.push(id);
+    const r = row.row;
+    out.push({ id: r.id, created: row.created, kind: r.kind, title: r.title, detail: r.detail, severity: r.severity, state: r.state, penName: r.penName, cameraName: r.cameraName, evidenceUrl: r.evidenceUrl });
   }
-  return ids;
+  return out;
 }
 
 export async function listFindings(filter: { open?: boolean; penId?: string; from?: Date; to?: Date; take?: number }) {

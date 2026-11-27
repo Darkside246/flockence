@@ -56,3 +56,8 @@ export function sendTeamInvitationEmail(to: string, url: string, farmName: strin
 export function sendVisionReportEmail(to: string, message: { subject: string; text: string; html: string }, key: string) {
   return sendEmail(to, message, key);
 }
+
+/** A Farm Vision alert (lib/vision-alerts.ts). */
+export function sendVisionAlertEmail(to: string, message: { subject: string; text: string; html: string }, key: string) {
+  return sendEmail(to, message, key);
+}
