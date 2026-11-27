@@ -1,5 +1,7 @@
 "use client";
 
+import { WyzeBridgeLink } from "@/components/wyze-bridge-link";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { BlinkConnectCard, NetworkCameraSetup, cameraApi, cameraJson, type Camera, type Status } from "@/components/camera-connection-controls";
@@ -111,6 +113,7 @@ export function SettingsCameraProviders() {
       <BlinkConnectCard status={status} onDone={refresh} />}
     {provider === "network" && status?.available && status.canManage && status.networkCameras &&
       <NetworkCameraSetup cameras={cameras ?? []} onChange={refresh} />}
+    {provider === "wyze" && <WyzeBridgeLink />}
     {(provider === "wyze" || provider === "network") &&
       <CameraGateways key={provider} brand={provider} filterByBrand />}
   </>;
