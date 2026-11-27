@@ -17,7 +17,7 @@ import {
 export type ReportScope = { kind: "FARM" } | { kind: "PEN"; id: string } | { kind: "BATCH"; id: string } | { kind: "CAMERA"; name: string };
 export type ReportPeriod = { from: Date; to: Date; label: string };
 
-type Assessment = { pen?: { id: string; name: string }; source?: { kind?: string; name?: string }; signals?: { category?: string; state?: string }[]; capture?: unknown; eggs?: { floorEggs?: number | null; nestEggs?: number | null } };
+type Assessment = { pen?: { id: string; name: string }; source?: { kind?: string; name?: string }; signals?: { category?: string; state?: string }[]; capture?: unknown; eggs?: { floorEggs?: number | null; nestEggs?: number | null }; animals?: unknown[]; people?: { inView?: number; activity?: string; boots?: string; coveralls?: string } };
 
 const hourInFarm = (d: Date) => Number(new Intl.DateTimeFormat("en-GB", { timeZone: FARM_TIME_ZONE, hour: "2-digit", hourCycle: "h23" }).format(d));
 const visibleFrom = (notes: string | null) => { const m = notes?.match(/Birds visible: about (\d+)/); return m ? Number(m[1]) : null; };
@@ -102,7 +102,7 @@ export async function buildVisionReport(scope: ReportScope, period: ReportPeriod
     select: { kind: true, state: true },
   });
 
-  const parsedInspections = inspections.map((r) => ({ signals: ((r.visionAssessment ?? {}) as Assessment).signals ?? [], visibleBirds: visibleFrom(r.notes), eggsSeen: Boolean(((r.visionAssessment ?? {}) as Assessment).eggs) }));
+  const parsedInspections = inspections.map((r) => ({ signals: ((r.visionAssessment ?? {}) as Assessment).signals ?? [], visibleBirds: visibleFrom(r.notes), eggsSeen: Boolean(((r.visionAssessment ?? {}) as Assessment).eggs), animalsChecked: Array.isArray(((r.visionAssessment ?? {}) as Assessment).animals) }));
   const areas = areaStatuses(findings, parsedInspections);
   const overall: AreaStatus = overallStatus(areas);
   const actions = rankedActions(findings);
@@ -175,8 +175,25 @@ export async function buildVisionReport(scope: ReportScope, period: ReportPeriod
       : "Vision says whether floor eggs were seen and where. Its egg counts stay hidden until you have checked them and switched them on. Records are never changed by Vision.",
   } : null;
 
+  // People in the house (only kept while the farm's people timeline is on): first and last seen each day, no identity.
+  const peopleRows = inspections.flatMap((r) => { const p = ((r.visionAssessment ?? {}) as Assessment).people; return p && (p.inView ?? 0) > 0 ? [{ at: r.observedAt, p }] : []; });
+  const byDay = new Map<string, { first: Date; last: Date; checks: number; noBoots: number; activities: Set<string> }>();
+  for (const { at, p } of peopleRows) {
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: FARM_TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+    const d = byDay.get(day) ?? { first: at, last: at, checks: 0, noBoots: 0, activities: new Set<string>() };
+    if (at < d.first) d.first = at;
+    if (at > d.last) d.last = at;
+    d.checks += 1;
+    if (p.boots === "NOT_SEEN" || p.coveralls === "NOT_SEEN") d.noBoots += 1;
+    if (p.activity && p.activity !== "NONE") d.activities.add(p.activity.toLowerCase().replace("_", " "));
+    byDay.set(day, d);
+  }
+  const people = byDay.size ? [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, d]) => ({
+    day, firstSeen: d.first.toISOString(), lastSeen: d.last.toISOString(), checks: d.checks, protectiveWearNotSeen: d.noBoots, activities: [...d.activities],
+  })) : null;
+
   const changes = areaList.map((area) => {
-    const kinds = { BIRDS: ["DEAD_OR_DOWN_BIRD", "HEALTH", "BEHAVIOUR"], THERMAL: ["THERMAL"], LITTER: ["LITTER"], FEED_WATER: ["FEED_WATER"], EQUIPMENT: ["EQUIPMENT"], POPULATION: ["POPULATION"], EGGS: ["FLOOR_EGGS"] }[area as Area];
+    const kinds = { BIRDS: ["DEAD_OR_DOWN_BIRD", "HEALTH", "BEHAVIOUR"], THERMAL: ["THERMAL"], LITTER: ["LITTER"], FEED_WATER: ["FEED_WATER"], EQUIPMENT: ["EQUIPMENT"], POPULATION: ["POPULATION"], EGGS: ["FLOOR_EGGS"], BIOSECURITY: ["PESTS"] }[area as Area];
     const now = findings.filter((f) => kinds.includes(f.kind) && f.state !== "DISMISSED").length;
     const then = before.filter((f) => kinds.includes(f.kind) && f.state !== "DISMISSED").length;
     return { area, label: AREA_LABELS[area as Area], now, before: then, trend: now > then ? "worse" : now < then ? "better" : "same" };
@@ -197,6 +214,7 @@ export async function buildVisionReport(scope: ReportScope, period: ReportPeriod
     summary: summarise({ scopeLabel, periodLabel: period.label, overall, actions, inspections: inspections.length, cameras: bySource.size, hoursCovered: hours.size, hoursInPeriod }),
     areas: areaList.map((a) => ({ area: a, label: AREA_LABELS[a], status: areas[a].status, statusLabel: STATUS_LABELS[areas[a].status], reasons: areas[a].reasons.slice(0, 5), fixed: areas[a].fixed })),
     eggs,
+    people,
     actions,
     population: { liveRecorded: liveTotal, mostVisible: visibleMax, note: "Bird counts from pictures are estimates of what one camera can see, not the flock total. Official numbers are never changed by Vision." },
     flocks: flockLines,

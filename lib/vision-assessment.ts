@@ -32,6 +32,17 @@ export const eggsSchema = z.object({
   nestBoxes: z.enum(["OPEN", "CLOSED", "NOT_VISIBLE"]).optional().catch(undefined),
 });
 
+export const animalsSchema = z.array(z.object({
+  kind: z.enum(["RODENT", "WILD_BIRD", "DOG", "CAT", "OTHER"]).catch("OTHER"), where: detail.optional().catch(undefined), confidence: confidence.optional().catch(undefined),
+})).max(10);
+const wear = z.enum(["SEEN", "NOT_SEEN", "UNCLEAR"]).optional().catch(undefined);
+/** People in view, with no identity (no faces, names or descriptions): only kept when the farm switched the timeline on. */
+export const peopleSchema = z.object({
+  inView: z.number().int().min(0).max(50).catch(0),
+  activity: z.enum(["FEEDING", "WATERING", "CLEANING", "COLLECTING_EGGS", "CHECKING_BIRDS", "MAINTENANCE", "OTHER", "NONE"]).optional().catch(undefined),
+  boots: wear, coveralls: wear,
+});
+
 export const visionResultSchema = z.object({
   summary: detail.min(1),
   confidence: confidence.optional(),
@@ -48,6 +59,9 @@ export const visionResultSchema = z.object({
   questions: z.array(detail.min(1)).max(3).optional().catch([]),
   notVisible: z.array(detail.min(1)).max(8).optional().catch([]),
   stillBirds: z.array(z.object({ where: detail.min(1), why: detail.optional(), confidence: confidence.optional() })).max(10).optional().catch([]),
+  // Animals and pests at or in the house (biosecurity), and people in view with no identity (Vision Intelligence phase 5).
+  animals: animalsSchema.optional().catch([]),
+  people: peopleSchema.nullable().optional().catch(null),
   // Eggs seen in a layer house: nest and floor eggs (Vision Intelligence phase 4; counts shown only once validated).
   eggs: eggsSchema.nullable().optional().catch(null),
   // Equipment and crowding seen in a pen picture, for the pen layout advice (lib/pen-layout-rules.mjs).
@@ -78,6 +92,8 @@ export const visionAssessmentSchema = z.object({
   pen: z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string().min(1).max(120) }).optional(),
   layout: layoutSchema.optional().catch(undefined),
   eggs: eggsSchema.optional().catch(undefined),
+  animals: animalsSchema.optional().catch(undefined),
+  people: peopleSchema.optional().catch(undefined),
   /** The phone's upload id, so a retried upload is recognised (lib/vision-upload-requests.ts). */
   requestId: z.string().regex(/^[A-Za-z0-9-]{16,64}$/).optional(),
 });
@@ -88,7 +104,10 @@ type AssessmentRecord = { id: string; batchId: string | null; observedAt: Date; 
 
 export function createVisionAssessment(result: VisionResult, input: {
   model: string; source: VisionAssessment["source"]; inspectionCategory: string; evidenceId: string; pen?: VisionAssessment["pen"]; capture?: VisionAssessment["capture"]; requestId?: string;
+  /** Keep people in view (the farm's people timeline is on). When false, nothing about people is saved. */
+  keepPeople?: boolean;
 }): VisionAssessment {
+  const { keepPeople, ...saved } = input;
   const signals = assessmentCategories.map((categoryName) => {
     const candidates = result.signals.filter((row) => row.category === categoryName);
     const stateRank = { NOT_OBSERVED: 0, NORMAL: 1, ATTENTION: 2, WARNING: 3, CRITICAL: 4 };
@@ -105,10 +124,12 @@ export function createVisionAssessment(result: VisionResult, input: {
     : rank.has("NOT_OBSERVED") || !result.confidence || result.confidence === "LOW" ? "INSUFFICIENT_EVIDENCE"
     : "GOOD";
   return {
-    version: 1, ...input, status, signals,
+    version: 1, ...saved, status, signals,
     confidence: result.confidence ?? null, summary: result.summary, checks: result.checks,
     ...(result.layout ? { layout: result.layout } : {}),
     ...(result.eggs ? { eggs: result.eggs } : {}),
+    ...(Array.isArray(result.animals) ? { animals: result.animals } : {}),
+    ...(keepPeople && result.people && result.people.inView > 0 ? { people: result.people } : {}),
   };
 }
 

@@ -897,3 +897,45 @@ test("eggs: a layer farm's report compares floor eggs seen with collections; cou
   assert.ok(!broiler.areas.some((a) => a.area === "EGGS"), "no eggs area for a pen without layers");
   assert.equal(broiler.eggs, null);
 });
+
+test("people and biosecurity: no people data unless the owner keeps a timeline, removed after its keep period; pests reported", async () => {
+  const { createVisionAssessment } = await import("../lib/vision-assessment.ts");
+  const { savePeopleSettings, peopleSettings, removePeopleData } = await import("../lib/vision-people.ts");
+  const { recordFindings } = await import("../lib/vision-findings.ts");
+  const { buildVisionReport, periodFor } = await import("../lib/vision-reports.ts");
+  const result = { summary: "ok", observations: [], concerns: [], checks: [], escalate: false, signals: [], animals: [{ kind: "RODENT", where: "by the feed store" }], people: { inView: 1, activity: "FEEDING", boots: "NOT_SEEN", coveralls: "SEEN" } };
+  const base = { model: "m", source: { kind: "UPLOAD" }, inspectionCategory: "PEN", evidenceId: "e" };
+  const off = createVisionAssessment(result, { ...base, keepPeople: false });
+  assert.equal(off.people, undefined, "nothing about people is saved while the timeline is off");
+  assert.equal("keepPeople" in off, false);
+  assert.equal(off.animals.length, 1, "animals are always kept");
+  assert.equal(createVisionAssessment(result, { ...base, keepPeople: true }).people.activity, "FEEDING");
+
+  assert.deepEqual(await runAsFarm(A, () => peopleSettings()), { timeline: false, keepDays: 30 });
+  await runAsFarm(A, () => savePeopleSettings({ timeline: true, keepDays: 30 }));
+  const stamp = Date.now();
+  const pen = await runAsFarm(A, () => prisma.setting.create({ data: { key: `PENCFG::u::bio-${stamp}`, value: JSON.stringify({ name: `Bio Pen ${stamp}`, active: true }) } }));
+  const mk = (daysAgo) => runAsFarm(A, () => prisma.healthObservation.create({ data: { observedAt: new Date(Date.now() - daysAgo * 86_400_000), symptom: "Farm Vision inspection", category: "VISION:PEN", affectedCount: 0, notes: "x",
+    visionAssessment: { pen: { id: pen.id, name: `Bio Pen ${stamp}` }, source: { kind: "UPLOAD" }, signals: [], animals: [], people: { inView: 2, activity: "CLEANING", boots: "NOT_SEEN" } } } }));
+  const old = await mk(40), recent = await mk(0.05);
+  assert.equal(await runAsFarm(A, () => removePeopleData(new Date(Date.now() - 30 * 86_400_000))), 1);
+  const [o, r] = await Promise.all([old, recent].map((x) => runAsFarm(A, () => prisma.healthObservation.findUnique({ where: { id: x.id } }))));
+  assert.equal(o.visionAssessment.people, undefined, "older than 30 days: removed");
+  assert.equal(o.visionAssessment.pen.id, pen.id, "the rest of the inspection stays");
+  assert.equal(r.visionAssessment.people.inView, 2);
+
+  const report = await runAsFarm(A, () => buildVisionReport({ kind: "PEN", id: pen.id }, periodFor("24h")));
+  assert.equal(report.people.length, 1);
+  assert.equal(report.people[0].protectiveWearNotSeen, 1);
+  assert.deepEqual(report.people[0].activities, ["cleaning"]);
+  assert.ok(report.areas.some((a) => a.area === "BIOSECURITY" && a.status === "GOOD"), "checked for animals, none seen");
+
+  const found = await runAsFarm(A, () => recordFindings({ analysis: { animals: [{ kind: "WILD_BIRD", where: "inside by the fan" }] }, expectedLive: null, at: new Date(), pen: { id: pen.id, name: `Bio Pen ${stamp}` }, batchId: null, cameraName: null, observationId: recent.id, evidenceUrl: null }));
+  assert.equal(found[0].kind, "PESTS");
+  assert.equal(found[0].severity, "HIGH");
+
+  await runAsFarm(A, () => savePeopleSettings({ timeline: false, keepDays: 30 }));
+  const after = await runAsFarm(A, () => prisma.healthObservation.findUnique({ where: { id: recent.id } }));
+  assert.equal(after.visionAssessment.people, undefined, "switching the timeline off removes what was kept");
+  assert.deepEqual(await runAsFarm(B, () => peopleSettings()), { timeline: false, keepDays: 30 }, "farm B's setting is its own");
+});

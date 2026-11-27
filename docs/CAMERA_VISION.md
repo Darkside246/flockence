@@ -295,3 +295,18 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
 - **Counts from pictures stay hidden** until an owner or manager switches on "Show egg counts from pictures" (after
   comparing a few days of Vision's counts with the collections). Until then Vision only says floor eggs were seen, and
   where. Egg records are never changed by Vision. Setting: `VISION_EGG_COUNTS` per farm, `app/api/vision/eggs`.
+
+## People and biosecurity (Vision Intelligence phase 5, 2026-11-27)
+
+- **Animals and pests** are always checked: rats or mice, wild birds, dogs, cats or other animals in or at the house,
+  with where. They become an **Animals or pests in the house** finding (wild birds HIGH, as an avian influenza risk;
+  others MEDIUM), under a new report area **Biosecurity and pests**, with an action.
+- **People, privacy first.** Vision is told never to describe or identify anyone (no faces, names, age, gender, skin,
+  hair or clothing colour; no matching across pictures). It may only say how many people are in view, the work being
+  done, and whether boots and coveralls can be seen.
+- The **people timeline is off by default**; only the owner can switch it on (Cameras → Vision → People and privacy;
+  audited). While off, nothing about people is saved. While on, reports show each day's first and last time people were
+  seen, in how many pictures, the work done, and pictures where boots or coveralls were not seen.
+- **Retention:** people data is removed from saved inspections after the chosen period (7–90 days, default 30) by the
+  automatic round; switching the timeline off removes it at once. The rest of each inspection stays.
+- Code: `lib/vision-people.ts`, `app/api/vision/people`, `components/vision-people.tsx`.

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { VisionDailyReport } from "@/components/vision-daily-report";
 import { VisionAlerts } from "@/components/vision-alerts";
+import { VisionPeople } from "@/components/vision-people";
 
 type Report = {
   scope: { label: string }; period: { label: string };
@@ -15,6 +16,7 @@ type Report = {
   changes: { area: string; label: string; now: number; before: number; trend: string }[];
   evidence: { title: string; at: string; url: string | null }[];
   limitations: string[];
+  people: { day: string; firstSeen: string; lastSeen: string; checks: number; protectiveWearNotSeen: number; activities: string[] }[] | null;
   eggs: { recordedEggs: number; recordedFloorEggs: number; picturesChecked: number; picturesWithFloorEggs: number; mostFloorEggsInOnePicture: number | null; countsOn: boolean; note: string } | null;
 };
 type Option = { id: string; name: string };
@@ -88,6 +90,7 @@ export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras:
     </div>
     <VisionAlerts />
     <VisionDailyReport />
+    <VisionPeople />
 
     {error && <p role="alert" className="notice">{error}</p>}
     {loading && <p>Building the report…</p>}
@@ -123,6 +126,11 @@ export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras:
         </ul>
         <p className="muted">{report.eggs.note}</p>
         <EggCountsSwitch on={report.eggs.countsOn} />
+      </section>}
+
+      {report.people && <section className="card"><h3>People in the house</h3>
+        <ul>{report.people.map((d) => <li key={d.day}><strong>{d.day}:</strong> first seen {new Date(d.firstSeen).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}, last seen {new Date(d.lastSeen).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}, in {d.checks} picture{d.checks === 1 ? "" : "s"}{d.activities.length ? ` (${d.activities.join(", ")})` : ""}{d.protectiveWearNotSeen ? `. Boots or coveralls not seen in ${d.protectiveWearNotSeen}` : ""}.</li>)}</ul>
+        <p className="muted">No one is identified: Vision only notes how many people are in view, the work being done and protective clothing. Kept only while the people timeline is on, then removed.</p>
       </section>}
 
       {report.changes.length > 0 && <section className="card"><h3>Compared with the period before</h3><ul>
