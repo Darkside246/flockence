@@ -200,3 +200,19 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
   (`flockence-vision-queue`, per user and farm, dropped after 7 days) and sent with the same id when the phone is back
   online or the Farm Vision page is opened. Shown as "N photos saved on this phone" with a Send now button.
 - The queue is sent while the Flockence app is open; sending with the app closed (background sync) is not built yet.
+
+## Daily email report (Vision Intelligence phase 1c, 2026-11-27)
+
+- Once a day, each farm's owners and managers who ticked **Farm reports** on their Account page get an email with the
+  last 24 hours: the overall condition, what to do first, areas needing attention, areas not seen, their flock records
+  (age, live count, deaths, feed) and what the cameras covered, with a link to Cameras → Vision.
+- Every plan, Free included. Settings are in Cameras → Vision → Daily email report: on or off (default on) and the
+  hour, farm time (default 07:00, America/Barbados for all farms today).
+- It is sent by the automatic camera round (`flockence-vision-rounds.timer`, every 10 minutes), from the chosen hour
+  until the end of the farm's day. No extra set-up beyond that timer and Resend (`RESEND_API_KEY`, `RESEND_FROM`).
+- Each person gets it at most once a day: who has been sent is recorded per farm and day
+  (`VISION_DAILY_REPORT_STATE`), and Resend's Idempotency-Key covers a crash between sending and recording. A failed
+  send is retried on the next round, for that person only. A missed day is never sent late.
+- A day with no pictures and nothing open sends nothing.
+- Code: `lib/vision-daily-report.ts`, `lib/vision-daily-report-rules.mjs`, `app/api/vision/daily-report`,
+  `components/vision-daily-report.tsx`.

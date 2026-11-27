@@ -51,3 +51,8 @@ export function sendTeamInvitationEmail(to: string, url: string, farmName: strin
     text: `You were invited to join ${farmName} on Flockence. Open this single-use link to create your account. It expires on ${expiresAt.toISOString().slice(0, 10)} (UTC).\n\n${url}`,
   }, "flockence-team-invite-" + inviteId);
 }
+
+/** The daily Farm Vision report (lib/vision-daily-report.ts). The key makes a resend the same day a no-op. */
+export function sendVisionReportEmail(to: string, message: { subject: string; text: string; html: string }, key: string) {
+  return sendEmail(to, message, key);
+}
