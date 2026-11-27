@@ -310,3 +310,21 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
 - **Retention:** people data is removed from saved inspections after the chosen period (7–90 days, default 30) by the
   automatic round; switching the timeline off removes it at once. The rest of each inspection stays.
 - Code: `lib/vision-people.ts`, `app/api/vision/people`, `components/vision-people.tsx`.
+
+## Reference library: the farm's own guides (Vision Intelligence phase 6, 2026-11-27)
+
+`lib/reference-library.mjs` holds values read from the guides the owner has, each with its source:
+
+| Source | Used for |
+|---|---|
+| Cobb Broiler Management Guide (Cobb-Vantress, 2020) | air temperature by age (days 0–20) and house humidity; temperature by stocking density for grown birds; litter moisture below 35%; ammonia below 25 ppm and CO₂ below 3,000 ppm; above 28 kg/m² watch closely, never above 42; 45–65 birds per 33 cm feeder pan; 12 birds per high-flow or 10 per low-flow nipple; light at least 25 lux at the start, later 5–10 lux |
+| Philip Thomas, "Poultry Rearing" (Caribbean, 2017) | brooding schedule from 32–33 °C in week 1 down about 2 °C a week to 20–21 °C; at least 1.5 sq ft per bird in naturally ventilated houses (1.7–1.8 in hot months); litter 3–4 inches; one 1-gallon fountain per 100 chicks; crumble to day 28, then pellets |
+| J. R. Gehlot, "Preservation and maintenance of eggs" | collect 3–4 times a day; hold at about 15 °C and 70–80% humidity; pack broad end up |
+
+Not held yet, so not used: Ross handbooks, Hy-Line layer guides, WOAH codes. Add each as a new source with its own
+values when the guide is available.
+
+Every Vision check now gets two more sections: **Your records against your guides** (OK or Check, for the recorded
+house temperature and humidity, ammonia, stocking density, floor space per bird and litter) and **What your guides say
+for this age**. The Farm Vision page shows them under "What Vision already knows", and the model judges the birds'
+behaviour against the right target for their age.

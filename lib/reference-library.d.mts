@@ -1,0 +1,10 @@
+export type Guidance = { topic: string; text: string; source: string };
+export type Check = { topic: string; level: "OK" | "CHECK"; text: string; source: string };
+export const SOURCES: Record<string, { id: string; title: string; publisher: string; year: number | null }>;
+export const NOT_HELD: string[];
+export function cite(id: string): string;
+export function cobbTargetC(ageDays: number, rh?: number | null): number | null;
+export function cobbDensityRangeC(density: number): [number, number] | null;
+export function thomasRangeC(ageDays: number): [number, number] | null;
+export function guidanceFor(flock: { kind?: string; ageDays?: number; rh?: number | null; densityKgM2?: number | null; naturalVentilation?: boolean }): Guidance[];
+export function checkAgainstGuidance(now: { kind?: string; ageDays: number; tempC?: number | null; rh?: number | null; ammoniaPpm?: number | null; densityKgM2?: number | null; litter?: string | null; m2PerBird?: number | null }): Check[];
