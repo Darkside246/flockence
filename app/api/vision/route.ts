@@ -13,6 +13,8 @@ import { visionConfigured } from "@/lib/vision-provider";
 import { currentVisionPlan } from "@/lib/vision-plan";
 import { monthUsage } from "@/lib/vision-usage";
 import { runVisionInspection } from "@/lib/vision-inspection";
+import { validRequestId } from "@/lib/photo-size.mjs";
+import { earlierReply, runOnce } from "@/lib/vision-upload-requests";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -33,7 +35,30 @@ export async function GET(request: Request) {
   return NextResponse.json(rows, { headers: { "Cache-Control": "private, no-store" } });
 }
 
+/**
+ * Start an inspection. A phone sends an Idempotency-Key with each upload and the same key when it retries after a lost
+ * connection, so a retry never analyses, saves or charges the picture twice (lib/vision-upload-requests.ts).
+ */
 export async function POST(request: Request) {
+  const session = await currentUserOrRoleResponse(request);
+  if (session.response) return session.response;
+  const requestId = request.headers.get("idempotency-key");
+  if (requestId === null) return inspect(request);
+  if (!validRequestId(requestId)) return NextResponse.json({ error: "Invalid upload id." }, { status: 400 });
+  if (!isTrustedAppOrigin(request)) return NextResponse.json({ error: "Open Farm Vision from the Flockence website." }, { status: 403 });
+  await ensureFarm();
+  const earlier = await earlierReply(requestId);
+  const reply = earlier ?? await runOnce(requestId, async () => {
+    const response = await inspect(request, requestId);
+    const body = await response.json().catch(() => ({ error: "Could not analyze image." }));
+    const retryAfter = response.headers.get("Retry-After");
+    return { status: response.status, body: retryAfter ? { ...body, retryAfterSeconds: Number(retryAfter) } : body };
+  });
+  const retryAfter: Record<string, string> = typeof reply.body.retryAfterSeconds === "number" ? { "Retry-After": String(reply.body.retryAfterSeconds) } : {};
+  return NextResponse.json(reply.body, { status: reply.status, headers: { "Cache-Control": "private, no-store", ...retryAfter } });
+}
+
+async function inspect(request: Request, requestId?: string): Promise<Response> {
   const session = await currentUserOrRoleResponse(request);
   if (session.response) return session.response;
   const locked = await premiumFeatureResponse();
@@ -113,6 +138,7 @@ export async function POST(request: Request) {
     const result = await runVisionInspection({
       category: categoryRaw, batchId: batchIdRaw || null, notes, pen, camera, video,
       upload: file instanceof File ? { bytes: Buffer.from(await file.arrayBuffer()), mimeType } : undefined,
+      ...(requestId ? { requestId } : {}),
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
     return NextResponse.json({ observation: result.observation, imageUrl: result.imageUrl, analysis: result.analysis, model: result.model }, {

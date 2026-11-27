@@ -6,6 +6,16 @@ import { VisionSchedule } from "@/components/vision-schedule";
 import { VisionReport } from "@/components/vision-report";
 import { VisionFindings } from "@/components/vision-findings";
 import { useSession } from "@/components/auth-gate";
+import { shrinkPhoto, sizeLabel } from "@/lib/photo-shrink";
+import { retryDelayMs } from "@/lib/photo-size.mjs";
+
+/** A random id for one upload; the same id is sent again on a retry so the server runs it only once. */
+function uploadId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 const categories = [
   ["PEN", "Pen / housing", "Look for bedding, space, airflow, heat and sanitation issues."],
@@ -59,6 +69,8 @@ export default function VisionPage() {
   const [result, setResult] = useState<VisionResult | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [sizeNote, setSizeNote] = useState("");
   const [earlier, setEarlier] = useState("");
   const [later, setLater] = useState("");
   const [comparison, setComparison] = useState<Comparison | null>(null);
@@ -84,8 +96,18 @@ export default function VisionPage() {
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
-  function pickFile(event: ChangeEvent<HTMLInputElement>) {
-    const next = event.target.files?.[0] ?? null;
+  async function pickFile(event: ChangeEvent<HTMLInputElement>) {
+    const picked = event.target.files?.[0] ?? null;
+    setSizeNote("");
+    let next = picked;
+    if (picked) {
+      // Shrink to what the vision model can see (2576 px on the long side): same detail for the model, faster upload.
+      setPreparing(true);
+      const shrunk = await shrinkPhoto(picked);
+      setPreparing(false);
+      next = shrunk.file;
+      if (shrunk.shrunk) setSizeNote(`Made smaller for upload: ${sizeLabel(shrunk.from)} to ${sizeLabel(shrunk.to)}, full detail for the model.`);
+    }
     setFile(next);
     setCameraName("");
     if (cameraName) setPenId("");
@@ -137,11 +159,27 @@ export default function VisionPage() {
     if (penId) form.append("penId", penId);
     form.append("notes", notes);
     try {
-      const response = await fetch("/api/vision", { method: "POST", body: form });
-      const data = await response.json();
+      // A lost connection is retried with the same upload id, so the picture is analysed and charged only once.
+      const id = uploadId();
+      let response: Response | null = null;
+      for (let attempt = 0; ; attempt++) {
+        try {
+          response = await fetch("/api/vision", { method: "POST", body: form, headers: { "Idempotency-Key": id } });
+          if (response.status !== 502 && response.status !== 504) break;
+        } catch (error) {
+          if (!(error instanceof TypeError)) throw error;
+          response = null;
+        }
+        const wait = retryDelayMs(attempt + 1);
+        if (wait === null) break;
+        setMessage("Connection lost. Trying again…");
+        await new Promise((resolve) => setTimeout(resolve, wait));
+      }
+      if (!response) throw new Error("No connection. Check the signal and try again; the photo will not be charged twice.");
+      const data = await response.json().catch(() => ({ error: "Could not analyze photo." }));
       if (!response.ok) throw new Error(data.error || "Could not analyze photo.");
       setResult(data.analysis);
-      setMessage(captureVideo ? "Live video sample analyzed and saved to the farm history." : "Photo analyzed and saved to the farm history.");
+      setMessage(data.repeated ? "The connection dropped, but the inspection was already saved. It was not charged twice." : captureVideo ? "Live video sample analyzed and saved to the farm history." : "Photo analyzed and saved to the farm history.");
       await loadHistory();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not analyze photo.");
@@ -179,7 +217,7 @@ export default function VisionPage() {
         <div className="vision-category-grid">{categories.map(([value, title, desc]) => <button type="button" key={value} className={`vision-category ${category === value ? "selected" : ""}`} onClick={() => setCategory(value)}><span className="vision-icon">{value === "PEN" ? "⌂" : value === "BIRD" || value === "FLOCK" ? "◉" : value === "WATER" ? "≈" : value === "FEED" ? "≋" : value === "EQUIPMENT" ? "⚙" : value === "DROPPINGS" ? "•" : value === "DEAD_BIRD" ? "†" : "＋"}</span><strong>{title}</strong><small>{desc}</small></button>)}</div>
 
         <div className="section-head" style={{ marginTop: 24 }}><div><h3>2. Add the photo</h3><p>On a phone, this can open the camera. Maximum image size: 8 MB.</p></div></div>
-        <label className="upload-zone"><input type="file" accept="image/*" capture="environment" onChange={pickFile} /><span className="upload-icon">+</span><strong>{file ? file.name : "Take photo or choose image"}</strong><small>{file ? "Ready for inspection" : "Use a clear photo with good lighting"}</small></label>
+        <label className="upload-zone"><input type="file" accept="image/*" capture="environment" onChange={pickFile} /><span className="upload-icon">+</span><strong>{preparing ? "Preparing photo…" : file ? file.name : "Take photo or choose image"}</strong><small>{preparing ? "Making it ready to send" : file ? (sizeNote || "Ready for inspection") : "Use a clear photo with good lighting"}</small></label>
         {cameras.length > 0 && <div className="grid2" style={{ marginTop: 18 }}>
           <label>Farm camera<select value={cameraName} disabled={savingAssignment} onChange={(event) => {
             setCameraName(event.target.value);
@@ -224,7 +262,7 @@ export default function VisionPage() {
           {selectedCamera.pen && <span>Assigned to {selectedCamera.pen.name}</span>}
           {assignmentMessage && <span role="status">{assignmentMessage}</span>}
         </div>}
-        <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? (captureVideo ? "Capturing and analyzing…" : "Analyzing photo…") : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
+        <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy || preparing || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? (captureVideo ? "Capturing and analyzing…" : "Analyzing photo…") : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
       </form>
       {cameras.length > 0 && <VisionSchedule cameras={cameras} />}
       <VisionFindings pens={pens} canReview={session?.role === "OWNER" || session?.role === "MANAGER" || session?.role === "WORKER"} />

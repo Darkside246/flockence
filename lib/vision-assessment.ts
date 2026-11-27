@@ -53,6 +53,8 @@ export const visionAssessmentSchema = z.object({
   evidenceId: label,
   capture: z.object({ mode: z.literal("VIDEO_SAMPLE"), frames: z.literal(3) }).optional(),
   pen: z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string().min(1).max(120) }).optional(),
+  /** The phone's upload id, so a retried upload is recognised (lib/vision-upload-requests.ts). */
+  requestId: z.string().regex(/^[A-Za-z0-9-]{16,64}$/).optional(),
 });
 
 type VisionResult = z.infer<typeof visionResultSchema>;
@@ -60,7 +62,7 @@ type VisionAssessment = z.infer<typeof visionAssessmentSchema>;
 type AssessmentRecord = { id: string; batchId: string | null; observedAt: Date; visionAssessment: unknown };
 
 export function createVisionAssessment(result: VisionResult, input: {
-  model: string; source: VisionAssessment["source"]; inspectionCategory: string; evidenceId: string; pen?: VisionAssessment["pen"]; capture?: VisionAssessment["capture"];
+  model: string; source: VisionAssessment["source"]; inspectionCategory: string; evidenceId: string; pen?: VisionAssessment["pen"]; capture?: VisionAssessment["capture"]; requestId?: string;
 }): VisionAssessment {
   const signals = assessmentCategories.map((categoryName) => {
     const candidates = result.signals.filter((row) => row.category === categoryName);
