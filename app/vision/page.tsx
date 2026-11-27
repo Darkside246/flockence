@@ -7,6 +7,7 @@ import { VisionReport } from "@/components/vision-report";
 import { VisionFindings } from "@/components/vision-findings";
 import { VisionIntelligence } from "@/components/vision-intelligence";
 import { PenLayout } from "@/components/pen-layout";
+import { VisionKnown } from "@/components/vision-known";
 import { useSession } from "@/components/auth-gate";
 import { shrinkPhoto, sizeLabel } from "@/lib/photo-shrink";
 import { OfflineError, queueAvailable, queueCheck, queuedChecks, sendInspection, sendQueued, uploadId } from "@/lib/vision-send";
@@ -286,7 +287,8 @@ export default function VisionPage() {
         </div>}
         {preview && <div className="vision-preview"><img src={preview} alt="Selected poultry inspection" /></div>}
 
-        <div className="grid2" style={{ marginTop: 18 }}><label>Batch<select value={batchId} onChange={e => setBatchId(e.target.value)}><option value="">Farm-wide</option>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label><label>What should the AI know?<input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Example: birds are 24 days old and feed intake dropped" /></label></div>
+        <div className="grid2" style={{ marginTop: 18 }}><label>Batch<select value={batchId} onChange={e => setBatchId(e.target.value)}><option value="">Farm-wide</option>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label><label>Anything the records do not show?<input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Example: birds went off feed this morning; new litter yesterday" maxLength={2000} /></label></div>
+        <VisionKnown category={category} batchId={batchId} penId={penId} />
 
         {pens.length > 0 && <label>Pen<select value={penId} disabled={savingAssignment} onChange={(event) => setPenId(event.target.value)}>
           <option value="">No pen assigned</option>
