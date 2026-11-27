@@ -31,6 +31,8 @@ export const visionResultSchema = z.object({
   // Approximate count of the birds visible in the picture (never the whole flock), and questions when unsure.
   birdCount: z.object({ visible: z.number().int().min(0).max(100000).nullable(), confidence: confidence.optional(), note: detail.optional() }).nullable().optional().catch(null),
   questions: z.array(detail.min(1)).max(3).optional().catch([]),
+  notVisible: z.array(detail.min(1)).max(8).optional().catch([]),
+  stillBirds: z.array(z.object({ where: detail.min(1), why: detail.optional(), confidence: confidence.optional() })).max(10).optional().catch([]),
 });
 
 const source = z.discriminatedUnion("kind", [

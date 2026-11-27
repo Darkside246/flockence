@@ -3,6 +3,7 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
 import { VisionSchedule } from "@/components/vision-schedule";
+import { VisionReport } from "@/components/vision-report";
 
 const categories = [
   ["PEN", "Pen / housing", "Look for bedding, space, airflow, heat and sanitation issues."],
@@ -271,7 +272,7 @@ export default function VisionPage() {
           </li>)}</ul> : <p>No category had visible evidence in both inspections.</p>}
         </div>}
       </section>}
-      <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong>{item.visionAssessment && <span>{item.visionAssessment.pen?.name ? item.visionAssessment.pen.name + " · " : ""}{describe(item.visionAssessment.status)}{item.visionAssessment.capture ? " · Video sample (3 frames)" : ""}</span>}<span>{item.notes?.slice(0, 280) || "No notes recorded."}</span></div></article>)}</div>}</section>
+      <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong>{item.visionAssessment && <span>{item.visionAssessment.pen?.name ? item.visionAssessment.pen.name + " · " : ""}{describe(item.visionAssessment.status)}{item.visionAssessment.capture ? " · Video sample (3 frames)" : ""}</span>}{item.notes ? <details className="vision-history-full"><summary>{item.notes.split("\n").find(line => line.startsWith("Summary:"))?.slice(8).trim() || item.notes.slice(0, 160)} <span className="vision-read-more">Read the full report</span></summary>{item.imageUrl && <a href={item.imageUrl} target="_blank" rel="noreferrer" className="vision-full-photo">Open the photo full size</a>}<VisionReport text={item.notes} /></details> : <span>No notes recorded.</span>}</div></article>)}</div>}</section>
     </main>
   </div>;
 }

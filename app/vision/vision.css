@@ -17,3 +17,16 @@
 .vision-auto-more summary { cursor: pointer; font-weight: 650; padding: 6px 0; }
 @media (min-width: 760px) { .vision-auto-camera { grid-template-columns: minmax(0, 1.2fr) auto; align-items: center; } .vision-auto-status { grid-column: 1 / -1; } }
 .vision-auto-plan-line { margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }
+
+/* Saved inspections open in full (2026-11-27) */
+.vision-history-full { margin-top: 4px; }
+.vision-history-full > summary { cursor: pointer; list-style: none; line-height: 1.45; }
+.vision-history-full > summary::-webkit-details-marker { display: none; }
+.vision-read-more { display: inline-block; margin-left: 6px; font-weight: 700; color: var(--accent-primary); white-space: nowrap; }
+.vision-history-full[open] .vision-read-more { display: none; }
+.vision-full-photo { display: inline-block; margin: 8px 0 4px; font-weight: 650; }
+.vision-report { display: grid; gap: 10px; margin-top: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-default); background: var(--bg-surface-secondary); }
+.vision-report section { display: grid; gap: 4px; }
+.vision-report h4 { margin: 0; font-size: 13px; color: var(--text-heading, var(--text-primary)); }
+.vision-report p, .vision-report li { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; }
+.vision-report ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
