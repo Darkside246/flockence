@@ -602,3 +602,25 @@ test("vision report: a 12-day-old batch, 120 placed less 4 deaths is 116, findin
   assert.deepEqual(report.coverage.sources.map((s) => s.name), ["Camera Report Cam"]);
   assert.equal(await runAsFarm(B, () => buildVisionReport({ kind: "BATCH", id: batch.id }, periodFor("7d"))), null, "farm B cannot report on farm A's batch");
 });
+
+test("retry-safe uploads: a retry finds its own farm's saved inspection, and a running one is shared", async () => {
+  const { earlierReply, runOnce } = await import("../lib/vision-upload-requests.ts");
+  const id = `retry-${Date.now()}-abcdef123456`;
+  assert.equal(await runAsFarm(A, () => earlierReply(id)), null, "an unseen id runs normally");
+  await runAsFarm(A, () => prisma.healthObservation.create({ data: {
+    observedAt: new Date(), symptom: "Farm Vision inspection", category: "VISION:PEN", affectedCount: 0, severity: "LOW", notes: "saved",
+    visionAssessment: { requestId: id, summary: "Birds spread evenly.", confidence: "HIGH", checks: ["Check the drinkers"] },
+  } }));
+  const again = await runAsFarm(A, () => earlierReply(id));
+  assert.equal(again.status, 200);
+  assert.equal(again.body.repeated, true);
+  assert.equal(again.body.analysis.summary, "Birds spread evenly.");
+  assert.equal(await runAsFarm(B, () => earlierReply(id)), null, "farm B never sees farm A's upload");
+
+  let runs = 0;
+  const work = () => new Promise((resolve) => { runs += 1; setTimeout(() => resolve({ status: 201, body: { ok: true } }), 50); });
+  const other = `${id}-x`;
+  const [first, second] = await Promise.all([runAsFarm(A, () => runOnce(other, work)), runAsFarm(A, () => runOnce(other, work))]);
+  assert.equal(runs, 1, "the retry waited for the first attempt instead of analysing again");
+  assert.deepEqual(first, second);
+});

@@ -29,6 +29,8 @@ export type InspectionRequest = {
   upload?: { bytes: Buffer; mimeType: string };
   /** Automatic rounds: the picture is marked for the retention clean-up, and the note says it was automatic. */
   automatic?: boolean;
+  /** The phone's upload id (retry-safe uploads), saved with the inspection. */
+  requestId?: string;
 };
 export type InspectionResult =
   | { ok: true; observation: Awaited<ReturnType<typeof prisma.healthObservation.create>>; imageUrl: string; analysis: z.infer<typeof visionResultSchema>;
@@ -159,6 +161,7 @@ export async function runVisionInspection(request: InspectionRequest): Promise<I
       const visionAssessment = createVisionAssessment(parsed, {
         model: modelUsed, inspectionCategory: category, evidenceId: media.id,
         ...(pen ? { pen } : {}),
+        ...(request.requestId ? { requestId: request.requestId } : {}),
         ...(liveCapture ? { capture: { mode: "VIDEO_SAMPLE", frames: 3 } as const } : {}),
         source: capture ? { kind: "CAMERA", name: capture.camera.name, provider: capture.camera.source } : { kind: "UPLOAD" },
       });
