@@ -59,5 +59,16 @@ export async function inspectionContext(input: { batchId: string | null; pen?: {
       }
     }
   }
+  // Thermometers and sensors: each one's latest reading from the last two hours.
+  const readings = await prisma.thermometerReading.findMany({
+    where: { farmId, readAt: { gte: new Date(now.getTime() - 2 * 3_600_000), lte: now } },
+    orderBy: { readAt: "desc" }, take: 200, select: { sensor: true, readAt: true, temperatureC: true, humidityPercent: true },
+  }).catch(() => []);
+  const latest = new Map<string, (typeof readings)[number]>();
+  for (const row of readings) if (!latest.has(row.sensor)) latest.set(row.sensor, row);
+  if (latest.size) {
+    const list = [...latest.values()].slice(0, 6).map((r) => `${r.sensor} ${Number(r.temperatureC)} °C${r.humidityPercent != null ? ` / ${Number(r.humidityPercent)}%` : ""} (${Math.max(0, Math.round((now.getTime() - r.readAt.getTime()) / 60_000))} min ago)`);
+    parts.push(`Sensor readings: ${list.join("; ")}.`);
+  }
   return { batchId, text: parts.join(" ") };
 }

@@ -136,7 +136,10 @@ export async function runFarmRound(saved: Schedule, updatedBy: string | null, no
           : { ok: false, error: result.error });
         if (result.ok) {
           line.birdsVisible = result.analysis.birdCount?.visible ?? null;
-          line.questions = result.analysis.questions ?? [];
+          line.questions = [
+            ...(result.analysis.stillBirds ?? []).map((b) => `Possible dead or down bird ${b.where}. Please check it.`),
+            ...(result.analysis.questions ?? []),
+          ].slice(0, 4);
           line.escalate = result.analysis.escalate;
           // Same frames to Oriya (no second camera wake): its count, alerts and the WhatsApp message to the farm.
           line.oriya = await shareInspectionWithOriya({ cameraName: camera.name, penName: result.pen?.name ?? null, frames: result.frames, capturedAt: result.capturedAt, video: result.video })

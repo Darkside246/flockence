@@ -507,3 +507,24 @@ test("vision provider: OpenRouter is chosen by its key, sends the pictures, and 
     }
   }
 });
+
+test("vision answers: still birds, what was not in view, the count and questions are read safely", async () => {
+  const { visionResultSchema } = await import("../lib/vision-assessment.ts");
+  const ok = visionResultSchema.parse({
+    summary: "Birds spread evenly; one bird lying still near the left drinker.",
+    stillBirds: [{ where: "near the left drinker line", why: "on its side in the same place as in the earlier picture", confidence: "MEDIUM" }],
+    notVisible: ["feeders at the far end"], birdCount: { visible: 140, confidence: "LOW" }, questions: ["Has the bird near the left drinker moved?"],
+  });
+  assert.equal(ok.stillBirds.length, 1);
+  assert.deepEqual(ok.notVisible, ["feeders at the far end"]);
+  assert.equal(ok.birdCount.visible, 140);
+  // A malformed optional field never loses the rest of the answer.
+  const messy = visionResultSchema.parse({ summary: "Pen looks normal.", stillBirds: "none", notVisible: 5, birdCount: "many", questions: [1] });
+  assert.equal(messy.summary, "Pen looks normal.");
+  assert.deepEqual(messy.stillBirds, []);
+  assert.deepEqual(messy.notVisible, []);
+  assert.equal(messy.birdCount, null);
+  const { visionPrompt } = await import("../lib/vision.ts");
+  const prompt = visionPrompt("PEN", "Flock A, about 12 days old.");
+  for (const part of ["1. Birds.", "2. Feed.", "3. Water.", "5. Heat and cold.", "stillBirds", "notVisible"]) assert.ok(prompt.includes(part), part);
+});
