@@ -13,7 +13,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
  *     the sign-in routes.
  */
 
-interface FarmHolder { farmId: string | null; system?: boolean }
+interface FarmHolder { farmId: string | null; system?: boolean; created?: Map<string, Set<string>> }
 const storage = new AsyncLocalStorage<FarmHolder>();
 
 export class FarmScopeError extends Error {
@@ -52,6 +52,23 @@ export function currentFarmId(): string {
   return farmId;
 }
 
+/**
+ * Rows this request created through the scoped client (so already checked to belong to its farm). Inside a transaction
+ * they are not yet visible to the link check, which runs outside it; remembering them lets a save create a row and point
+ * at it in the same transaction (an egg collection's stock item, a processing output's inventory lot).
+ */
+export function rememberCreated(model: string, id: unknown) {
+  const holder = storage.getStore();
+  if (!holder || typeof id !== "string") return;
+  holder.created ??= new Map();
+  const set = holder.created.get(model) ?? new Set<string>();
+  set.add(id);
+  holder.created.set(model, set);
+}
+export function wasCreatedHere(model: string, id: string): boolean {
+  return storage.getStore()?.created?.get(model)?.has(id) === true;
+}
+
 export function isUnscoped(): boolean {
   return storage.getStore()?.system === true;
 }
@@ -84,7 +101,7 @@ export function runUnscoped<T>(work: () => T | Promise<T>): Promise<T> {
 /** Tables that carry farmId themselves. */
 export const FARM_MODELS = new Set([
   "AuditLog", "Batch", "BeddingPurchase", "BiosecurityLog", "Customer", "DailyFlockCheck", "DiagnosticTest", "EggCollection",
-  "EggPackRun", "Equipment", "Expense", "FarmTask", "FeedPurchase", "HealthCase", "HealthObservation", "InventoryMovement",
+  "EggPackRun", "Equipment", "Expense", "FarmTask", "FeedPurchase", "HealthCase", "HealthCaseEvent", "BirdMovement", "WaterReading", "FeedProduct", "FeedProductSupplier", "FeedMeasure", "HealthObservation", "InventoryMovement",
   "LayerStageEvent", "ManureRecord", "Product", "ProductionPlan", "RecurringExpense", "Sale", "Setting", "StorageLocation",
   "StorageTemperatureLog", "Supplier", "ThermometerReading", "TransportEvent", "TransportationExpense", "Treatment", "User",
   "VisionMedia", "WeatherSnapshot",
@@ -116,9 +133,9 @@ export const FOREIGN_KEYS: Record<string, Record<string, string>> = {
   EggPackRun: { batchId: "Batch", outputInventoryItemId: "InventoryItem" },
   EggPackInput: { packRunId: "EggPackRun", inventoryItemId: "InventoryItem" },
   Batch: { supplierId: "Supplier" }, BirdCount: { batchId: "Batch" }, MortalityEvent: { batchId: "Batch" },
-  FeedPurchase: { batchId: "Batch", supplierId: "Supplier" }, FeedUsage: { batchId: "Batch" },
+  FeedPurchase: { batchId: "Batch", supplierId: "Supplier", feedProductId: "FeedProduct" }, FeedUsage: { batchId: "Batch", feedProductId: "FeedProduct" },
   BeddingPurchase: { batchId: "Batch", supplierId: "Supplier" }, BeddingUsage: { batchId: "Batch" },
-  Expense: { batchId: "Batch" }, TransportationExpense: { batchId: "Batch" }, SlaughterEvent: { batchId: "Batch" },
+  Expense: { batchId: "Batch", supplierId: "Supplier" }, TransportationExpense: { batchId: "Batch" }, SlaughterEvent: { batchId: "Batch" },
   ProcessingOutput: { batchId: "Batch", inventoryItemId: "InventoryItem", slaughterEventId: "SlaughterEvent", storageLocationId: "StorageLocation" },
   TransportEvent: { batchId: "Batch", slaughterEventId: "SlaughterEvent" },
   InventoryItem: { productId: "Product", batchId: "Batch", storageLocationId: "StorageLocation" },
@@ -127,6 +144,11 @@ export const FOREIGN_KEYS: Record<string, Record<string, string>> = {
   SaleItem: { saleId: "Sale", batchId: "Batch", inventoryItemId: "InventoryItem" },
   HouseholdConsumption: { batchId: "Batch" }, WeightRecord: { batchId: "Batch" }, AuditLog: { userId: "User" },
   HealthCase: { batchId: "Batch", openedByUserId: "User" },
+  HealthCaseEvent: { healthCaseId: "HealthCase", userId: "User" },
+  BirdMovement: { batchId: "Batch" },
+  WaterReading: { batchId: "Batch" },
+  FeedProduct: { preferredSupplierId: "Supplier" },
+  FeedProductSupplier: { feedProductId: "FeedProduct", supplierId: "Supplier" },
   HealthObservation: { visionMediaId: "VisionMedia", batchId: "Batch", healthCaseId: "HealthCase" },
   Treatment: { batchId: "Batch", healthCaseId: "HealthCase", administeredByUserId: "User" },
   DiagnosticTest: { batchId: "Batch", healthCaseId: "HealthCase" }, FarmTask: { batchId: "Batch", assignedToUserId: "User" },

@@ -201,8 +201,10 @@ model Farm {
   customers Customer[]
   users User[]
   auditLogs AuditLog[]
+  birdMovements BirdMovement[]
   productionPlans ProductionPlan[]
   healthCases HealthCase[]
+  healthCaseEvents HealthCaseEvent[]
   treatments Treatment[]
   healthObservations HealthObservation[]
   diagnosticTests DiagnosticTest[]
@@ -220,6 +222,10 @@ model Farm {
   eggPackRuns EggPackRun[]
   layerStageEvents LayerStageEvent[]
   thermometerReadings ThermometerReading[]
+  waterReadings WaterReading[]
+  feedProducts FeedProduct[]
+  feedProductSuppliers FeedProductSupplier[]
+  feedMeasures FeedMeasure[]
 }
 
 model DailyFlockCheck {
@@ -277,6 +283,9 @@ model EggCollection {
   crackedEggs Int @default(0)
   floorEggs Int @default(0)
   rejectedEggs Int @default(0)
+  brokenEggs Int @default(0)
+  householdEggs Int @default(0)
+  hatchingEggs Int @default(0)
   withdrawalBlocked Boolean @default(false)
   withdrawalNotes String?
   averageEggWeightG Decimal? @db.Decimal(8,2)
@@ -372,6 +381,7 @@ model User {
   treatments Treatment[]
   farmTasks FarmTask[]
   @@index([farmId, role])
+  healthCaseEvents HealthCaseEvent[]
 }
 
 model Batch {
@@ -402,6 +412,8 @@ model Batch {
   targetDressedWeightKg Decimal? @db.Decimal(10,3)
   actualSlaughter DateTime?
   initialChicks Int
+  /// House or pen the flock was placed in; transfers move birds from here.
+  placementHouse String?
   supplierId String?
   chickCostMinor Int
   createdAt DateTime @default(now())
@@ -410,6 +422,8 @@ model Batch {
   supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   birdCounts BirdCount[]
   mortalityEvents MortalityEvent[]
+  birdMovements BirdMovement[]
+  waterReadings WaterReading[]
   feedPurchases FeedPurchase[]
   feedUsage FeedUsage[]
   beddingPurchases BeddingPurchase[]
@@ -452,8 +466,14 @@ model MortalityEvent {
   batchId String
   date DateTime
   quantity Int
+  /// DIED (found dead), CULLED (removed on purpose) or MISSING (confirmed gone, cause unknown). All three leave the flock.
+  kind String @default("DIED")
+  /// BURIED, BURNED, COMPOSTED, RENDERED or COLLECTED (taken away by a contractor). Empty when not recorded.
+  disposal String?
   reason String?
   notes String?
+  /// Set when the quantity or kind was corrected; the before/after is in AuditLog.
+  correctedAt DateTime?
   createdAt DateTime @default(now())
   batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   @@index([batchId, date])
@@ -465,6 +485,7 @@ model FeedPurchase {
   batchId String?
   date DateTime
   feedType String
+  feedProductId String?
   bagSizeKg Decimal @db.Decimal(10,3)
   quantityBags Decimal @db.Decimal(10,3)
   unitCostMinor Int
@@ -473,6 +494,7 @@ model FeedPurchase {
   supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
   @@index([batchId, date])
+  @@index([farmId, date])
 }
 
 model FeedUsage {
@@ -480,7 +502,20 @@ model FeedUsage {
   batchId String
   date DateTime
   feedType String
+  /// Feed taken from the store and put in the feeders that day.
   quantityKg Decimal @db.Decimal(12,3)
+  /// Feed still in the feeders at the end of the day, when it was weighed. Carries into the next day.
+  leftoverKg Decimal? @db.Decimal(12,3)
+  /// Spilt, wet or spoiled feed: wasted, not eaten.
+  spillageKg Decimal? @db.Decimal(12,3)
+  /// Feed taken back to the store (adds back to stock).
+  returnedKg Decimal? @db.Decimal(12,3)
+  feedProductId String?
+  /// How the farmer entered it, e.g. 1.5 BAG, 3 MEASURE:<id>, 2 LB. quantityKg is always the converted kilograms.
+  enteredQuantity Decimal? @db.Decimal(12,3)
+  enteredUnit String?
+  /// Pen the feed went to (pen ids live in farm settings).
+  penId String?
   costMinor Int
   note String?
   createdAt DateTime @default(now())
@@ -519,6 +554,8 @@ model Expense {
   id String @id @default(cuid())
   farmId String
   batchId String?
+  supplierId String?
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   date DateTime
   category String
   description String
@@ -579,6 +616,8 @@ model SlaughterEvent {
   slaughterCostMinor Int
   liveWeightKg Decimal? @db.Decimal(12,3)
   dressedWeightKg Decimal? @db.Decimal(12,3)
+  /// What dressedWeightKg includes: CARCASS (no giblets) or CARCASS_WITH_GIBLETS. Only rows that say so are used to learn the farm's yield.
+  dressedDefinition String?
   chillingCompletedAt DateTime?
   notes String?
   batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
@@ -690,6 +729,7 @@ model InventoryItem {
   updatedAt DateTime @updatedAt
   @@index([productId, status])
   @@index([batchId, status])
+  @@index([storageLocationId, status])
 }
 
 model StorageLocation {
@@ -834,6 +874,7 @@ model WeightRecord {
   liveOrDressed String
   batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+  @@index([batchId, date])
 }
 
 model Setting {
@@ -852,6 +893,20 @@ model Supplier {
   name String
   phone String?
   notes String?
+  /// CHICKS, FEED, MEDICINE, BEDDING, EQUIPMENT, PROCESSING, TRANSPORT, OTHER, or a category the farm typed itself.
+  category String @default("OTHER")
+  businessName String?
+  contactPerson String?
+  whatsapp String?
+  email String?
+  location String?
+  productsSupplied String?
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  feedProducts FeedProductSupplier[]
+  preferredFor FeedProduct[]
+  expenses Expense[]
   farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   batches Batch[]
   feedPurchases FeedPurchase[]
@@ -919,17 +974,48 @@ model HealthCase {
   isolationRecommended Boolean @default(false)
   movementRestricted Boolean @default(false)
   notes String?
+  // Lifecycle (OPEN -> MONITORING -> RESOLVED -> CLOSED, and back with a reason): see lib/health-case-lifecycle.ts
+  resolvedAt DateTime?
+  outcome String?
+  nextReviewAt DateTime?
+  reopenedCount Int @default(0)
+  lastActivityAt DateTime @default(now())
+  // Suspected notifiable disease (for example Newcastle disease or avian influenza): kept until it is reported
+  notifiable Boolean @default(false)
+  reportedToAuthorityAt DateTime?
+  authorityReference String?
   farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
   openedBy User? @relation(fields: [openedByUserId], references: [id], onDelete: SetNull)
   observations HealthObservation[]
   treatments Treatment[]
   diagnosticTests DiagnosticTest[]
+  events HealthCaseEvent[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@unique([farmId, caseNumber])
+  @@index([farmId, status, nextReviewAt])
   @@index([farmId, status, severity])
   @@index([batchId, openedAt])
+}
+
+// One line in a health case's history: opened, a note, a status change, a review date set, reported to the authority.
+// Kept even after the case is closed, so the record of what was decided and when is never lost.
+model HealthCaseEvent {
+  id String @id @default(cuid())
+  farmId String
+  healthCaseId String
+  userId String?
+  type String
+  fromStatus String?
+  toStatus String?
+  note String?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  healthCase HealthCase @relation(fields: [healthCaseId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([healthCaseId, createdAt])
+  @@index([farmId, createdAt])
 }
 
 model HealthObservation {
@@ -1094,4 +1180,106 @@ model ThermometerReading {
   farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   @@unique([farmId, sensor, readAt])
   @@index([farmId, readAt])
+}
+
+/// Birds that join a flock, or move between houses inside it. Losses (died, culled, missing) are MortalityEvent rows and
+/// birds sent to slaughter are SlaughterEvent rows, so every bird leaving is counted in exactly one place.
+model BirdMovement {
+  id String @id @default(cuid())
+  farmId String
+  batchId String
+  date DateTime
+  /// ADDITION (more birds join the flock) or TRANSFER (birds move from one house to another; the flock total is unchanged)
+  type String
+  quantity Int
+  fromHouse String?
+  toHouse String?
+  /// Where added birds came from: hatchery, supplier or own hatch.
+  source String?
+  costMinor Int?
+  notes String?
+  createdByUserId String?
+  /// A movement entered by mistake is voided, never deleted, so the history stays readable.
+  voidedAt DateTime?
+  voidReason String?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  @@index([batchId, date])
+  @@index([farmId, date])
+}
+
+/// A water meter or tank reading. Meter: the cumulative litres on the dial. Tank: the litres in the tank now, with any
+/// refill since the last reading and any water known to be used for something other than the birds (cleaning, people).
+model WaterReading {
+  id String @id @default(cuid())
+  farmId String
+  batchId String?
+  /// The meter or tank's name, so readings of the same one are compared with each other.
+  source String
+  /// METER or TANK
+  kind String
+  readingL Decimal @db.Decimal(14,3)
+  addedL Decimal? @db.Decimal(14,3)
+  otherUseL Decimal? @db.Decimal(14,3)
+  readAt DateTime
+  notes String?
+  createdByUserId String?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  batch Batch? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  @@index([farmId, source, readAt])
+  @@index([batchId, readAt])
+}
+
+/// The farm's feed catalogue. Started from the built-in Barbados list the first time it is opened, then the farm's own:
+/// names can be edited, products added or switched off, and several suppliers linked to one product.
+model FeedProduct {
+  id String @id @default(cuid())
+  farmId String
+  /// Maker or brand, e.g. "Super Feeds". Empty for the farm's own mix.
+  brand String @default("")
+  name String
+  description String?
+  /// Usual bag size in kg (the farm can still enter any size on a purchase).
+  defaultBagKg Decimal? @db.Decimal(10,3)
+  preferredSupplierId String?
+  active Boolean @default(true)
+  sortOrder Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  preferredSupplier Supplier? @relation(fields: [preferredSupplierId], references: [id], onDelete: SetNull)
+  suppliers FeedProductSupplier[]
+  @@unique([farmId, brand, name])
+  @@index([farmId, active])
+}
+
+/// Which suppliers sell a feed product, with their bag size and last price if known.
+model FeedProductSupplier {
+  id String @id @default(cuid())
+  farmId String
+  feedProductId String
+  supplierId String
+  bagSizeKg Decimal? @db.Decimal(10,3)
+  unitCostMinor Int?
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  feedProduct FeedProduct @relation(fields: [feedProductId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  @@unique([feedProductId, supplierId])
+}
+
+/// A farm's own way of measuring feed out: a scoop, a pan, a bucket. Converted to kg only when the farm has said how
+/// much one holds; Flockence never assumes a weight.
+model FeedMeasure {
+  id String @id @default(cuid())
+  farmId String
+  name String
+  /// SCOOP, PAN, FEEDER, BUCKET or OTHER
+  kind String @default("OTHER")
+  kgPerUnit Decimal? @db.Decimal(10,4)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  @@unique([farmId, name])
 }

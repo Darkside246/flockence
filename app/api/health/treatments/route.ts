@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { offlineEventId } from "@/lib/offline-event";
-import { isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 import { NextResponse } from "next/server";
+import { withdrawalClearsAt } from "@/lib/treatment-timing";
+import { calendarDateInTimeZone, isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
@@ -60,11 +61,8 @@ export async function POST(request: Request) {
     if (offline && (!batch || offline.startedAt < batch.startDate.toISOString().slice(0, 10))) {
       return NextResponse.json({ error: "The treatment date must match a flock and cannot predate placement." }, { status: 400 });
     }
-    let clearAt: Date | null = null;
-    if (days > 0) {
-      clearAt = new Date(startedAt);
-      clearAt.setUTCDate(clearAt.getUTCDate() + days);
-    }
+    // The withdrawal period runs from the end of the treatment (the last dose), not from the day it began.
+    let clearAt = withdrawalClearsAt(startedAt, endedAt, input.durationDays ? Number(input.durationDays) : null, days);
     if (offline?.clearsOn) {
       clearAt = parseCalendarDate(offline.clearsOn);
       if (!clearAt || !endedAt || clearAt < endedAt) {
@@ -146,4 +144,37 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not record treatment." }, { status: 400 });
   }
+}
+
+// End a treatment: it was finished ("complete") or stopped early ("stop"). The withdrawal period then runs from that
+// end date, and the health case it belongs to gets a dated line in its history.
+export async function PATCH(request: Request) {
+  const session = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
+  if (session.response) return session.response;
+  const id = new URL(request.url).searchParams.get("id");
+  let input: { action?: string; endedAt?: string; note?: string };
+  try { input = await request.json(); } catch { return NextResponse.json({ error: "Send what you want to do." }, { status: 400 }); }
+  if (!id) return NextResponse.json({ error: "Choose a treatment." }, { status: 400 });
+  if (input.action !== "complete" && input.action !== "stop") return NextResponse.json({ error: "Choose complete or stop." }, { status: 400 });
+  const today = calendarDateInTimeZone(new Date()) ?? new Date().toISOString().slice(0, 10);
+  const endText = input.endedAt || today;
+  const endedAt = parseCalendarDate(endText);
+  if (!endedAt || endText > today) return NextResponse.json({ error: "Enter the day the treatment ended, today or earlier." }, { status: 400 });
+
+  const result = await prisma.$transaction(async tx => {
+    const treatment = await tx.treatment.findFirst({ where: { id, farmId: currentFarmId() } });
+    if (!treatment) return { status: 404, error: "Treatment not found." };
+    if (treatment.status !== "ACTIVE") return { status: 409, error: "This treatment has already ended." };
+    if (endedAt < new Date(treatment.startedAt.toISOString().slice(0, 10) + "T00:00:00.000Z")) return { status: 409, error: "It cannot have ended before it started." };
+    const clearsAt = withdrawalClearsAt(treatment.startedAt, endedAt, null, treatment.withdrawalDays ?? 0);
+    const note = typeof input.note === "string" && input.note.trim() ? input.note.trim().slice(0, 400) : "";
+    await tx.treatment.update({ where: { id }, data: { status: input.action === "stop" ? "STOPPED" : "COMPLETED", endedAt, withdrawalClearsAt: clearsAt, ...(note ? { notes: [treatment.notes, note].filter(Boolean).join(" | ") } : {}) } });
+    if (treatment.healthCaseId) {
+      await tx.healthCaseEvent.create({ data: { farmId: currentFarmId(), healthCaseId: treatment.healthCaseId, userId: session.user!.id, type: "TREATMENT", note: `${treatment.productName} ${input.action === "stop" ? "stopped early" : "finished"} on ${endText}.${clearsAt ? " Withdrawal clears " + clearsAt.toISOString().slice(0, 10) + "." : ""}${note ? " " + note : ""}` } });
+      await tx.healthCase.update({ where: { id: treatment.healthCaseId }, data: { lastActivityAt: new Date() } });
+    }
+    return { status: 200, clearsAt: clearsAt ? clearsAt.toISOString().slice(0, 10) : null };
+  });
+  if (result.status !== 200) return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json({ ended: true, withdrawalClearsAt: result.clearsAt });
 }

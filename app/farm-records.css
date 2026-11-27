@@ -1,0 +1,136 @@
+/* Farm record dialogs and lists: health cases, flock edit and delete, type-to-confirm (ported 2026-11-26 onto the rebuilt theme tokens).
+   Only theme tokens are used, so every appearance (Poultry Farm, Cyber Crystal and the rest) styles them. */
+
+.section-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+.section-tabs :is(a, button) {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 999px;
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-decoration: none;
+  color: var(--text-secondary); background: transparent; border: 1px solid var(--border-default);
+}
+.section-tabs :is(a, button):hover { color: var(--text-primary); border-color: var(--border-strong); }
+.section-tabs :is(a, button).active, .section-tabs button[aria-selected="true"] {
+  color: var(--accent-contrast); background: var(--accent-primary); border-color: transparent;
+}
+.section-tabs .tab-count { padding: 1px 8px; border-radius: 999px; font-size: 11px; background: var(--accent-soft); color: inherit; }
+
+.case-card { display: grid; gap: 10px; }
+.case-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.case-head strong { display: block; font-size: 15px; }
+.case-meta { display: block; margin-top: 3px; font-size: 12px; color: var(--text-secondary); }
+.case-chips, .case-flags { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.status-chip {
+  display: inline-flex; align-items: center; min-height: 26px; padding: 0 11px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  border: 1px solid var(--border-default); color: var(--text-secondary); background: var(--bg-surface-secondary);
+}
+.status-open { color: var(--status-warning); border-color: var(--status-warning); }
+.status-monitoring { color: var(--status-info); border-color: var(--status-info); }
+.status-resolved { color: var(--status-success); border-color: var(--status-success); }
+.flag {
+  display: inline-flex; align-items: center; min-height: 26px; padding: 0 11px; border-radius: 8px; font-size: 12px; font-weight: 650;
+  color: var(--text-secondary); border: 1px solid var(--border-default); background: var(--bg-surface-secondary);
+}
+.flag-warn { color: var(--status-danger); border-color: var(--status-danger); }
+.case-facts { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); }
+.case-facts:empty { display: none; }
+.case-actions, .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+@media (max-width: 640px) { .row-actions { width: 100%; } .row-actions > :is(button, a) { flex: 1 1 0; } }
+
+dialog.ui-dialog {
+  width: min(520px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; overflow: auto;
+  color: var(--text-primary); background: var(--bg-surface-elevated); border: 1px solid var(--border-default);
+  border-radius: var(--card-radius, 16px); box-shadow: var(--shadow-elevated);
+}
+dialog.ui-dialog::backdrop { background: rgba(0, 0, 0, .55); }
+dialog.ui-dialog :is(form, .dialog-body) { display: grid; gap: 14px; padding: 22px; }
+dialog.ui-dialog h3 { margin: 0; font-size: 19px; color: var(--text-heading, var(--text-primary)); }
+dialog.ui-dialog p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+dialog.ui-dialog label { display: grid; gap: 6px; font-size: 13px; font-weight: 650; color: var(--text-secondary); }
+dialog.ui-dialog :is(input, select, textarea) {
+  min-height: 44px; padding: 0 12px; font: inherit; color: var(--text-primary);
+  background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: 10px;
+}
+dialog.ui-dialog textarea { min-height: 76px; padding: 10px 12px; }
+dialog.ui-dialog :is(button, input, select, textarea):focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+dialog.ui-dialog .dialog-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+dialog.ui-dialog .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+dialog.ui-dialog .dialog-error { color: var(--status-danger); font-size: 13px; }
+dialog.ui-dialog .check-line { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; }
+dialog.ui-dialog .check-line input { width: 18px; height: 18px; min-height: 0; flex: none; margin-top: 2px; }
+@media (max-width: 520px) {
+  dialog.ui-dialog .dialog-grid { grid-template-columns: 1fr; }
+  dialog.ui-dialog .dialog-actions > button { flex: 1 1 100%; }
+}
+
+.case-timeline {
+  list-style: none; margin: 0; padding: 0 0 0 16px; border-left: 2px solid var(--border-default);
+  display: grid; gap: 14px; max-height: 52vh; overflow: auto;
+}
+.case-timeline li { position: relative; display: grid; gap: 2px; padding-left: 4px; }
+.case-timeline li::before {
+  content: ""; position: absolute; left: -23px; top: 5px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent-primary); box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.case-timeline .tl-kind { font-size: 12px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; color: var(--accent-primary); }
+.case-timeline time { font-size: 11px; color: var(--text-muted); }
+.case-timeline p { margin: 2px 0 0; }
+
+/* A destructive action (delete a flock). Same shape as .button, in the theme's danger colour. */
+.button.button-danger, dialog.ui-dialog .button.button-danger {
+  background: var(--status-danger) !important; border-color: var(--status-danger) !important; color: #fff !important;
+}
+.button.button-danger:hover:enabled { filter: brightness(1.08); }
+.button:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* Live bird count (the bird ledger), flock insights and the pre-slaughter check. */
+.span-2 { grid-column: 1 / -1; }
+.live-birds, .preflight { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-default); background: var(--bg-surface-secondary); }
+.live-birds-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.live-birds-number { font-size: 26px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text-heading, var(--text-primary)); }
+.live-birds-head > span { font-size: 14px; color: var(--text-secondary); }
+.live-birds-head > .button { margin-left: auto; }
+.live-birds-working { margin-top: 10px; display: grid; gap: 8px; }
+.live-birds-working p, .flock-insights p { margin: 0; font-size: 13px; color: var(--text-secondary); }
+.preflight ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 1.45; }
+.preflight-warn { color: var(--status-warning); font-weight: 650; }
+.flock-insights { display: grid; gap: 8px; }
+.insight-alerts { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; color: var(--status-warning); }
+.insight-alerts strong { color: inherit; }
+
+/* Daily flock check: two tick boxes that belong together (panting, wing spreading) sit side by side in one cell. */
+.check-pair { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 24px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.check-pair > legend { width: 100%; padding: 0; margin: 0 0 7px; font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.check-pair > label { display: flex; align-items: center; gap: 10px; min-height: 42px; margin: 0; white-space: nowrap; }
+.check-pair > label > input { width: 18px; height: 18px; min-height: 0; flex: none; margin: 0; }
+
+/* Water meter or tank beside its reading; tick-box lines; the waste list. */
+.inline-pair { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr); gap: 8px; }
+.shell .check-line { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.shell .check-line input { width: 18px; height: 18px; min-height: 0; flex: none; }
+.waste-list { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13px; line-height: 1.5; }
+
+/* Farm briefing, supplier picker, feed catalogue lists, dashboard choices. */
+.briefing-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.briefing-list li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 4px; border-bottom: 1px solid var(--border-default); font-size: 14px; line-height: 1.45; }
+.briefing-list li:last-child { border-bottom: 0; }
+.briefing-mark { text-align: center; font-size: 12px; }
+.briefing-urgent .briefing-mark { color: var(--status-danger); }
+.briefing-attention .briefing-mark { color: var(--status-warning); }
+.briefing-urgent .briefing-text { font-weight: 650; }
+.briefing-text small { display: inline; }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.supplier-picker { position: relative; display: grid; gap: 6px; }
+.supplier-picker > label { margin: 0; }
+.supplier-options { position: absolute; z-index: 40; top: 100%; left: 0; right: 0; margin: 4px 0 0; padding: 4px; list-style: none; max-height: 280px; overflow-y: auto; border-radius: 10px; border: 1px solid var(--border-default); background: var(--bg-surface-elevated); box-shadow: var(--shadow-elevated); }
+.supplier-options button { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; width: 100%; min-height: 40px; padding: 6px 10px; text-align: left; border: 0; border-radius: 8px; background: transparent; color: var(--text-primary); font: inherit; cursor: pointer; }
+.supplier-options button:hover, .supplier-options button:focus-visible { background: var(--accent-soft); }
+.supplier-options small { font-size: 11px; color: var(--text-secondary); }
+.supplier-options .muted { padding: 8px 10px; }
+.feed-list { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 4px; }
+.feed-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border-default); font-size: 13px; }
+.feed-group summary { cursor: pointer; padding: 8px 0; font-weight: 650; }
+.row-inactive { opacity: .62; }
+.toolbar-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-bottom: 12px; }
+.toolbar-row > label { flex: 1 1 200px; }
+.quick-amounts { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-choices { display: grid; gap: 4px; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }

@@ -1,9 +1,32 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import type { CaptchaMode } from "@/lib/signup-captcha";
 import { useAccountCaptcha } from "@/components/account-captcha";
+
+/** "Sign in with Oriya" shows only when this server has been linked to Oriya; otherwise it would only lead to an error. */
+function OriyaSignIn() {
+  const [available, setAvailable] = useState(false);
+  useEffect(() => { fetch("/api/auth/oriya/status", { cache: "no-store" }).then(r => r.ok ? r.json() : null).then(d => setAvailable(Boolean(d?.available))).catch(() => {}); }, []);
+  return available ? <div className="auth-links"><a className="button" href="/api/auth/oriya/start">Sign in with Oriya</a></div> : null;
+}
+
+/**
+ * After a correct password the server sends a sign-in cookie that only travels over a secure (https) connection.
+ * Browsers make one exception, http://localhost, so on a network address such as http://192.168.1.20:3000 the browser
+ * quietly drops it and the page bounces back to sign-in. Check the browser kept it, and say plainly what to do if not.
+ */
+async function confirmSignedIn() {
+  const kept = await fetch("/api/auth/me", { cache: "no-store" }).catch(() => null);
+  if (!kept || kept.status !== 401) return;
+  const { protocol, hostname, port } = window.location;
+  const local = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+  if (protocol === "http:" && !local) {
+    throw new Error(`Your email and password are correct, but this browser will not keep you signed in at ${hostname}, because it is not a secure (https) address. On the computer that runs Flockence, open http://localhost${port ? ":" + port : ""} instead. Phones and other computers need Flockence on an https address.`);
+  }
+  throw new Error("Your email and password are correct, but this browser did not keep you signed in. Check that cookies are allowed for this site, then try again.");
+}
 
 function Shell({ children, title, subtitle }: { children: React.ReactNode; title: string; subtitle: string }) {
   return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><div className="brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div><div className="auth-heading"><h1>{title}</h1><p>{subtitle}</p></div>{children}</section></main>;
@@ -18,14 +41,14 @@ function Message({ error, success }: { error: string; success: string }) {
 export function LoginForm({ captchaSiteKey, captchaMode }: { captchaSiteKey: string | null; captchaMode: CaptchaMode }) {
   const captcha = useAccountCaptcha(captchaSiteKey, captchaMode, "login");
   const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
-  async function submit(e: FormEvent) { e.preventDefault(); if (loading || !captcha.ready) return; setError(""); setLoading(true); try { const r = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, captchaToken: await captcha.responseToken() }) }); const data = await r.json(); if (!r.ok) throw new Error(data.error || "Unable to sign in."); const requested = new URLSearchParams(window.location.search).get("next") || "/"; const destination = new URL(requested, window.location.origin); window.location.assign(destination.origin === window.location.origin ? destination.href : "/"); } catch (err) { setError(err instanceof Error ? err.message : "Unable to sign in."); } finally { captcha.reset(); setLoading(false); } }
-  return <Shell title="Welcome back" subtitle="Sign in to manage your flock, pens, health and finances."><form className="form" onSubmit={submit}><label>Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label><Message error={error} success=""/>{captcha.widget}<button className="button button-primary" disabled={loading || !captcha.ready}>{loading ? "Signing in…" : "Sign in"}</button><div className="auth-links"><Link href="/forgot-password">Forgot password?</Link><span>·</span><Link href="/signup">Create account</Link></div><div className="auth-links"><a className="button" href="/api/auth/oriya/start">Sign in with Oriya</a></div></form></Shell>;
+  async function submit(e: FormEvent) { e.preventDefault(); if (loading || !captcha.ready) return; setError(""); setLoading(true); try { const r = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, captchaToken: await captcha.responseToken() }) }); const data = await r.json(); if (!r.ok) throw new Error(data.error || "Unable to sign in."); await confirmSignedIn(); const requested = new URLSearchParams(window.location.search).get("next") || "/"; const destination = new URL(requested, window.location.origin); window.location.assign(destination.origin === window.location.origin ? destination.href : "/"); } catch (err) { setError(err instanceof Error ? err.message : "Unable to sign in."); } finally { captcha.reset(); setLoading(false); } }
+  return <Shell title="Welcome back" subtitle="Sign in to manage your flock, pens, health and finances."><form className="form" onSubmit={submit}><label>Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Password<input type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required/></label><Message error={error} success=""/>{captcha.widget}<button className="button button-primary" disabled={loading || !captcha.ready}>{loading ? "Signing in…" : "Sign in"}</button><div className="auth-links"><Link href="/forgot-password">Forgot password?</Link><span>·</span><Link href="/signup">Create account</Link></div><OriyaSignIn/></form></Shell>;
 }
 
 export function SignupForm({ captchaSiteKey, captchaMode }: { captchaSiteKey: string | null; captchaMode: CaptchaMode }) {
   const captcha = useAccountCaptcha(captchaSiteKey, captchaMode, "signup");
   const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [password,setPassword]=useState(""); const [confirm,setConfirm]=useState(""); const [inviteCode,setInviteCode]=useState(""); const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
-  async function submit(e:FormEvent){e.preventDefault(); if (loading || !captcha.ready) return; setError("");if(password!==confirm){setError("Passwords do not match.");return;}setLoading(true);try{const r=await fetch("/api/auth/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ name,email,password,inviteCode, captchaToken: await captcha.responseToken() })});const data=await r.json();if(!r.ok)throw new Error(data.error||"Unable to create account.");window.location.href="/";}catch(err){setError(err instanceof Error?err.message:"Unable to create account.");}finally{captcha.reset();setLoading(false);}}
+  async function submit(e:FormEvent){e.preventDefault(); if (loading || !captcha.ready) return; setError("");if(password!==confirm){setError("Passwords do not match.");return;}setLoading(true);try{const r=await fetch("/api/auth/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ name,email,password,inviteCode, captchaToken: await captcha.responseToken() })});const data=await r.json();if(!r.ok)throw new Error(data.error||"Unable to create account.");await confirmSignedIn();window.location.href="/";}catch(err){setError(err instanceof Error?err.message:"Unable to create account.");}finally{captcha.reset();setLoading(false);}}
   return <Shell title="Create your account" subtitle="Your pen configurations and operational records stay tied to your account."><form className="form" onSubmit={submit}><label>Name<input autoComplete="name" value={name} onChange={e=>setName(e.target.value)} required/></label><label>Email<input type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label>Password<input type="password" autoComplete="new-password" value={password} onChange={e=>setPassword(e.target.value)} minLength={8} required/><small className="password-rule">At least 8 characters, one uppercase letter, and one special character.</small></label><label>Confirm password<input type="password" autoComplete="new-password" value={confirm} onChange={e=>setConfirm(e.target.value)} required/></label><label>Farm setup or invitation code<input type="password" autoComplete="one-time-code" value={inviteCode} onChange={e=>setInviteCode(e.target.value)} placeholder="Enter the code provided by your administrator"/><small className="password-rule">In production, the initial owner uses the farm setup code. Additional staff accounts require an invitation code from the owner or administrator.</small></label><Message error={error} success=""/>{captcha.widget}<button className="button button-primary" disabled={loading || !captcha.ready}>{loading?"Creating account…":"Create account"}</button><div className="auth-links"><span>Already have an account?</span><Link href="/login">Sign in</Link></div></form></Shell>;
 }
 

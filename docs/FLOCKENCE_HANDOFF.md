@@ -68,6 +68,36 @@ The user wants the farm administrator to select a role and enter an email. The r
 Record the exact GitHub commit, the exact live app revision, CI links and the scope of any stage or production test. List the user-facing behavior separately from provider or VPS configuration still required. Report temporary failures and the recovery outcome. Update this handoff when deployments or priorities change.
 
 
+## Ported farm-record work (branch `port/local-work-2026-11`, November 26, 2026)
+
+Farm-record features first built on a local branch (November 6–7), ported onto main at 8b9cfb9 as nine commits. Not
+merged or deployed yet. CI runs once the pull request is opened.
+
+| Area | What it adds | Database (additive, `ops/postgres/`) |
+| --- | --- | --- |
+| Health cases | Open → monitoring → resolved → closed, reopen with a reason, dated case history, notifiable-disease flag until reported, end a treatment, record a test result. Withdrawal counts from the last dose. | `add-health-case-lifecycle.sql` (new `HealthCaseEvent`) |
+| Flocks | Edit a flock's set-up, close an empty broiler flock, delete only after typing DELETE (never when food-traceability records exist). | none |
+| Bird ledger | Dead birds counted first in the daily check; died, culled and missing; birds added or moved between houses; corrections with an audit entry; slaughter space check and live-weight estimate. | `add-bird-ledger.sql` (new `BirdMovement`) |
+| Feed, water, eggs | Feed left, spilt and returned (eaten is worked out, never typed); water meter or tank readings; broken, household and hatching eggs; house at placement; dead-bird disposal; waste summary. | `add-feed-water-eggs.sql` (new `WaterReading`) |
+| Suppliers and feed | Suppliers page and picker; the farm's own feed catalogue and measures; feed recorded by bag, kg, lb or scoop; Feed used card; "Today on your farm" briefing; dashboard section choices; faster dashboard totals. | `add-suppliers-feed-catalogue.sql` (new `FeedProduct`, `FeedProductSupplier`, `FeedMeasure`) |
+| Sign-in | "Sign in with Oriya" shown only when this server is linked; a readable page instead of raw JSON; a plain message if the browser will not keep the sign-in. | none |
+
+- **Farm isolation:** every new table is in `lib/farm-scope.ts` (FARM_MODELS and FOREIGN_KEYS) and in `ops/postgres/farm-rls.sql`.
+- **Release order on the VPS:**
+  1. Verified backup.
+  2. The four SQL files above, in that order.
+  3. Re-run the farm row-security script if its policies are active.
+  4. Deploy the app.
+- **Checked locally:** typecheck and the 116 unit tests. Not yet run: the CI database and browser suites, the production build, and any check on flockence.com.
+- **Not ported, because main covers it:**
+  - pen orientation and profile fields (main's multi-pen housing)
+  - the farm profile form (`/farm-setup`)
+  - the farm "operation" setting
+  - theme tokens and experience levels (main rebuilt the themes)
+  - the moved menu and fold-away sections
+  - the review-branch camera wall, Govee and daily-rounds work
+  - the farm-Wi-Fi HTTPS helper (production has a domain)
+
 ## GitHub work since the last verified VPS release
 
 The last operator-confirmed application release is `33322ad`. Establish the running Git SHA and worker version before choosing a release. The latest separately reported Blink check confirmed that the private worker returned HTTP 200, was signed in, had no verification code pending, and discovered six cameras. No real footage or end-to-end analysis result was supplied.

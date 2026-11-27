@@ -1,4 +1,5 @@
 "use client";
+import { compareToBaseline } from "@/lib/farm-engine.mjs";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Nav } from "@/components/nav";
@@ -31,6 +32,9 @@ type EggCollection = {
   crackedEggs: number;
   floorEggs: number;
   rejectedEggs: number;
+  brokenEggs?: number;
+  householdEggs?: number;
+  hatchingEggs?: number;
   averageEggWeightG?: number | string | null;
   notes?: string | null;
   withdrawalBlocked?: boolean;
@@ -97,6 +101,9 @@ export default function LayersPage() {
   const [crackedEggs, setCrackedEggs] = useState("0");
   const [floorEggs, setFloorEggs] = useState("0");
   const [rejectedEggs, setRejectedEggs] = useState("0");
+  const [brokenEggs, setBrokenEggs] = useState("0");
+  const [householdEggs, setHouseholdEggs] = useState("0");
+  const [hatchingEggs, setHatchingEggs] = useState("0");
   const [averageEggWeightG, setAverageEggWeightG] = useState("");
   const [notes, setNotes] = useState("");
   const [grades, setGrades] = useState<GradeCounts>({
@@ -143,7 +150,7 @@ export default function LayersPage() {
     if (!batchId) {
       setLiveHensOnDate("");
       setSaleableEggs("0"); setDirtyEggs("0"); setCrackedEggs("0");
-      setFloorEggs("0"); setRejectedEggs("0"); setAverageEggWeightG(""); setNotes("");
+      setFloorEggs("0"); setRejectedEggs("0"); setBrokenEggs("0"); setHouseholdEggs("0"); setHatchingEggs("0"); setAverageEggWeightG(""); setNotes("");
       setGrades({ SMALL: "0", MEDIUM: "0", LARGE: "0", EXTRA_LARGE: "0", JUMBO: "0", UNGRADED: "0" });
       return;
     }
@@ -155,6 +162,9 @@ export default function LayersPage() {
       setCrackedEggs(String(selectedCollection.crackedEggs));
       setFloorEggs(String(selectedCollection.floorEggs));
       setRejectedEggs(String(selectedCollection.rejectedEggs));
+      setBrokenEggs(String(selectedCollection.brokenEggs ?? 0));
+      setHouseholdEggs(String(selectedCollection.householdEggs ?? 0));
+      setHatchingEggs(String(selectedCollection.hatchingEggs ?? 0));
       setAverageEggWeightG(selectedCollection.averageEggWeightG == null ? "" : String(selectedCollection.averageEggWeightG));
       setNotes(selectedCollection.notes || "");
       const savedGrades = Object.fromEntries(selectedCollection.grades.map((row) => [row.grade, String(row.quantity)])) as Partial<GradeCounts>;
@@ -167,9 +177,14 @@ export default function LayersPage() {
     }
 
     const batch = layerBatches.find((row) => row.id === batchId);
-    setLiveHensOnDate(date === localToday() && batch ? String(liveHens(batch)) : "");
+    setLiveHensOnDate("");
+    if (batch) {
+      fetch("/api/flock-ledger?" + new URLSearchParams({ batchId, date }), { cache: "no-store" })
+        .then((r) => r.json()).then((d) => { if (d?.ok && Number.isSafeInteger(d.live)) setLiveHensOnDate((current) => current === "" ? String(d.live) : current); })
+        .catch(() => { if (date === localToday()) setLiveHensOnDate(String(liveHens(batch))); });
+    }
     setSaleableEggs("0"); setDirtyEggs("0"); setCrackedEggs("0");
-    setFloorEggs("0"); setRejectedEggs("0"); setAverageEggWeightG(""); setNotes("");
+    setFloorEggs("0"); setRejectedEggs("0"); setBrokenEggs("0"); setHouseholdEggs("0"); setHatchingEggs("0"); setAverageEggWeightG(""); setNotes("");
     setGrades({ SMALL: "0", MEDIUM: "0", LARGE: "0", EXTRA_LARGE: "0", JUMBO: "0", UNGRADED: "0" });
   }, [batchId, date, selectedCollection?.id, selectedCollection?.updatedAt, collections.length, batches.length]);
 
@@ -189,16 +204,16 @@ export default function LayersPage() {
   const recordedBatchIds = new Set(selectedDayRows.map((row) => row.batchId));
   const missingLayerCollections = layingBatchesOnDate.filter((batch) => !recordedBatchIds.has(batch.id)).length;
   const layingHens = selectedDayRows.reduce((sum, row) => sum + number(row.liveHens), 0);
-  const currentTotal = number(saleableEggs) + number(dirtyEggs) + number(crackedEggs) + number(floorEggs) + number(rejectedEggs);
+  const currentTotal = number(saleableEggs) + number(dirtyEggs) + number(crackedEggs) + number(floorEggs) + number(rejectedEggs) + number(brokenEggs) + number(householdEggs) + number(hatchingEggs);
   const gradeTotal = gradeOrder.reduce((sum, grade) => sum + number(grades[grade]), 0);
-  const allCountsValid = [saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, ...gradeOrder.map((grade) => grades[grade])]
+  const allCountsValid = [saleableEggs, dirtyEggs, crackedEggs, floorEggs, rejectedEggs, brokenEggs, householdEggs, hatchingEggs, ...gradeOrder.map((grade) => grades[grade])]
     .every((value) => /^\d+$/.test(value) && Number.isSafeInteger(Number(value)));
   const henDayRate = missingLayerCollections === 0 && layingBatchesOnDate.length > 0 ? calculateHenDayProduction(selectedDayEggs, layingHens) : null;
   const selectedDaySaleable = selectedDayRows.reduce((sum, row) => sum + (row.withdrawalBlocked ? 0 : number(row.saleableEggs)), 0);
   const selectedDayWithdrawalCondemned = selectedDayRows.reduce((sum, row) => sum + (row.withdrawalBlocked ? number(row.totalEggs) : 0), 0);
   const selectedDayNonSaleable = selectedDayRows.reduce((sum, row) => sum + (row.withdrawalBlocked
     ? number(row.totalEggs)
-    : number(row.dirtyEggs) + number(row.crackedEggs) + number(row.floorEggs) + number(row.rejectedEggs)), 0);
+    : number(row.dirtyEggs) + number(row.crackedEggs) + number(row.floorEggs) + number(row.rejectedEggs) + number(row.brokenEggs ?? 0) + number(row.householdEggs ?? 0) + number(row.hatchingEggs ?? 0)), 0);
   const selectedDaySaleableRate = layingBatchesOnDate.length > 0 && missingLayerCollections === 0 && selectedDayEggs > 0
     ? (selectedDaySaleable / selectedDayEggs) * 100
     : null;
@@ -226,6 +241,7 @@ export default function LayersPage() {
     };
   });
   const trendMaxEggs = Math.max(1, ...trendDays.map((day) => day.eggs));
+  const baseline = henDayRate == null ? null : compareToBaseline(henDayRate, trendDays.filter((day) => day.date < date && day.henDayRate != null).map((day) => day.henDayRate as number));
   const trendTotalEggs = trendDays.reduce((sum, day) => sum + day.eggs, 0);
   const stageOnCollectionDate = selectedBatch ? layerStageOnDate(selectedBatch, date) : null;
   const canSave = Boolean(batchId) && stageOnCollectionDate === "LAYING" && !saving && allCountsValid && gradeTotal === number(saleableEggs);
@@ -320,6 +336,7 @@ export default function LayersPage() {
           saleableEggs: number(saleableEggs), dirtyEggs: number(dirtyEggs),
           crackedEggs: number(crackedEggs), floorEggs: number(floorEggs),
           rejectedEggs: number(rejectedEggs),
+          brokenEggs: number(brokenEggs), householdEggs: number(householdEggs), hatchingEggs: number(hatchingEggs),
           averageEggWeightG: averageEggWeightG ? number(averageEggWeightG) : null,
           notes,
           grades: gradeOrder.map((grade) => ({ grade, quantity: number(grades[grade]) })),
@@ -352,7 +369,7 @@ export default function LayersPage() {
         <div className="card metric-card"><div className="metric-label">Active layer flocks</div><div className="metric-value">{activeLayerBatches.length}</div><div className="metric-foot">flocks currently laying or being managed</div></div>
         <div className="card metric-card"><div className="metric-label">Live layer birds</div><div className="metric-value">{totalHens.toLocaleString()}</div><div className="metric-foot">latest recorded count across active layer flocks</div></div>
         <div className="card metric-card"><div className="metric-label">Eggs collected</div><div className="metric-value">{selectedDayEggs.toLocaleString()}</div><div className="metric-foot">{date} · all layer flocks</div></div>
-        <div className="card metric-card"><div className="metric-label">Hen-day production</div><div className="metric-value">{henDayRate == null ? "—" : henDayRate.toFixed(1) + "%"}</div><div className="metric-foot">{henDayRate == null ? (layingHens === 0 ? "No flocks at laying stage" : `Collection missing for ${missingLayerCollections} laying flock(s)`) : "total eggs divided by live hens in laying-stage flocks"}</div></div>
+        <div className="card metric-card"><div className="metric-label">Hen-day production</div><div className="metric-value">{henDayRate == null ? "—" : henDayRate.toFixed(1) + "%"}</div><div className="metric-foot">{henDayRate == null ? (layingHens === 0 ? "No flocks at laying stage" : `Collection missing for ${missingLayerCollections} laying flock(s)`) : baseline?.ok ? `${baseline.direction === "level" ? "Level with" : Math.abs(baseline.difference!).toFixed(1) + " points " + baseline.direction} the flock's usual ${baseline.baseline}% (median of ${baseline.days} days)` : "total eggs divided by live hens in laying-stage flocks"}</div></div>
         <div className="card metric-card"><div className="metric-label">Saleable rate</div><div className="metric-value">{selectedDaySaleableRate == null ? "—" : selectedDaySaleableRate.toFixed(1) + "%"}</div><div className="metric-foot">{selectedDaySaleable.toLocaleString()} saleable of {selectedDayEggs.toLocaleString()} eggs</div></div>
         <div className="card metric-card"><div className="metric-label">Non-saleable eggs</div><div className="metric-value">{selectedDayRows.length && missingLayerCollections === 0 ? selectedDayNonSaleable.toLocaleString() : "—"}</div><div className="metric-foot">{missingLayerCollections > 0 ? `${missingLayerCollections} laying flock collection(s) missing` : selectedDayWithdrawalCondemned > 0 ? `${selectedDayWithdrawalCondemned.toLocaleString()} condemned under withdrawal` : "Dirty, cracked, floor and rejected"}</div></div>
       </section>
@@ -419,7 +436,7 @@ export default function LayersPage() {
           <form className="form" onSubmit={submit}>
           <div className="grid2">
             <label>Collection date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required/></label>
-            <label>Live hens on this date<input type="number" min="1" step="1" value={liveHensOnDate} onChange={(event) => setLiveHensOnDate(event.target.value)} required/><span className="muted">{date === localToday() ? "Today's latest flock count is prefilled. Confirm it before saving." : "Historical dates start blank so today's bird count is not accidentally used for an earlier date. Enter the actual live hens for that day."}</span></label>
+            <label>Live hens on this date<input type="number" min="1" step="1" value={liveHensOnDate} onChange={(event) => setLiveHensOnDate(event.target.value)} required/><span className="muted">Worked out from the flock's records for this date (birds placed and added, less deaths, culls and birds sent). Change it only if you counted the hens.</span></label>
           </div>
           <div className="section-head"><div><h3>Egg outcome</h3><p>Use exclusive categories so every egg is counted once.</p></div><strong>{currentTotal.toLocaleString()} total eggs</strong></div>
           <div className="grid">
@@ -429,7 +446,10 @@ export default function LayersPage() {
             <label>Floor eggs<input type="number" min="0" step="1" value={floorEggs} onChange={(event) => setFloorEggs(event.target.value)}/></label>
           </div>
           <div className="grid2">
+            <label>Broken eggs<input type="number" min="0" step="1" value={brokenEggs} onChange={(event) => setBrokenEggs(event.target.value)}/></label>
             <label>Other rejected eggs<input type="number" min="0" step="1" value={rejectedEggs} onChange={(event) => setRejectedEggs(event.target.value)}/></label>
+            <label>Kept for the house<input type="number" min="0" step="1" value={householdEggs} onChange={(event) => setHouseholdEggs(event.target.value)}/></label>
+            <label>Set for hatching<input type="number" min="0" step="1" value={hatchingEggs} onChange={(event) => setHatchingEggs(event.target.value)}/></label>
             <label>Average egg weight (g), optional<input type="number" min="0.1" step="0.1" value={averageEggWeightG} onChange={(event) => setAverageEggWeightG(event.target.value)} placeholder="Sample average"/></label>
           </div>
           <div className="section-head"><div><h3>Saleable egg grades</h3><p>Ungraded is used until eggs are sized. Grade totals must equal saleable eggs.</p></div><strong>{gradeTotal.toLocaleString()} / {number(saleableEggs).toLocaleString()}</strong></div>
@@ -454,6 +474,7 @@ export default function LayersPage() {
             <div><span>Cracked</span><strong>{number(row.crackedEggs).toLocaleString()}</strong></div>
             <div><span>Floor</span><strong>{number(row.floorEggs).toLocaleString()}</strong></div>
             <div><span>Rejected</span><strong>{number(row.rejectedEggs).toLocaleString()}</strong></div>
+            {number(row.brokenEggs ?? 0) + number(row.householdEggs ?? 0) + number(row.hatchingEggs ?? 0) > 0 && <div><span>Broken · house · hatching</span><strong>{number(row.brokenEggs ?? 0)} · {number(row.householdEggs ?? 0)} · {number(row.hatchingEggs ?? 0)}</strong></div>}
           </div>
           <div className="flow" style={{ marginTop: 14 }}>
             {row.grades.filter((grade) => grade.quantity > 0).map((grade) => <span key={grade.grade}>{gradeLabels[grade.grade]}: {grade.quantity.toLocaleString()}</span>)}

@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { Prisma, PrismaClient } from "@prisma/client";
 import {
-  CHILD_MODELS, FARM_MODELS, FarmScopeError, GLOBAL_MODELS, currentFarmId, currentFarmIdOrNull, farmFilter, isUnscoped, linkedIds, withFarm,
+  CHILD_MODELS, FARM_MODELS, FarmScopeError, GLOBAL_MODELS, currentFarmId, currentFarmIdOrNull, farmFilter, isUnscoped, linkedIds, rememberCreated, wasCreatedHere, withFarm,
 } from "@/lib/farm-scope";
 
 /**
@@ -62,7 +62,7 @@ function buildClient(base: PrismaClient) {
             if (typeof connected === "string") links.push({ target: child!.parent, id: connected });
             for (const link of links) {
               const found = await delegateFor(transactions.getStore()?.client ?? scoped, link.target).count({ where: { id: link.id } });
-              if (found !== 1) throw new FarmScopeError("LINK_OUTSIDE_FARM");
+              if (found !== 1 && !wasCreatedHere(link.target, link.id)) throw new FarmScopeError("LINK_OUTSIDE_FARM");
             }
             return row;
           };
@@ -76,7 +76,10 @@ function buildClient(base: PrismaClient) {
             next.create = await prepare(next.create, true);
             next.update = await prepare(next.update, false);
           }
-          return query(next as typeof args);
+          const result = await query(next as typeof args);
+          if (operation === "create" || operation === "upsert") rememberCreated(model, (result as { id?: unknown } | null)?.id);
+          else if (operation === "createManyAndReturn" && Array.isArray(result)) for (const row of result) rememberCreated(model, (row as { id?: unknown }).id);
+          return result;
         },
       },
     },

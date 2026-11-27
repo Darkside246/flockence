@@ -9,7 +9,7 @@ type NavItem = readonly [string, string, string];
 
 const groups: { label: string; items: NavItem[] }[] = [
   { label: "Operate", items: [["Overview", "/", "home"], ["Flocks", "/batches", "flock"], ["Daily round", "/operations", "operations"], ["Egg production", "/layers", "eggs"], ["Layer performance", "/layers/performance", "performance"], ["Pack eggs", "/layers/packing", "package"], ["House", "/house", "house"], ["Pens", "/pens", "pens"], ["Health", "/health", "health"]] },
-  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Devices", "/devices", "devices"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Production", "/planning", "production"]] },
+  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Devices", "/devices", "devices"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Suppliers", "/suppliers", "users"], ["Production", "/planning", "production"]] },
   { label: "Understand", items: [["Performance", "/performance", "performance"], ["Reports", "/reports", "reports"]] }
 ];
 const teamGroup = { label: "Manage", items: [["Team", "/team", "users"]] as NavItem[] };
