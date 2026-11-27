@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { currentFarmId } from "@/lib/operations";
 import { reconcileLiveBirdsFromSnapshot, FARM_TIME_ZONE } from "@/lib/poultry-metrics.mjs";
 import { contextText, eggLines, feedLines, orderSections, type ContextSection } from "@/lib/vision-context-rules.mjs";
+import { checkAgainstGuidance, guidanceFor } from "@/lib/reference-library.mjs";
 
 /**
  * What Farm Vision is told about the farm, so it can judge a picture the way a person who knows the flock would. It is
@@ -40,6 +41,8 @@ export async function inspectionContext(input: { batchId: string | null; pen?: {
   add("TIME", [`local time at the farm ${time}`]);
 
   let live: number | null = null, weightKg: number | null = null, layer = false;
+  let ageDays: number | null = null, recorded: { tempC: number | null; rh: number | null; ammonia: number | null; litter: string | null } | null = null;
+  let penArea = 0, natural = true;
   if (batchId) {
     const batch = await prisma.batch.findFirst({
       where: { id: batchId, farmId },
@@ -59,7 +62,7 @@ export async function inspectionContext(input: { batchId: string | null; pen?: {
       live = typeof reconciled === "number" ? reconciled : null;
       expectedLive = live;
       layer = batch.productionType === "LAYER" || String(batch.species).toUpperCase() === "LAYER";
-      const ageDays = Math.max(0, Math.floor((now.getTime() - (batch.hatchDate ?? batch.startDate).getTime()) / 86_400_000));
+      ageDays = Math.max(0, Math.floor((now.getTime() - (batch.hatchDate ?? batch.startDate).getTime()) / 86_400_000));
       add("FLOCK", [
         `${batch.name}: ${layer ? "layers" : "broilers"}${batch.breed ? `, ${batch.breed}` : ""}, about ${ageDays} days old`,
         `${batch.initialChicks} placed; ${live ?? "unknown"} live in the records`,
@@ -79,6 +82,7 @@ export async function inspectionContext(input: { batchId: string | null; pen?: {
       ]);
       add("FEED", feedLines({ kg24h: n(feedDay._sum.quantityKg) ?? 0, kg7d: n(feedWeek._sum.quantityKg) ?? 0, live: live ?? 0 }));
       const check = batch.dailyFlockChecks[0];
+      if (check) recorded = { tempC: n(check.temperatureC), rh: n(check.humidityPercent), ammonia: n(check.ammoniaPpm), litter: check.litterCondition };
       const water = n(check?.waterLiters);
       const feed24 = n(feedDay._sum.quantityKg) ?? 0;
       add("WATER", [water != null && `${water} litres on the latest daily check (${check!.date.toISOString().slice(0, 10)})${feed24 > 0 ? `, about ${Math.round((water / feed24) * 10) / 10} litres per kg of feed` : ""}`]);
@@ -120,6 +124,8 @@ export async function inspectionContext(input: { batchId: string | null; pen?: {
     try { saved = JSON.parse(row?.value ?? "{}"); } catch { /* none */ }
     const num = (k: string) => Math.max(0, Number(saved[k]) || 0);
     const area = num("lengthM") * num("widthM");
+    penArea = area;
+    natural = saved.housingMode !== "CONTROLLED";
     const kit = [num("feederPans") && `${num("feederPans")} feeder pans`, num("nipples") && `${num("nipples")} nipples`, num("bellDrinkers") && `${num("bellDrinkers")} bell drinkers`, num("heatSources") && `${num("heatSources")} heaters`, num("fans") && `${num("fans")} fans`].filter(Boolean);
     add("PEN", [
       `${input.pen.name}${area ? `: ${num("lengthM")} × ${num("widthM")} m (${Math.round(area * 10) / 10} m²)` : " (size not recorded)"}`,
@@ -130,6 +136,18 @@ export async function inspectionContext(input: { batchId: string | null; pen?: {
       const open = await prisma.visionFinding.findMany({ where: { farmId, penId: input.pen.id, state: { in: ["OBSERVED", "SUSPECTED", "REQUIRES_INSPECTION", "INCONCLUSIVE", "CONFIRMED"] } }, orderBy: { lastSeenAt: "desc" }, take: 3, select: { title: true, occurrences: true, state: true } });
       add("FINDINGS", open.map((f) => `${f.title}${f.occurrences > 1 ? ` (seen ${f.occurrences} times)` : ""}${f.state === "CONFIRMED" ? ", confirmed by the farm" : ""}`));
     }
+  }
+
+  // The farm's own guides (lib/reference-library.mjs): targets for this kind and age, and today's records against them.
+  if (ageDays != null) {
+    const sensor = [...latest.values()][0];
+    const tempC = recorded?.tempC ?? (sensor ? Number(sensor.temperatureC) : null);
+    const rh = recorded?.rh ?? (sensor?.humidityPercent != null ? Number(sensor.humidityPercent) : null);
+    const density = penArea && live && weightKg ? (live * weightKg) / penArea : null;
+    const kind = layer ? "layer" : "broiler";
+    add("GUIDE_CHECK", checkAgainstGuidance({ kind, ageDays, tempC, rh, ammoniaPpm: recorded?.ammonia ?? null, densityKgM2: density, litter: recorded?.litter ?? null, m2PerBird: penArea && live ? penArea / live : null })
+      .map((c) => `${c.level === "OK" ? "OK" : "Check"}: ${c.text} (${c.source})`));
+    add("GUIDANCE", guidanceFor({ kind, ageDays, rh, densityKgM2: density, naturalVentilation: natural }).map((g) => `${g.topic}: ${g.text} (${g.source})`));
   }
 
   const ordered: ContextSection[] = orderSections(sections, input.category ?? "OTHER");

@@ -939,3 +939,18 @@ test("people and biosecurity: no people data unless the owner keeps a timeline, 
   assert.equal(after.visionAssessment.people, undefined, "switching the timeline off removes what was kept");
   assert.deepEqual(await runAsFarm(B, () => peopleSettings()), { timeline: false, keepDays: 30 }, "farm B's setting is its own");
 });
+
+test("reference library in the Vision context: a 3-day-old flock at 27 °C is flagged against the farm's own guides", async () => {
+  const { inspectionContext } = await import("../lib/vision-context.ts");
+  const placed = new Date(Date.now() - 3 * 86_400_000);
+  const chicks = await runAsFarm(A, () => prisma.batch.create({ data: { name: `Chicks ${Date.now()}`, startDate: placed, hatchDate: placed, initialChicks: 600, chickCostMinor: 0, status: "ACTIVE" } }));
+  await runAsFarm(A, () => prisma.birdCount.create({ data: { batchId: chicks.id, date: placed, liveCount: 600, note: "Initial count" } }));
+  await runAsFarm(A, () => prisma.dailyFlockCheck.create({ data: { batchId: chicks.id, date: new Date(), liveCount: 600, temperatureC: 27, humidityPercent: 60 } }));
+  const c = await runAsFarm(A, () => inspectionContext({ batchId: chicks.id, category: "FLOCK" }));
+  const check = c.sections.find((s) => s.key === "GUIDE_CHECK");
+  assert.ok(check, "records are checked against the guides");
+  assert.match(check.lines.join(" "), /Check: 27 °C recorded; the guide's target is about 31 °C: too cold for their age, watch for huddling \(Cobb Broiler Management Guide \(2020\)\)/);
+  const guide = c.sections.find((s) => s.key === "GUIDANCE");
+  assert.ok(guide.lines.some((l) => /32–33 °C for day 3 on the Caribbean brooding schedule/.test(l)));
+  assert.match(c.text, /Your records against your guides: Check: 27 °C/);
+});
