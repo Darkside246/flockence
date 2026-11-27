@@ -7,15 +7,7 @@ import { VisionReport } from "@/components/vision-report";
 import { VisionFindings } from "@/components/vision-findings";
 import { useSession } from "@/components/auth-gate";
 import { shrinkPhoto, sizeLabel } from "@/lib/photo-shrink";
-import { retryDelayMs } from "@/lib/photo-size.mjs";
-
-/** A random id for one upload; the same id is sent again on a retry so the server runs it only once. */
-function uploadId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
+import { OfflineError, queueAvailable, queueCheck, queuedChecks, sendInspection, sendQueued, uploadId } from "@/lib/vision-send";
 
 const categories = [
   ["PEN", "Pen / housing", "Look for bedding, space, airflow, heat and sanitation issues."],
@@ -71,6 +63,8 @@ export default function VisionPage() {
   const [busy, setBusy] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [sizeNote, setSizeNote] = useState("");
+  const [queued, setQueued] = useState(0);
+  const [sendingQueued, setSendingQueued] = useState(false);
   const [earlier, setEarlier] = useState("");
   const [later, setLater] = useState("");
   const [comparison, setComparison] = useState<Comparison | null>(null);
@@ -95,6 +89,35 @@ export default function VisionPage() {
   }, []);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+
+  // Photos taken with no signal wait on this phone and are sent when it is back online (or when this page opens).
+  async function flushQueue() {
+    if (!session || sendingQueued || (typeof navigator !== "undefined" && navigator.onLine === false)) return;
+    const waiting = await queuedChecks(session.id, session.farmId).catch(() => []);
+    setQueued(waiting.length);
+    if (!waiting.length) return;
+    setSendingQueued(true);
+    try {
+      const done = await sendQueued(session.id, session.farmId, () => setMessage(`Sending ${waiting.length} saved photo${waiting.length === 1 ? "" : "s"}…`));
+      setQueued(done.left);
+      if (done.sent || done.failed) {
+        setMessage(`${done.sent} saved photo${done.sent === 1 ? "" : "s"} checked and added to the history.${done.failed ? ` ${done.failed} could not be checked.` : ""}${done.left ? ` ${done.left} still waiting.` : ""}`);
+        await loadHistory();
+      }
+    } catch {
+      setMessage("Saved photos could not be sent yet; they will be tried again.");
+    } finally {
+      setSendingQueued(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!session) return;
+    flushQueue().catch(() => undefined);
+    const online = () => { flushQueue().catch(() => undefined); };
+    window.addEventListener("online", online);
+    return () => window.removeEventListener("online", online);
+  }, [session?.id]);
 
   async function pickFile(event: ChangeEvent<HTMLInputElement>) {
     const picked = event.target.files?.[0] ?? null;
@@ -158,31 +181,31 @@ export default function VisionPage() {
     form.append("batchId", batchId);
     if (penId) form.append("penId", penId);
     form.append("notes", notes);
+    // One id for this check, used for every retry, so it is analysed and charged once.
+    const id = uploadId();
+    // A photo (not a live camera) taken with no signal is kept on this phone and sent later.
+    const keepForLater = async () => {
+      if (!(file && session && queueAvailable())) return false;
+      const fields: Record<string, string> = { category, batchId, notes };
+      if (penId) fields.penId = penId;
+      await queueCheck({ id, userId: session.id, farmId: session.farmId, createdAt: Date.now(), fields, image: file, imageName: file.name });
+      setQueued((n) => n + 1);
+      setMessage("No signal. The photo is saved on this phone and will be checked when you are back online.");
+      return true;
+    };
     try {
-      // A lost connection is retried with the same upload id, so the picture is analysed and charged only once.
-      const id = uploadId();
-      let response: Response | null = null;
-      for (let attempt = 0; ; attempt++) {
-        try {
-          response = await fetch("/api/vision", { method: "POST", body: form, headers: { "Idempotency-Key": id } });
-          if (response.status !== 502 && response.status !== 504) break;
-        } catch (error) {
-          if (!(error instanceof TypeError)) throw error;
-          response = null;
-        }
-        const wait = retryDelayMs(attempt + 1);
-        if (wait === null) break;
-        setMessage("Connection lost. Trying again…");
-        await new Promise((resolve) => setTimeout(resolve, wait));
-      }
-      if (!response) throw new Error("No connection. Check the signal and try again; the photo will not be charged twice.");
-      const data = await response.json().catch(() => ({ error: "Could not analyze photo." }));
-      if (!response.ok) throw new Error(data.error || "Could not analyze photo.");
-      setResult(data.analysis);
+      if (!cameraName && typeof navigator !== "undefined" && navigator.onLine === false && await keepForLater()) return;
+      const sent = await sendInspection(form, id, setMessage);
+      const data = sent.body as { error?: string; analysis?: VisionResult; repeated?: boolean; pending?: boolean };
+      if (data.pending) { setMessage("Still checking this photo. The result will appear in the history below."); return; }
+      if (sent.httpStatus >= 300) throw new Error(data.error || "Could not analyze photo.");
+      setResult(data.analysis ?? null);
       setMessage(data.repeated ? "The connection dropped, but the inspection was already saved. It was not charged twice." : captureVideo ? "Live video sample analyzed and saved to the farm history." : "Photo analyzed and saved to the farm history.");
       await loadHistory();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not analyze photo.");
+      if (error instanceof OfflineError && !cameraName && await keepForLater().catch(() => false)) return;
+      setMessage(error instanceof OfflineError ? "No connection. Check the signal and try again; the photo will not be charged twice."
+        : error instanceof Error ? error.message : "Could not analyze photo.");
     } finally {
       setBusy(false);
     }
@@ -263,6 +286,10 @@ export default function VisionPage() {
           {assignmentMessage && <span role="status">{assignmentMessage}</span>}
         </div>}
         <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy || preparing || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? (captureVideo ? "Capturing and analyzing…" : "Analyzing photo…") : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
+        {queued > 0 && <p className="notice" role="status" style={{ marginTop: 12 }}>
+          {queued} photo{queued === 1 ? "" : "s"} saved on this phone, waiting for a signal.{" "}
+          <button type="button" className="button" disabled={sendingQueued} onClick={() => { flushQueue().catch(() => undefined); }}>{sendingQueued ? "Sending…" : "Send now"}</button>
+        </p>}
       </form>
       {cameras.length > 0 && <VisionSchedule cameras={cameras} />}
       <VisionFindings pens={pens} canReview={session?.role === "OWNER" || session?.role === "MANAGER" || session?.role === "WORKER"} />
