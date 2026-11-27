@@ -5,6 +5,7 @@ import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { visionCameraRoles, visionCamerasEnabled, visionLiveEnabled } from "@/lib/vision-camera";
 import { loadSchedule, saveSchedule } from "@/lib/vision-schedule";
+import { loadRecordingStatus } from "@/lib/vision-recordings";
 import { currentVisionPlan } from "@/lib/vision-plan";
 import { monthUsage } from "@/lib/vision-usage";
 import { visionConfigured, visionModel, visionProvider } from "@/lib/vision-provider";
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
   if (session.response) return session.response;
   const locked = await premiumFeatureResponse();
   if (locked) return locked;
-  const [{ schedule, state }, plan, usage] = await Promise.all([loadSchedule(), currentVisionPlan(), monthUsage()]);
+  const [{ schedule, state }, plan, usage, recordingStatus] = await Promise.all([loadSchedule(), currentVisionPlan(), monthUsage(), loadRecordingStatus().catch(() => null)]);
   const lastRound = state.lastRoundAt ? Date.parse(state.lastRoundAt) : NaN;
   return NextResponse.json({
     schedule: schedule ?? { enabled: false, cameras: {}, ...DEFAULTS },
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
     plan: { name: plan.plan, label: plan.label, limits: plan.limits },
     usage: { month: usage.month, manual: usage.manual, automatic: usage.automatic, costUsd: Math.round(usage.costMicros / 10_000) / 100, unpricedCalls: usage.unpricedCalls },
     model: { provider: visionProvider(), name: visionModel() },
+    recordings: recordingStatus ? { missing: recordingStatus.missing ?? {}, checkedAt: recordingStatus.checkedAt ?? null } : null,
     ready: {
       vision: visionConfigured(),
       cameras: visionCamerasEnabled(),

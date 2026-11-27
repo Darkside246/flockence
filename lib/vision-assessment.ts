@@ -61,7 +61,11 @@ export const visionAssessmentSchema = z.object({
   summary: detail.min(1),
   checks: z.array(detail.min(1)).max(12),
   evidenceId: label,
-  capture: z.object({ mode: z.literal("VIDEO_SAMPLE"), frames: z.literal(3) }).optional(),
+  capture: z.union([
+    z.object({ mode: z.literal("VIDEO_SAMPLE"), frames: z.literal(3) }),
+    // Frames from a saved recording, filed at the time it was filmed (lib/vision-recordings.ts).
+    z.object({ mode: z.literal("RECORDING"), frames: z.number().int().min(1).max(3), clipAt: z.string().max(40) }),
+  ]).optional(),
   pen: z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string().min(1).max(120) }).optional(),
   layout: layoutSchema.optional().catch(undefined),
   /** The phone's upload id, so a retried upload is recognised (lib/vision-upload-requests.ts). */

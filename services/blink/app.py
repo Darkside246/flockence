@@ -33,9 +33,12 @@ import rtsp
 from blink_controls import BlinkChange, change_setting, night_mode, readings
 from clip_archive import ClipArchive, configured_archive
 from immi import extract_transport_stream_packets, patch_liveview_auth_header
+from settings import RECORDINGS_DIR
 from settings import DATA_DIR, FFMPEG, LIVE_DIR, MIN_TOKEN_LENGTH, TOKEN, client_allowed, credentials_encrypted, open_credentials, require_token, seal_credentials, slug as _slug
 from transport import DEFAULT_IMPERSONATE, CurlCffiAiohttpAdapter
 from video_sample import sample_live_playlist
+from clip_frames import MAX_CLIP_BYTES, blink_path, clip_frames, local_clip
+import tempfile
 
 log = logging.getLogger("flockence.blink")
 
@@ -440,6 +443,38 @@ async def media_clip(path: str):
 async def media_thumb(path: str):
     p = path if path.endswith(".jpg") else path + ".jpg"
     return await _proxy_blink_media(p, "image/jpeg")
+
+
+class ClipFramesRequest(BaseModel):
+    source: Literal["blink", "rtsp", "archive"]
+    media: str
+
+
+@app.post("/clips/frames")
+async def clip_frames_route(body: ClipFramesRequest):
+    """Three frames (start, middle, end) from a saved clip, for Farm Vision's recording checks (clip_frames.py)."""
+    if body.source == "blink":
+        path = blink_path(body.media)
+        if not path:
+            raise HTTPException(400, "Invalid clip path")
+        resp = await _blink().do_http_get(path)
+        if resp is None or resp.status != 200:
+            raise HTTPException(502, "Blink returned no clip")
+        data = await resp.read()
+        if not data or len(data) > MAX_CLIP_BYTES:
+            raise HTTPException(502, "The clip is empty or too large")
+        with tempfile.TemporaryDirectory() as tmp:
+            clip = Path(tmp) / "clip.mp4"
+            clip.write_bytes(data)
+            frames = await clip_frames(FFMPEG, clip)
+    else:
+        clip = local_clip(body.source, body.media, RECORDINGS_DIR, archive_storage.path)
+        if clip is None:
+            raise HTTPException(404, "Clip not found")
+        frames = await clip_frames(FFMPEG, clip)
+    if not frames:
+        raise HTTPException(502, "No usable frame could be taken from the clip")
+    return {"frames": frames}
 
 
 # ---- live view: Blink immis (blinkpy local TCP MPEG-TS) or RTSP -> ffmpeg -> HLS ----
