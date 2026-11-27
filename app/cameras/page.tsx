@@ -2,13 +2,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Nav } from "@/components/nav";
 import "../camera-recordings.css";
+import { VisionIntelligence } from "@/components/vision-intelligence";
 import { BlinkSettings } from "@/components/blink-settings";
 import { CameraGateways } from "@/components/camera-gateways";
 import { BlinkConnectCard, NetworkCameraSetup, cameraApi as api, cameraJson as json, type Camera, type Status } from "@/components/camera-connection-controls";
 
 type Clip = { id: string; camera: string; source: "blink" | "rtsp" | "import" | "archive"; createdAt: string; media: string; thumbnail: string | null };
 type Provider = "blink" | "wyze" | "network";
-type Tab = "live" | "stills" | "recordings";
+type Tab = "live" | "stills" | "recordings" | "vision";
 
 const enc = encodeURIComponent;
 
@@ -350,12 +351,13 @@ export default function CamerasPage() {
         <div style={{ marginTop: 16 }}><Recordings cameras={cameras} /></div>
       </>}
       {cameras.length > 0 && <>
-        <div className="segmented" style={{ marginBottom: 18 }}>{(["live", "stills", "recordings"] as Tab[]).map((t) => <button key={t} className={tab === t ? "selected" : ""} onClick={() => setTab(t)}>{t === "live" ? "Live" : t === "stills" ? "Pictures" : "Recordings"}</button>)}</div>
+        <div className="segmented" style={{ marginBottom: 18 }}>{(["live", "stills", "recordings", "vision"] as Tab[]).map((t) => <button key={t} className={tab === t ? "selected" : ""} onClick={() => setTab(t)}>{t === "live" ? "Live" : t === "stills" ? "Pictures" : t === "recordings" ? "Recordings" : "Vision"}</button>)}</div>
         {tab === "live" && <>
           <label>Camera<select value={selected} onChange={(e) => setSelected(e.target.value)}>{cameras.map((c) => <option key={c.name}>{c.name}</option>)}</select></label>
           {selected && <LiveView key={selected} camera={selected} source={cameras.find((c) => c.name === selected)?.source ?? "rtsp"} ffmpeg={Boolean(status.ffmpeg)} />}</>}
         {tab === "stills" && <Stills cameras={cameras} />}
         {tab === "recordings" && <Recordings cameras={cameras} />}
+        {tab === "vision" && <VisionIntelligence cameras={cameras} />}
       </>}
     </>}
   </main></div>;

@@ -47,3 +47,23 @@
   .clip-player-actions { width: 100%; }
   .clip-player-actions > .button { flex: 1 1 0; padding: 6px 8px; }
 }
+
+/* Vision tab in Cameras (Vision Intelligence phase 1b) */
+.vision-intel { display: grid; gap: 14px; }
+.vision-intel-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.vision-intel-controls > label { flex: 1 1 160px; }
+.vision-intel-overall { border-left: 6px solid var(--border-default); }
+.vision-intel-overall h3 { margin: 4px 0; }
+.is-urgent { border-left-color: var(--status-danger) !important; }
+.is-attention { border-left-color: var(--status-warning) !important; }
+.is-monitor { border-left-color: var(--status-info, var(--accent-primary)) !important; }
+.is-good { border-left-color: var(--status-success) !important; }
+.vision-intel-areas { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.vision-intel-area { border-left: 4px solid var(--border-default); display: grid; gap: 4px; align-content: start; }
+.vision-intel-area ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text-secondary); }
+.vision-intel-area-status { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--text-secondary); }
+.vision-intel-area.is-urgent .vision-intel-area-status { color: var(--status-danger); }
+.vision-intel-area.is-attention .vision-intel-area-status { color: var(--status-warning); }
+.vision-intel-area.is-good .vision-intel-area-status { color: var(--status-success); }
+.vision-intel-actions { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+@media (max-width: 600px) { .vision-intel-areas { grid-template-columns: 1fr; } }

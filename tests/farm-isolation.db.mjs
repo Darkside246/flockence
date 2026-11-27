@@ -568,3 +568,37 @@ test("vision findings: grouped into incidents, reviewed by a person, kept to the
   assert.ok(timeline.every((e, i) => i === 0 || timeline[i - 1].at <= e.at), "in date order");
   assert.equal(await runAsFarm(A, () => prisma.mortalityEvent.count()), await runAsFarm(A, () => prisma.mortalityEvent.count()), "no mortality written");
 });
+
+test("vision report: a 12-day-old batch, 120 placed less 4 deaths is 116, findings decide the status, and no data is said plainly", async () => {
+  const { buildVisionReport, periodFor } = await import("../lib/vision-reports.ts");
+  const { recordFindings } = await import("../lib/vision-findings.ts");
+  const placed = new Date(Date.now() - 12 * 86_400_000);
+  const pen = await runAsFarm(A, () => prisma.setting.create({ data: { key: `PEN::u::report-pen-${Date.now()}`, value: JSON.stringify({ name: "Report Pen" }) } }));
+  const batch = await runAsFarm(A, () => prisma.batch.create({ data: { name: "Report flock", startDate: placed, initialChicks: 120, chickCostMinor: 0, status: "ACTIVE", placementHouse: "Report Pen" } }));
+  await runAsFarm(A, () => prisma.birdCount.create({ data: { batchId: batch.id, date: placed, liveCount: 120, note: "Initial count" } }));
+  await runAsFarm(A, () => prisma.mortalityEvent.create({ data: { batchId: batch.id, date: new Date(Date.now() - 2 * 86_400_000), quantity: 4 } }));
+
+  const empty = await runAsFarm(A, () => buildVisionReport({ kind: "PEN", id: pen.id }, periodFor("7d")));
+  assert.equal(empty.overall.status, "INSUFFICIENT_DATA");
+  assert.match(empty.summary, /cannot say how the birds are/);
+  const flock = empty.flocks.find((f) => f.id === batch.id);
+  assert.equal(flock.ageDays, 12, "age from the real placement date, not a 42-day cycle");
+  assert.equal(flock.liveRecorded, 116);
+  assert.equal(flock.deathsInPeriod, 4);
+
+  const at = new Date(Date.now() - 3_600_000);
+  const obs = await runAsFarm(A, () => prisma.healthObservation.create({ data: {
+    observedAt: at, symptom: "Farm Vision inspection", category: "VISION:PEN", affectedCount: 0, batchId: batch.id,
+    notes: "Summary: One bird lying still.\n\nBirds visible: about 108. This is what the camera shows, not the flock total.",
+    visionAssessment: { pen: { id: pen.id, name: "Report Pen" }, source: { kind: "CAMERA", name: "Report Cam" }, signals: [{ category: "BEHAVIOR", state: "NORMAL" }] },
+  } }));
+  await runAsFarm(A, () => recordFindings({ analysis: { stillBirds: [{ where: "by the wall" }], birdCount: { visible: 108 } }, expectedLive: 116, at, pen: { id: pen.id, name: "Report Pen" }, batchId: batch.id, cameraName: "Report Cam", observationId: obs.id, evidenceUrl: null }));
+  const report = await runAsFarm(A, () => buildVisionReport({ kind: "BATCH", id: batch.id }, periodFor("batch", new Date(), undefined, placed)));
+  assert.equal(report.overall.status, "ATTENTION");
+  assert.equal(report.actions[0].kind, "DEAD_OR_DOWN_BIRD");
+  assert.equal(report.population.liveRecorded, 116);
+  assert.equal(report.population.mostVisible, 108, "the estimate is shown beside the records, not instead of them");
+  assert.equal(report.coverage.inspections, 1);
+  assert.deepEqual(report.coverage.sources.map((s) => s.name), ["Camera Report Cam"]);
+  assert.equal(await runAsFarm(B, () => buildVisionReport({ kind: "BATCH", id: batch.id }, periodFor("7d"))), null, "farm B cannot report on farm A's batch");
+});
