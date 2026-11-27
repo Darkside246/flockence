@@ -325,3 +325,35 @@ test("emailed team invitations bind farm, mailbox and role and redeem once", asy
   await assert.rejects(() => send(owner, randomUUID() + "@example.test", "READ_ONLY"), /EMAIL_INVITE_DELIVERY_FAILED/);
   assert.deepEqual(await runAsFarm(A, () => activeEmailInvitations()), []);
 });
+
+test("changing a local password revokes sessions and outstanding reset links", async () => {
+  const { randomUUID } = await import("node:crypto");
+  const { changeAccountPassword, createPasswordReset, createSession, hashPassword, savePasswordHash,
+    verifyPassword, getPasswordHash, resetAccountPassword, sessionFromToken } = await import("../lib/auth.ts");
+  const id = randomUUID();
+  const another = randomUUID();
+  const oldPassword = "Old-Password-123!";
+  const newPassword = "New-Password-456!";
+  const fixture = await runAsFarm(A, async () => {
+    await prisma.user.createMany({ data: [
+      { id, farmId: A, name: "Password fixture", email: id + "@example.test", role: "WORKER" },
+      { id: another, farmId: A, name: "Other password fixture", email: another + "@example.test", role: "WORKER" },
+    ] });
+    await savePasswordHash(id, await hashPassword(oldPassword));
+    const [own, other, recovery] = await Promise.all([createSession(id), createSession(another), createPasswordReset(id)]);
+    return { own, other, recovery };
+  });
+  assert.equal(await runAsFarm(A, () => changeAccountPassword(id, "Incorrect-Password", newPassword)), "incorrect");
+  const results = await Promise.all([
+    runAsFarm(A, () => changeAccountPassword(id, oldPassword, newPassword)),
+    runAsFarm(A, () => changeAccountPassword(id, oldPassword, newPassword)),
+  ]);
+  assert.deepEqual(results.sort(), ["changed", "incorrect"]);
+  assert.equal(await sessionFromToken(fixture.own.token), null);
+  assert.equal((await sessionFromToken(fixture.other.token)).userId, another);
+  assert.equal(await resetAccountPassword(fixture.recovery.token, oldPassword), false);
+  assert.ok(await verifyPassword(newPassword, await runAsFarm(A, () => getPasswordHash(id))));
+  const fresh = await runAsFarm(A, () => createPasswordReset(id));
+  const reset = await Promise.all([resetAccountPassword(fresh.token, oldPassword), resetAccountPassword(fresh.token, oldPassword)]);
+  assert.deepEqual(reset.sort(), [false, true]);
+});

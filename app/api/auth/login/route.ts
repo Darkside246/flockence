@@ -1,7 +1,7 @@
 import { accountCaptchaResponse, accountClientIp, accountFormOriginResponse, accountRateLimitResponse, readAccountForm } from "@/lib/account-form-security";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getPasswordHash, createSession, setSessionCookie, normalizeEmail, verifyPassword } from "@/lib/auth";
+import { getPasswordHash, createSession, setSessionCookie, normalizeEmail, verifyPassword, lockPasswordAccount } from "@/lib/auth";
 import { ensureFarm } from "@/lib/operations";
 import { runAsFarm, runUnscoped } from "@/lib/farm-scope";
 
@@ -46,7 +46,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email or password is incorrect. If you joined from Oriya, open Flockence from Oriya instead." }, { status: 401 });
     }
 
-    const session = await runAsFarm(user.farmId, async () => { await ensureFarm(); return createSession(user.id); });
+    const session = await runAsFarm(user.farmId, async () => {
+      await ensureFarm();
+      return prisma.$transaction(async tx => {
+        await lockPasswordAccount(tx, user.id);
+        if (await getPasswordHash(user.id, tx) !== stored) return null;
+        return createSession(user.id, undefined, tx);
+      });
+    });
+    if (!session) return NextResponse.json({ error: "Email or password is incorrect." }, { status: 401 });
     const response = NextResponse.json({ user: { id: user.id, name: user.name, email: user.email } });
     response.headers.set("Set-Cookie", setSessionCookie(session.token));
     return response;

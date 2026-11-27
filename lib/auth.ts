@@ -183,8 +183,8 @@ export async function savePasswordHash(userId: string, passwordHash: string, cli
   await client.setting.upsert({ where: { farmId_key: { farmId: currentFarmId(), key: `${PASSWORD_PREFIX}${userId}` } }, update: { value: passwordHash }, create: { farmId: currentFarmId(), key: `${PASSWORD_PREFIX}${userId}`, value: passwordHash } });
 }
 
-export async function getPasswordHash(userId: string) {
-  const row = await prisma.setting.findUnique({ where: { farmId_key: { farmId: currentFarmId(), key: `${PASSWORD_PREFIX}${userId}` } } });
+export async function getPasswordHash(userId: string, client: Prisma.TransactionClient = prisma) {
+  const row = await client.setting.findUnique({ where: { farmId_key: { farmId: currentFarmId(), key: `${PASSWORD_PREFIX}${userId}` } } });
   return row?.value ?? null;
 }
 
@@ -196,41 +196,62 @@ export async function createPasswordReset(userId: string) {
   return { token, expiresAt };
 }
 
-/** The reset link's farm, found by the link's own hash; the rest runs inside that farm. */
-export async function consumePasswordReset(token: string): Promise<{ userId: string; settingId: string; farmId: string } | null> {
-  if (!token) return null;
-  const key = `${RESET_PREFIX}${digest(token)}`;
-  const found = await runUnscoped(() => prisma.setting.findFirst({ where: { key }, select: { farmId: true } }));
-  if (!found) return null;
-  const result = await runAsFarm(found.farmId, () => consumeInFarm(key));
-  return result ? { ...result, farmId: found.farmId } : null;
+/** Password writes and local login session creation serialize for the account. */
+export async function lockPasswordAccount(client: Prisma.TransactionClient, userId: string) {
+  const lock = JSON.stringify(["local-password", currentFarmId(), userId]);
+  await client.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lock}, 0))::text`;
 }
 
-async function consumeInFarm(key: string) {
-  const row = await prisma.setting.findUnique({ where: { farmId_key: { farmId: currentFarmId(), key } } });
-  if (!row) return null;
-  let value: { userId: string; expiresAt: string };
-  try {
-    value = JSON.parse(row.value) as { userId: string; expiresAt: string };
-  } catch {
-    await prisma.setting.deleteMany({ where: { id: row.id, farmId: currentFarmId() } });
-    return null;
-  }
-  if (!value.userId || !Number.isFinite(new Date(value.expiresAt).getTime()) || new Date(value.expiresAt).getTime() <= Date.now()) {
-    await prisma.setting.deleteMany({ where: { id: row.id, farmId: currentFarmId() } });
-    return null;
-  }
-
-  // Atomically consume the single-use token. Concurrent requests cannot both reset the password.
-  const consumed = await prisma.setting.deleteMany({
-    where: { id: row.id, farmId: currentFarmId(), key, value: row.value },
+async function revokePasswordArtifacts(userId: string, client: Prisma.TransactionClient) {
+  const farmId = currentFarmId();
+  const rows = await client.setting.findMany({
+    where: { farmId, OR: [{ key: { startsWith: SESSION_PREFIX } }, { key: { startsWith: RESET_PREFIX } }] },
+    select: { id: true, value: true },
   });
-  if (consumed.count !== 1) return null;
-  return { userId: value.userId, settingId: row.id };
+  const ids = rows.filter(row => {
+    try { return JSON.parse(row.value).userId === userId; } catch { return false; }
+  }).map(row => row.id);
+  if (ids.length) await client.setting.deleteMany({ where: { farmId, id: { in: ids } } });
 }
 
-export async function invalidateUserSessions(userId: string) {
+async function replacePassword(userId: string, derived: string, client: Prisma.TransactionClient) {
+  await savePasswordHash(userId, derived, client);
+  await revokePasswordArtifacts(userId, client);
+}
+
+export async function changeAccountPassword(userId: string, current: string, next: string) {
   await ensureFarm();
-  const rows = await prisma.setting.findMany({ where: { farmId: currentFarmId(), key: { startsWith: SESSION_PREFIX } } });
-  await Promise.all(rows.filter((row) => { try { return JSON.parse(row.value).userId === userId; } catch { return false; } }).map((row) => prisma.setting.delete({ where: { id: row.id } })));
+  const existing = await getPasswordHash(userId);
+  if (!existing) return "no-password";
+  if (!await verifyPassword(current, existing)) return "incorrect";
+  const derived = await hashPassword(next);
+  return prisma.$transaction(async tx => {
+    await lockPasswordAccount(tx, userId);
+    if (await getPasswordHash(userId, tx) !== existing) return "incorrect";
+    await replacePassword(userId, derived, tx);
+    return "changed";
+  });
+}
+
+export async function resetAccountPassword(token: string, next: string) {
+  const key = RESET_PREFIX + digest(token);
+  const found = await runUnscoped(() => prisma.setting.findFirst({ where: { key }, select: { farmId: true, value: true } }));
+  if (!found) return false;
+  let proof: { userId?: unknown; expiresAt?: unknown };
+  try { proof = JSON.parse(found.value); } catch { return false; }
+  const { userId, expiresAt } = proof ?? {};
+  if (typeof userId !== "string" || typeof expiresAt !== "string" || !(Date.parse(expiresAt) > Date.now())) return false;
+  const derived = await hashPassword(next);
+  return runAsFarm(found.farmId, async () => {
+    await ensureFarm();
+    return prisma.$transaction(async tx => {
+      await lockPasswordAccount(tx, userId);
+      const entry = await tx.setting.findUnique({ where: { farmId_key: { farmId: found.farmId, key } } });
+      if (!entry || entry.value !== found.value || !(Date.parse(expiresAt) > Date.now())) return false;
+      const user = await tx.user.findFirst({ where: { id: userId, farmId: found.farmId }, select: { id: true } });
+      if (!user) return false;
+      await replacePassword(user.id, derived, tx);
+      return true;
+    });
+  });
 }

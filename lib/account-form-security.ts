@@ -38,11 +38,10 @@ export async function accountCaptchaResponse(token: unknown, action: CaptchaActi
 }
 
 // Account forms carry short strings. Avoid buffering uploads under the larger camera proxy limit.
-export async function readAccountForm(request: Request): Promise<Record<string, unknown> | null> {
+export async function readAccountForm(request: Request, limit = 16 * 1024): Promise<Record<string, unknown> | null> {
   const reader = request.body?.getReader();
   if (!reader) return null;
   try {
-    const limit = 16 * 1024;
     let length = 0;
     const decoder = new TextDecoder("utf-8", { fatal: true });
     let text = "";

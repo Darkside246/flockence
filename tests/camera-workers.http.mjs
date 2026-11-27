@@ -333,6 +333,37 @@ try {
   assert.equal((await submitExpense(0, { ...expense, amountMinor: 1300 })).status, 409);
   assert.equal(await runAsFarm(ids[0], () => prisma.expense.count()), 1);
 
+  const inspectionPhoto = Buffer.from([255, 216, 255, 217, 255, 217]).toString("base64");
+  const draft = { batchId: flock.id, date: workspace.today, notes: "Observed bedding",
+    temperatureC: 24, humidityPercent: 62, beddingIssue: true, ventilationIssue: false,
+    waterChange: false, feedChange: false, photo: inspectionPhoto, offline: { ...workspace.scope, id: randomUUID() } };
+  const inspectionPath = origin + "/api/offline/inspections";
+  const submitInspection = (account, data) => fetch(inspectionPath, {
+    method: "POST", headers: headerFor(account), body: JSON.stringify(data),
+  });
+  assert.equal((await submitInspection(1, draft)).status, 403);
+  assert.equal((await submitInspection(0, { ...draft, photo: "aW52YWxpZA==" })).status, 400);
+  const receipts = await Promise.all([submitInspection(0, draft), submitInspection(0, draft)]);
+  assert.deepEqual(receipts.map(response => response.status), [201, 201]);
+  const [inspectionA, inspectionB] = await Promise.all(receipts.map(response => response.json()));
+  assert.equal(inspectionA.id, inspectionB.id);
+  assert.equal((await submitInspection(0, { ...draft, notes: "Changed" })).status, 409);
+  const photoUrl = inspectionPath + "?photo=" + inspectionA.id;
+  assert.equal((await fetch(photoUrl)).status, 401);
+  assert.equal((await fetch(photoUrl, { headers: headerFor(1) })).status, 404);
+  const photoResult = await fetch(photoUrl, { headers: headerFor(0) });
+  assert.equal(photoResult.status, 200);
+  assert.equal(photoResult.headers.get("content-disposition"), 'attachment; filename="flock-inspection.jpg"');
+  assert.equal(Buffer.from(await photoResult.arrayBuffer()).toString("base64"), inspectionPhoto);
+  const removePhoto = account => fetch(inspectionPath, {
+    method: "DELETE", headers: headerFor(account), body: JSON.stringify({ id: inspectionA.id }),
+  });
+  assert.equal((await removePhoto(1)).status, 404);
+  assert.equal((await removePhoto(0)).status, 200);
+  assert.equal((await fetch(photoUrl, { headers: headerFor(0) })).status, 404);
+  assert.equal((await submitInspection(0, draft)).status, 201);
+  assert.equal((await fetch(photoUrl, { headers: headerFor(0) })).status, 404);
+
   if (process.env.FLOCKENCE_BROWSER_MODULE) {
     const { chromium } = createRequire(import.meta.url)(process.env.FLOCKENCE_BROWSER_MODULE);
     const browser = await chromium.launch();
@@ -376,6 +407,20 @@ try {
       await page.locator("#expense-amount").fill("4.50");
       await page.locator("#save").click();
       await page.getByText(/Expense.*4.50.*Waiting to sync/).waitFor();
+      await page.selectOption("#record-kind", "inspection");
+      await page.selectOption("#flock", flock.id);
+      await page.locator("#inspection-notes").fill("Offline inspection fixture");
+      const png = await page.evaluate(() => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 10;
+        canvas.height = 10;
+        return canvas.toDataURL("image/png").split(",")[1];
+      });
+      await page.locator("#inspection-photo").setInputFiles({
+        name: "fixture.png", mimeType: "image/png", buffer: Buffer.from(png, "base64"),
+      });
+      await page.locator("#save").click();
+      await page.getByText(/Flock inspection.*Photo attached.*Waiting to sync/).waitFor();
       await page.reload();
       await page.locator("#passphrase").fill("test-device-research-only-123");
       await page.locator("#unlock-button").click();
@@ -384,6 +429,7 @@ try {
       await page.getByText(/Egg collection.*Waiting to sync/).waitFor();
       await page.getByText(/Feed consumption.*Waiting to sync/).waitFor();
       await page.getByText(/Expense.*4.50.*Waiting to sync/).waitFor();
+      await page.getByText(/Flock inspection.*Photo attached.*Waiting to sync/).waitFor();
       await context.setOffline(false);
       await page.getByText("No entries waiting to sync.").waitFor();
       assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
@@ -394,6 +440,10 @@ try {
       assert.equal(await runAsFarm(ids[0], () => prisma.dailyFlockCheck.count({ where: { batchId: flock.id } })), 2);
 
       assert.equal(await runAsFarm(ids[0], () => prisma.expense.count()), 2);
+
+      await page.goto(origin + "/inspections");
+      await page.getByText("Offline inspection fixture").waitFor();
+      await page.getByRole("link", { name: "Download inspection photo" }).waitFor();
 
       let blink = "disconnected";
       await page.route("**/api/cameras/status", (route) => route.fulfill({ json: {
