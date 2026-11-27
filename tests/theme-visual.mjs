@@ -76,7 +76,9 @@ try {
     const context = await browser.newContext({ viewport, reducedMotion: "reduce" });
     const email = device + "@visual.example.test";
     const password = "Flockence-V1sual!";
+    // Account forms only accept same-site JSON posts (lib/account-form-security.ts), as a browser would send.
     const response = await context.request.post(origin + (device === "desktop" ? "/api/auth/signup" : "/api/auth/login"), {
+      headers: { origin, "content-type": "application/json" },
       data: { name: "Visual Test Owner", email: device === "desktop" ? email : "desktop@visual.example.test", password, inviteCode: process.env.FARM_OWNER_SETUP_CODE },
     });
     assert.ok(response.ok(), "Could not authenticate visual test: " + await response.text());
