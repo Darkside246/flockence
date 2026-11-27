@@ -94,3 +94,14 @@ farm-scoped in PostgreSQL, are served as downloads, and are never submitted
 to Farm Vision. Each farm can retain 100 photos, up to 256 KB each. An Owner
 can remove a photo without deleting the written inspection. A farm that
 reaches the limit keeps the unsynced draft for review.
+
+### Treatment records
+
+Owners and Supervisors can queue a treatment that was administered,
+including the flock, administration date, product name and notes. If
+known, add the actual end and recorded withdrawal clearance dates. The
+app does not calculate a clearance date from treatment notes. A missing
+clearance leaves the treatment active and triggers the existing sale and
+layer-egg hold rules after the record reaches the server. Until the
+receipt arrives, the draft is only on the device. Offline sales remain
+outside this release.

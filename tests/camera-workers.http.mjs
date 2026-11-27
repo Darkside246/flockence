@@ -421,6 +421,12 @@ try {
       });
       await page.locator("#save").click();
       await page.getByText(/Flock inspection.*Photo attached.*Waiting to sync/).waitFor();
+      await page.selectOption("#record-kind", "treatment");
+      await page.selectOption("#flock", flock.id);
+      await page.locator("#treatment-product").fill("Test treatment fixture");
+      await page.locator("#treatment-notes").fill("Observed administration fixture");
+      await page.locator("#save").click();
+      await page.getByText(/Treatment.*Test treatment fixture.*Waiting to sync/).waitFor();
       await page.reload();
       await page.locator("#passphrase").fill("test-device-research-only-123");
       await page.locator("#unlock-button").click();
@@ -430,6 +436,7 @@ try {
       await page.getByText(/Feed consumption.*Waiting to sync/).waitFor();
       await page.getByText(/Expense.*4.50.*Waiting to sync/).waitFor();
       await page.getByText(/Flock inspection.*Photo attached.*Waiting to sync/).waitFor();
+      await page.getByText(/Treatment.*Test treatment fixture.*Waiting to sync/).waitFor();
       await context.setOffline(false);
       await page.getByText("No entries waiting to sync.").waitFor();
       assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
@@ -441,6 +448,9 @@ try {
 
       assert.equal(await runAsFarm(ids[0], () => prisma.expense.count()), 2);
 
+      const syncedTreatment = await runAsFarm(ids[0], () => prisma.treatment.findFirst({ where: { batchId: flock.id, productName: "Test treatment fixture" } }));
+      assert.equal(syncedTreatment.status, "ACTIVE");
+      assert.equal(syncedTreatment.withdrawalClearsAt, null);
       await page.goto(origin + "/inspections");
       await page.getByText("Offline inspection fixture").waitFor();
       await page.getByRole("link", { name: "Download inspection photo" }).waitFor();
@@ -518,7 +528,26 @@ try {
     }
   }
 
-  console.log("Camera HTTP checks passed for two private workers and an unconfigured farm.");
+  const pendingTreatment = { batchId: laying.id, productName: "Offline test record", startedAt: previousDay,
+    endedAt: null, clearsOn: null, notes: "", offline: { ...workspace.scope, id: randomUUID() } };
+  const submitTreatment = (account, data) => fetch(origin + "/api/health/treatments", {
+    method: "POST", headers: headerFor(account), body: JSON.stringify(data),
+  });
+  assert.equal((await submitTreatment(1, pendingTreatment)).status, 403);
+  assert.equal((await submitTreatment(0, { ...pendingTreatment, clearsOn: workspace.today })).status, 400);
+  const treatmentResponses = await Promise.all([submitTreatment(0, pendingTreatment), submitTreatment(0, pendingTreatment)]);
+  assert.deepEqual(treatmentResponses.map(response => response.status), [201, 201]);
+  const [treatmentA, treatmentB] = await Promise.all(treatmentResponses.map(response => response.json()));
+  assert.equal(treatmentA.id, treatmentB.id);
+  assert.equal((await submitTreatment(0, { ...pendingTreatment, notes: "Different note" })).status, 409);
+  assert.equal(await runAsFarm(ids[0], () => prisma.treatment.count({ where: { batchId: laying.id } })), 1);
+  const blockedSale = await fetch(origin + "/api/sales", {
+    method: "POST", headers: headerFor(0), body: JSON.stringify({ date: workspace.today,
+      items: [{ batchId: laying.id, quantity: 1, unitPriceMinor: 100, description: "Egg" }] }),
+  });
+  assert.equal(blockedSale.status, 409);
+  assert.match((await blockedSale.json()).error, /withdrawal/i);
+  console.log("Camera HTTP checks, offline records and withdrawal holds passed.");
 } finally {
   app?.kill();
   for (const server of servers) {

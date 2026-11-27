@@ -59,10 +59,13 @@ async function render(active) {
     ? "Last synced " + new Date(active.profile.lastSync).toLocaleString()
     : "No farm records have synced from this device yet.";
   const allowExpenses = active.profile.canRecordExpenses === true;
+  const allowTreatments = active.profile.canRecordTreatments === true;
+  find("treatment-option").hidden = !allowTreatments;
+  find("treatment-option").disabled = !allowTreatments;
   find("expense-option").hidden = !allowExpenses;
   find("expense-option").disabled = !allowExpenses;
   find("expense-currency").textContent = active.profile.currency || "";
-  if (!allowExpenses && find("record-kind").value === "expense") {
+  if ((!allowExpenses && find("record-kind").value === "expense") || (!allowTreatments && find("record-kind").value === "treatment")) {
     find("record-kind").value = "mortality";
     updateRecordFields();
   }
@@ -78,6 +81,7 @@ async function render(active) {
   for (const { id, entry } of rows) {
     const li = document.createElement("li");
     const detail = entry.kind === "expense" ? "Expense · " + (entry.expense.amountMinor / 100).toFixed(2) + " " + (entry.expense.currency || "")
+      : entry.kind === "treatment" ? "Treatment · " + entry.treatment.productName
       : entry.kind === "inspection" ? "Flock inspection" + (entry.inspection.photo ? " · Photo attached" : "")
       : entry.kind === "eggs" ? entry.collection.totalEggs + " eggs · Egg collection"
       : entry.kind === "feed" ? entry.feedKg + " kg · Feed consumption"
@@ -158,8 +162,9 @@ async function sync() {
     for (const { id, entry } of await list(active)) {
       if (current !== active) return;
       if (entry.review) continue;
-      if (entry.kind === "expense" && !syncedProfile.canRecordExpenses) {
-        entry.review = "Your current role cannot sync expenses. The draft remains saved.";
+      if ((entry.kind === "expense" && !syncedProfile.canRecordExpenses)
+        || (entry.kind === "treatment" && !syncedProfile.canRecordTreatments)) {
+        entry.review = "Your current role cannot sync this record. The draft remains saved.";
         await storage("outbox", "put", { id, value: await seal(active.key, id, entry) }, id);
         continue;
       }
@@ -168,15 +173,16 @@ async function sync() {
       const feed = entry.kind === "feed";
       const expense = entry.kind === "expense";
       const inspection = entry.kind === "inspection";
-      const endpoint = inspection ? "/api/offline/inspections" : expense ? "/api/expenses" : feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
-      const values = inspection ? entry.inspection : expense ? { category: entry.expense.category, description: entry.expense.description, amountMinor: entry.expense.amountMinor, currency: entry.expense.currency }
+      const treatment = entry.kind === "treatment";
+      const endpoint = treatment ? "/api/health/treatments" : inspection ? "/api/offline/inspections" : expense ? "/api/expenses" : feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
+      const values = treatment ? entry.treatment : inspection ? entry.inspection : expense ? { category: entry.expense.category, description: entry.expense.description, amountMinor: entry.expense.amountMinor, currency: entry.expense.currency }
         : feed ? { feedKg: entry.feedKg } : eggs ? entry.collection : weight ? { quantity: entry.quantity, avgWeightKg: entry.avgWeightKg }
         : { quantity: entry.quantity, reason: entry.reason, notes: entry.notes };
       const response = await fetch(endpoint, {
         method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(12000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...(expense ? {} : { batchId: entry.batchId }), date: entry.date, ...values,
+          ...(expense ? {} : { batchId: entry.batchId }), ...(treatment ? { startedAt: entry.date } : { date: entry.date }), ...values,
           offline: { id, ...active.profile.scope },
         }),
       });
@@ -267,7 +273,11 @@ unlockForm.addEventListener("submit", async (event) => {
 });
 
 function updateRecordFields() {
+  const treatment = find("record-kind").value === "treatment";
   const inspection = find("record-kind").value === "inspection";
+  find("entry-date-label").textContent = treatment ? "Treatment start date" : "Date";
+  find("treatment-fields").hidden = !treatment;
+  find("treatment-fields").disabled = !treatment;
   const weight = find("record-kind").value === "weight";
   const eggs = find("record-kind").value === "eggs";
   const feed = find("record-kind").value === "feed";
@@ -280,9 +290,9 @@ function updateRecordFields() {
   find("expense-fields").hidden = !expense;
   find("expense-fields").disabled = !expense;
   find("quantity-label").textContent = weight ? "Birds weighed" : "Birds lost";
-  find("mortality-fields").hidden = weight || eggs || feed || expense || inspection;
-  find("bird-fields").hidden = eggs || feed || expense || inspection;
-  find("quantity").disabled = eggs || feed || expense || inspection;
+  find("mortality-fields").hidden = weight || eggs || feed || expense || inspection || treatment;
+  find("bird-fields").hidden = eggs || feed || expense || inspection || treatment;
+  find("quantity").disabled = eggs || feed || expense || inspection || treatment;
   find("feed-fields").hidden = !feed;
   find("feed-weight").disabled = !feed;
   find("feed-weight").required = feed;
@@ -368,6 +378,18 @@ form.addEventListener("submit", async (event) => {
   working = true;
   find("save").disabled = true;
   try {
+    let treatment;
+    if (kind === "treatment") {
+      if (!active.profile.canRecordTreatments) return;
+      const productName = String(data.get("treatmentProduct") || "").trim();
+      const endedAt = data.get("treatmentEnd") || null;
+      const clearsOn = data.get("treatmentClearance") || null;
+      if (!productName || (endedAt && endedAt < date) || (clearsOn && (!endedAt || clearsOn < endedAt))) {
+        show("Check the product name, treatment dates and recorded clearance date.");
+        return;
+      }
+      treatment = { productName, endedAt, clearsOn, notes: String(data.get("treatmentNotes") || "").trim() };
+    }
     let inspection;
     if (kind === "inspection") {
       const numberOrNull = key => data.get(key) === "" ? null : Number(data.get(key));
@@ -388,7 +410,7 @@ form.addEventListener("submit", async (event) => {
     const id = crypto.randomUUID();
     const entry = {
       kind, flock: flock?.name ?? "Farm-wide", batchId: flock?.id, date, quantity,
-      ...(kind === "inspection" ? { inspection } : kind === "expense" ? { expense } : kind === "feed" ? { feedKg } : kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
+      ...(kind === "treatment" ? { treatment } : kind === "inspection" ? { inspection } : kind === "expense" ? { expense } : kind === "feed" ? { feedKg } : kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
       createdAt: Date.now(),
     };
     await storage("outbox", "add", { id, value: await seal(active.key, id, entry) }, id);

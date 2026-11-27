@@ -28,10 +28,10 @@
         <p id="last-sync"></p>
         <form id="entry">
           <label for="record-kind">Record type</label>
-          <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option><option value="feed">Feed consumption</option><option value="inspection">Flock inspection</option><option id="expense-option" value="expense" disabled hidden>Farm expense</option></select>
+          <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option><option value="feed">Feed consumption</option><option value="inspection">Flock inspection</option><option id="treatment-option" value="treatment" hidden disabled>Treatment record</option><option id="expense-option" value="expense" disabled hidden>Farm expense</option></select>
           <label id="flock-label" for="flock">Flock</label>
           <select name="batchId" id="flock" required></select>
-          <label for="date">Date</label>
+          <label id="entry-date-label" for="date">Date</label>
           <input name="date" id="date" type="date" required>
           <div id="bird-fields">
           <label for="quantity" id="quantity-label">Birds lost</label>
@@ -49,6 +49,19 @@
             <input id="expense-description" name="description" maxlength="300" required>
             <label for="expense-amount">Amount <span id="expense-currency"></span></label>
             <input id="expense-amount" name="amount" type="text" inputmode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" maxlength="12" required>
+          </fieldset>
+          <fieldset id="treatment-fields" hidden disabled>
+            <legend>Treatment record</legend>
+            <p>Record the treatment you actually gave. Offline drafts do not update sale or egg holds until they sync.</p>
+            <label for="treatment-product">Product name</label>
+            <input id="treatment-product" name="treatmentProduct" maxlength="160" required>
+            <label for="treatment-end">Treatment end date (optional)</label>
+            <input id="treatment-end" name="treatmentEnd" type="date">
+            <label for="treatment-clearance">Recorded withdrawal clearance date (optional)</label>
+            <input id="treatment-clearance" name="treatmentClearance" type="date">
+            <small>Leave the clearance date empty when it has not been confirmed. Flockence keeps the treatment active.</small>
+            <label for="treatment-notes">Notes (optional)</label>
+            <textarea id="treatment-notes" name="treatmentNotes" maxlength="1000" rows="2"></textarea>
           </fieldset>
           <fieldset id="inspection-fields" hidden disabled>
             <legend>Flock inspection</legend>
