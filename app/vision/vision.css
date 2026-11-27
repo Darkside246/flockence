@@ -16,3 +16,4 @@
 .vision-auto-status em { display: block; font-style: normal; color: var(--text-primary); }
 .vision-auto-more summary { cursor: pointer; font-weight: 650; padding: 6px 0; }
 @media (min-width: 760px) { .vision-auto-camera { grid-template-columns: minmax(0, 1.2fr) auto; align-items: center; } .vision-auto-status { grid-column: 1 / -1; } }
+.vision-auto-plan-line { margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); }

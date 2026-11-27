@@ -8,7 +8,10 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { visionPens } from "@/lib/vision-pens";
-import { VISION_MODEL, visionCategories, type VisionCategory } from "@/lib/vision";
+import { visionCategories, type VisionCategory } from "@/lib/vision";
+import { visionConfigured } from "@/lib/vision-provider";
+import { currentVisionPlan } from "@/lib/vision-plan";
+import { monthUsage } from "@/lib/vision-usage";
 import { runVisionInspection } from "@/lib/vision-inspection";
 
 export const runtime = "nodejs";
@@ -49,8 +52,16 @@ export async function POST(request: Request) {
       });
     }
     await ensureFarm();
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json({ error: "Farm Vision is not configured. Add OPENAI_API_KEY to the server environment." }, { status: 503 });
+    if (!visionConfigured()) {
+      return NextResponse.json({ error: "Farm Vision is not configured. Add ANTHROPIC_API_KEY (or OPENAI_API_KEY) to the server environment." }, { status: 503 });
+    }
+
+    // Each plan includes a number of hand-started inspections a month (VISION_PLAN_LIMITS).
+    const plan = await currentVisionPlan();
+    if ((await monthUsage()).manual >= plan.limits.manualPerMonth) {
+      return NextResponse.json({ error: plan.limits.manualPerMonth > 0
+        ? `The ${plan.label} plan includes ${plan.limits.manualPerMonth} Farm Vision inspections a month, and they have been used. More are included with Premium.`
+        : `Farm Vision inspections are not included in the ${plan.label} plan. Upgrade to Premium to use them.`, code: "PLAN_LIMIT" }, { status: 403 });
     }
 
     const form = await request.formData();
@@ -104,7 +115,7 @@ export async function POST(request: Request) {
       upload: file instanceof File ? { bytes: Buffer.from(await file.arrayBuffer()), mimeType } : undefined,
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
-    return NextResponse.json({ observation: result.observation, imageUrl: result.imageUrl, analysis: result.analysis, model: VISION_MODEL }, {
+    return NextResponse.json({ observation: result.observation, imageUrl: result.imageUrl, analysis: result.analysis, model: result.model }, {
       status: 201, headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {

@@ -7,9 +7,11 @@ import { assignedCameraPen } from "@/lib/vision-camera-pens";
 import { visionCameras, visionCamerasEnabled, visionLiveEnabled } from "@/lib/vision-camera";
 import { AUTOMATIC_MEDIA_PREFIX, runVisionInspection, visionStorageDir } from "@/lib/vision-inspection";
 import { shareInspectionWithOriya } from "@/lib/vision-oriya";
+import { currentVisionPlan } from "@/lib/vision-plan";
+import { monthUsage } from "@/lib/vision-usage";
 import { calendarDateInTimeZone, FARM_TIME_ZONE } from "@/lib/poultry-metrics.mjs";
 import {
-  LEASE_MS, SCHEDULE_KEY, STATE_KEY, camerasToRun, clockInZone, inQuietHours, readSchedule, readState, recordAttempt,
+  LEASE_MS, SCHEDULE_KEY, STATE_KEY, camerasToRun, overBudget, scheduleWithinPlan, clockInZone, inQuietHours, readSchedule, readState, recordAttempt,
   type Schedule, type ScheduleState,
 } from "@/lib/vision-schedule-rules.mjs";
 
@@ -92,13 +94,15 @@ export async function pruneAutomaticPictures(keepDays: number, now: Date) {
 export type FarmRoundResult = { farmId: string; ran: string[]; skipped?: string; pruned?: number };
 
 /** One round for the current farm. */
-export async function runFarmRound(schedule: Schedule, updatedBy: string | null, now: Date): Promise<FarmRoundResult> {
+export async function runFarmRound(saved: Schedule, updatedBy: string | null, now: Date): Promise<FarmRoundResult> {
   const farmId = currentFarmId();
   if (!visionCamerasEnabled()) return { farmId, ran: [], skipped: "cameras-off" };
-  // Loaded here (not at the top) because it also carries the web response helpers the timer does not need.
-  const { farmFeatureAccess } = await import("@/lib/farm-feature-access");
-  const access = await farmFeatureAccess().catch(() => ({ state: "UNAVAILABLE" as const }));
-  if (access.state !== "PREMIUM" && access.state !== "EXISTING") return { farmId, ran: [], skipped: "plan" };
+  // The plan decides what may run: the saved schedule cut down to the plan's cameras, timing and daily limit, and
+  // nothing once the month's vision spend reaches the plan's budget.
+  const { limits } = await currentVisionPlan();
+  const schedule = scheduleWithinPlan(saved, limits);
+  if (!schedule) return { farmId, ran: [], skipped: "plan" };
+  if (overBudget((await monthUsage(now)).costMicros, limits)) return { farmId, ran: [], skipped: "monthly-budget" };
   if (updatedBy && !(await accountPreferences(farmId, updatedBy)).allowVisionImages) return { farmId, ran: [], skipped: "image-sharing-off" };
   if (inQuietHours(clockInZone(now, FARM_TIME_ZONE), schedule.quietStart, schedule.quietEnd)) return { farmId, ran: [], skipped: "quiet-hours" };
 

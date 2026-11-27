@@ -92,3 +92,54 @@ test("the daily estimate respects quiet hours and the cap", () => {
   assert.equal(inspectionsPerDay(schedule, quietMinutes("19:00", "05:30")), 11);
   assert.equal(inspectionsPerDay({ ...schedule, dailyCap: 5 }, 0), 5);
 });
+
+import { fitScheduleToPlan, overBudget, planLimits, scheduleWithinPlan, visionPlan } from "../lib/vision-schedule-rules.mjs";
+
+test("the plan follows the membership, and listed farms get Premium vision", () => {
+  assert.equal(visionPlan("FREE", "f1"), "FREE");
+  assert.equal(visionPlan("EXISTING", "f1"), "STANDARD");
+  assert.equal(visionPlan("PREMIUM", "f1"), "PREMIUM");
+  assert.equal(visionPlan("EXISTING", "default-farm", "x, default-farm"), "PREMIUM");
+  assert.equal(visionPlan("UNAVAILABLE", "f1"), "FREE");
+});
+
+test("plan limits can be changed without code", () => {
+  assert.equal(planLimits("STANDARD").dailyCap, 3);
+  const custom = planLimits("STANDARD", JSON.stringify({ STANDARD: { dailyCap: 6, automatic: false, maxCameras: -1 } }));
+  assert.equal(custom.dailyCap, 6);
+  assert.equal(custom.automatic, false);
+  assert.equal(custom.maxCameras, 1, "a negative number is ignored");
+  assert.equal(planLimits("STANDARD", "not json").dailyCap, 3);
+});
+
+test("saving a schedule over the plan is refused in plain words; the daily cap is lowered to fit", () => {
+  const standard = planLimits("STANDARD");
+  const two = { ...base, cameras: { A: { everyHours: 6, mode: "video", category: "PEN" }, B: { everyHours: 6, mode: "video", category: "PEN" } } };
+  const tooMany = fitScheduleToPlan(two, standard, "Standard");
+  assert.equal(tooMany.ok, false);
+  assert.match(tooMany.error, /The Standard plan includes automatic checks on 1 camera/);
+  const tooOften = fitScheduleToPlan({ ...base, cameras: { A: { everyHours: 2, mode: "video", category: "PEN" } } }, standard, "Standard");
+  assert.match(tooOften.error, /at most every 6 hours/);
+  const fits = fitScheduleToPlan({ ...base, cameras: { A: { everyHours: 6, mode: "video", category: "PEN" } } }, standard, "Standard");
+  assert.equal(fits.ok, true);
+  assert.equal(fits.schedule.dailyCap, 3);
+  assert.match(fitScheduleToPlan(base, planLimits("FREE"), "Free").error, /not included in the Free plan/);
+  assert.equal(fitScheduleToPlan({ ...base, enabled: false }, planLimits("FREE"), "Free").ok, true, "switching off is always allowed");
+});
+
+test("a round never goes past the plan, even if the plan changed after saving", () => {
+  const many = { ...base, dailyCap: 24, cameras: Object.fromEntries(["A", "B", "C"].map((n) => [n, { everyHours: 1, mode: "video", category: "PEN" }])) };
+  const cut = scheduleWithinPlan(many, planLimits("STANDARD"));
+  assert.deepEqual(Object.keys(cut.cameras), ["A"]);
+  assert.equal(cut.cameras.A.everyHours, 6);
+  assert.equal(cut.dailyCap, 3);
+  assert.equal(scheduleWithinPlan(many, planLimits("FREE")), null);
+  assert.equal(scheduleWithinPlan({ ...many, enabled: false }, planLimits("PREMIUM")), null);
+});
+
+test("the monthly budget stops automatic spending", () => {
+  const standard = planLimits("STANDARD");
+  assert.equal(overBudget(999_999, standard), false);
+  assert.equal(overBudget(1_000_000, standard), true);
+  assert.equal(overBudget(0, planLimits("FREE")), true);
+});

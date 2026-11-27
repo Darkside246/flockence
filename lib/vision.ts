@@ -1,4 +1,4 @@
-export const VISION_MODEL = process.env.VISION_MODEL || "gpt-5.6-luna";
+// The model is chosen in lib/vision-provider.ts (VISION_PROVIDER, VISION_MODEL).
 
 export const visionCategories = [
   "PEN",

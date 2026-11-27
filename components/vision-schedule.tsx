@@ -10,14 +10,18 @@ type CameraState = {
   birdsVisible?: number | null; questions?: string[]; lastSeverity?: string | null;
   oriya?: { sent: boolean; reason?: string; alerts?: number; birdsVisible?: number | null; whatsapp?: boolean } | null;
 };
+type Limits = { automatic: boolean; maxCameras: number; minIntervalHours: number; dailyCap: number; manualPerMonth: number; monthlyBudgetUsd: number };
 type Data = {
+  plan: { name: string; label: string; limits: Limits };
+  usage: { month: string; manual: number; automatic: number; costUsd: number; unpricedCalls: number };
+  model: { provider: string | null; name: string };
   schedule: Schedule; perDay: number; options: { intervals: number[] };
   state: { runsToday: number; lastRoundAt: string | null; cameras: Record<string, CameraState> };
   ready: { vision: boolean; cameras: boolean; liveVideo: boolean; timer: boolean };
 };
 
 const when = (iso?: string | null) => iso ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
-const DEFAULT_PLAN = (camera: Camera): CameraPlan => ({ everyHours: 2, mode: camera.liveSampling ? "video" : "still", category: "PEN" });
+const DEFAULT_PLAN = (camera: Camera, minHours = 2): CameraPlan => ({ everyHours: Math.max(2, minHours), mode: camera.liveSampling ? "video" : "still", category: "PEN" });
 
 /**
  * Automatic inspections: one switch, the cameras to include, how often. Sensible defaults (every 2 hours, live video
@@ -59,15 +63,15 @@ export function VisionSchedule({ cameras }: { cameras: Camera[] }) {
     let next: Schedule = { ...draft, enabled: on };
     // Switching on with nothing chosen: include every camera that has a pen, with the defaults.
     if (on && !Object.keys(next.cameras).length) {
-      const withPen = cameras.filter(c => c.pen);
-      next = { ...next, cameras: Object.fromEntries(withPen.map(c => [c.name, DEFAULT_PLAN(c)])) };
+      const withPen = cameras.filter(c => c.pen).slice(0, data?.plan.limits.maxCameras ?? 1);
+      next = { ...next, cameras: Object.fromEntries(withPen.map(c => [c.name, DEFAULT_PLAN(c, data?.plan.limits.minIntervalHours)])) };
     }
     setDraft(next);
     if (!on || Object.keys(next.cameras).length) void save(next);
   }
 
   const blockers = [
-    !data.ready.vision && "The server has no OpenAI key yet (OPENAI_API_KEY), so pictures cannot be analysed.",
+    !data.ready.vision && "The server has no vision key yet (ANTHROPIC_API_KEY, or OPENAI_API_KEY), so pictures cannot be analysed.",
     !data.ready.cameras && "Camera inspections are switched off on the server (FLOCKENCE_CAMERA_VISION).",
     draft.enabled && data.state.lastRoundAt === null && "Waiting for the first automatic round. If nothing happens within 15 minutes, the server timer is not installed yet (ops/systemd/enable-vision-rounds.sh).",
     draft.enabled && data.state.lastRoundAt !== null && !data.ready.timer && "No automatic round in the last 30 minutes: the server timer may have stopped.",
@@ -77,8 +81,16 @@ export function VisionSchedule({ cameras }: { cameras: Camera[] }) {
     <div className="section-head">
       <div><div className="hero-kicker">Hands-free</div><h3 id="vision-auto-title">Automatic inspections</h3>
         <p>Flockence checks your cameras on a timer, uses your flock records (age, live birds, deaths, the daily check), counts the birds it can see, and puts the result on the dashboard. When the farm is linked to Oriya, the result is also sent there for the WhatsApp message.</p></div>
-      <label className="vision-auto-switch"><input type="checkbox" checked={draft.enabled} disabled={saving} onChange={e => toggle(e.target.checked)} /> <strong>{draft.enabled ? "On" : "Off"}</strong></label>
+      <label className="vision-auto-switch"><input type="checkbox" checked={draft.enabled} disabled={saving || !data.plan.limits.automatic} onChange={e => toggle(e.target.checked)} /> <strong>{draft.enabled ? "On" : "Off"}</strong></label>
     </div>
+    <p className="vision-auto-plan-line">
+      <strong>{data.plan.label} plan:</strong>{" "}
+      {data.plan.limits.automatic
+        ? `up to ${data.plan.limits.maxCameras} camera${data.plan.limits.maxCameras === 1 ? "" : "s"}, each at most every ${data.plan.limits.minIntervalHours} hour${data.plan.limits.minIntervalHours === 1 ? "" : "s"}, ${data.plan.limits.dailyCap} automatic check${data.plan.limits.dailyCap === 1 ? "" : "s"} a day`
+        : "automatic checks are not included"}
+      {" · "}{data.usage.manual} of {data.plan.limits.manualPerMonth} hand-started inspections used this month
+      {data.plan.name !== "PREMIUM" && <> · <a href="/settings/plan">More with Premium</a></>}
+    </p>
     {blockers.map(b => <p key={b} className="notice" role="status">{b}</p>)}
 
     <ul className="vision-auto-cameras">{cameras.map(camera => {
@@ -86,7 +98,7 @@ export function VisionSchedule({ cameras }: { cameras: Camera[] }) {
       const st = data.state.cameras[camera.name];
       return <li key={camera.name} className="vision-auto-camera">
         <label className="vision-auto-include"><input type="checkbox" checked={included(camera.name)} disabled={!camera.pen}
-          onChange={e => setCamera(camera, e.target.checked ? DEFAULT_PLAN(camera) : null)} />
+          onChange={e => setCamera(camera, e.target.checked ? DEFAULT_PLAN(camera, data.plan.limits.minIntervalHours) : null)} />
           <span><strong>{camera.name}</strong><small>{camera.pen ? `Pen: ${camera.pen.name}` : "Assign a pen above first"}</small></span></label>
         {plan && <span className="vision-auto-plan">
           <select aria-label={`How often for ${camera.name}`} value={plan.everyHours} onChange={e => setCamera(camera, { ...plan, everyHours: Number(e.target.value) })}>
@@ -117,7 +129,7 @@ export function VisionSchedule({ cameras }: { cameras: Camera[] }) {
 
     <div className="actions">
       <button type="button" className="button button-primary" disabled={saving} onClick={() => void save(draft)}>{saving ? "Saving…" : "Save"}</button>
-      {draft.enabled && <span className="muted">About {data.perDay} check{data.perDay === 1 ? "" : "s"} a day · {data.state.runsToday} so far today</span>}
+      {draft.enabled && <span className="muted">About {data.perDay} check{data.perDay === 1 ? "" : "s"} a day · {data.state.runsToday} so far today · {data.usage.automatic} this month</span>}
       {message && <span role="status">{message}</span>}
     </div>
   </section>;

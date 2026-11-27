@@ -130,3 +130,57 @@ The timer always uses the live release directory, so a release switch needs no c
 `sudo systemctl disable --now flockence-vision-rounds.timer`. Analysis needs `OPENAI_API_KEY`.
 
 **Cost:** each check is one model request and wakes a Blink camera. The page shows the expected checks per day.
+
+## Choosing the vision model, and plan limits (2026-11-27)
+
+### Which AI looks at the pictures
+
+`lib/vision-provider.ts` sends every inspection (manual and automatic) to one provider. Switching changes cost and
+quality only: every provider gets the same prompt and pictures, and its answer is checked against the same schema.
+
+| Setting | Meaning |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | Uses Claude (the default when this key is set). |
+| `OPENAI_API_KEY` | Uses OpenAI, when no Claude key is set or `VISION_PROVIDER=openai`. |
+| `VISION_PROVIDER` | `anthropic` or `openai`, to choose explicitly. |
+| `VISION_MODEL` | The routine model. Empty means `claude-haiku-5-5` (or `gpt-5.6-luna`). A model name from the other company is ignored. |
+| `VISION_EFFORT` | Claude only: `low` (default), `medium` or `high`. Routine farm pictures need little reasoning. |
+| `VISION_ESCALATE_MODEL` | Optional, same provider, for example `claude-sonnet-5-5`. Only pictures the routine model rated high, urgent or "escalate" are looked at again by this model, and its answer is kept. Off unless set. |
+| `VISION_PRICES` | Optional JSON `{"model": [input $, output $ per million tokens]}`, for a model not in the built-in list or a changed price. |
+
+Built-in list prices, US dollars per million tokens (input / output):
+- `claude-haiku-5-5`: 0.10 / 0.50
+- `claude-sonnet-5-5`: 2 / 10
+- `claude-opus-5-5`: 4 / 20
+
+A typical inspection (three 512-pixel frames, the farm context, the answer and its reasoning) is about 2,500 tokens
+in and 1,500 out. That is roughly $0.001 on Claude Haiku 5.5 and $0.02 on Claude Sonnet 5.5. Check the real
+figures: every call's tokens and cost are recorded per farm per month (`VISION_USAGE::YYYY-MM`) and shown on the Farm
+Vision page.
+
+Before choosing a model for good, compare it on 20–30 saved pictures (good, problem and dark ones), and pick the
+cheapest one whose counts and findings hold up.
+
+### Plan limits
+
+The plan follows the farm's membership:
+- **Free** farms are Free.
+- **Premium** farms are Premium.
+- Farms from before Premium was enforced count as **Standard**.
+- Farms listed in `VISION_PREMIUM_FARMS` (comma-separated farm ids, for example the owner's own `default-farm`) get Premium vision limits.
+
+| Plan | Automatic checks | Cameras | Most often | Automatic checks a day | Manual inspections a month | Monthly vision budget |
+| --- | --- | --- | --- | --- | --- | --- |
+| Free | no | 0 | – | 0 | 0 | $0 |
+| Standard | yes | 1 | every 6 hours | 3 | 30 | $1 |
+| Premium | yes | 8 | every hour | 24 | 300 | $10 |
+
+Change any number without code, for example `VISION_PLAN_LIMITS='{"STANDARD":{"dailyCap":4},"PREMIUM":{"monthlyBudgetUsd":20}}'`.
+
+The limits are enforced on the server in three places:
+- **Saving a schedule:** over the plan is refused in plain words, and the daily cap is lowered to fit.
+- **Every automatic round:** the saved schedule is cut down to the plan, and rounds stop for the month once the farm's
+  vision cost reaches its budget.
+- **Every "Check my flock":** the monthly allowance of manual inspections applies.
+
+The Farm Vision page shows the plan, what it includes, and the month's use.
