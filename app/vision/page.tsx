@@ -25,10 +25,10 @@ type ResearchReport = {
   behavior?: { clips: number; accuracy: number; macroF1: number };
 };
 const score = (ratio: number) => (ratio * 100).toFixed(1) + "%";
-type VisionCamera = { name: string; source: "blink" | "rtsp"; pen?: { id: string; name: string } | null };
+type VisionCamera = { name: string; source: "blink" | "rtsp"; liveSampling?: boolean; pen?: { id: string; name: string } | null };
 type Batch = { id: string; name: string };
 type VisionResult = { summary?: string; confidence?: string; severity?: string; observations?: { title?: string; detail?: string; confidence?: string }[]; concerns?: { title?: string; whyItMatters?: string }[]; checks?: string[]; escalate?: boolean; escalationReason?: string; medicalDisclaimer?: string };
-type Assessment = { source: { kind: "UPLOAD" | "CAMERA"; name?: string }; status: string; pen?: { id: string; name: string } };
+type Assessment = { capture?: { mode: "VIDEO_SAMPLE"; frames: 3 }; source: { kind: "UPLOAD" | "CAMERA"; name?: string }; status: string; pen?: { id: string; name: string } };
 type Comparison = { earlier: { at: string; status: string }; later: { at: string; status: string }; changes: { category: string; before: string; after: string; earlierEvidence: string; laterEvidence: string }[] };
 const describe = (value: string) => value.toLowerCase().replaceAll("_", " ");
 type HistoryRow = { visionAssessment?: Assessment | null; id: string; observedAt: string; imageUrl?: string; notes?: string; category?: string; severity?: string; batchId?: string };
@@ -49,6 +49,7 @@ export default function VisionPage() {
   const [savingAssignment, setSavingAssignment] = useState(false);
   const [assignmentMessage, setAssignmentMessage] = useState("");
   const selectedCamera = cameras.find(camera => camera.name === cameraName);
+  const [captureVideo, setCaptureVideo] = useState(false);
   const [shareCamera, setShareCamera] = useState(false);
   const [result, setResult] = useState<VisionResult | null>(null);
   const [message, setMessage] = useState("");
@@ -85,6 +86,7 @@ export default function VisionPage() {
     if (cameraName) setPenId("");
     setAssignmentMessage("");
     setShareCamera(false);
+    setCaptureVideo(false);
     setResult(null);
     setMessage("");
     if (next) setPreview(URL.createObjectURL(next));
@@ -104,7 +106,7 @@ export default function VisionPage() {
       if (!response.ok) throw new Error(data.error || "Could not save the camera assignment.");
       setCameras(previous => previous.map(camera => camera.name === cameraName ? { ...camera, pen: data.pen } : camera));
       setAssignmentMessage(data.pen ? "Camera assigned to " + data.pen.name + "." : "Camera assignment removed.");
-      if (!data.pen) setPenId("");
+      if (!data.pen) { setPenId(""); setCaptureVideo(false); }
     } catch (error) {
       setAssignmentMessage(error instanceof Error ? error.message : "Could not save the camera assignment.");
     } finally {
@@ -123,6 +125,7 @@ export default function VisionPage() {
     if (cameraName) {
       form.append("camera", cameraName);
       form.append("shareCameraImage", "yes");
+      if (captureVideo) form.append("captureMode", "video-sample");
     } else if (file) form.append("image", file);
     form.append("category", category);
     form.append("batchId", batchId);
@@ -133,7 +136,7 @@ export default function VisionPage() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not analyze photo.");
       setResult(data.analysis);
-      setMessage("Photo analyzed and saved to the farm history.");
+      setMessage(captureVideo ? "Live video sample analyzed and saved to the farm history." : "Photo analyzed and saved to the farm history.");
       await loadHistory();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not analyze photo.");
@@ -178,6 +181,7 @@ export default function VisionPage() {
             setPenId(cameras.find(camera => camera.name === event.target.value)?.pen?.id ?? "");
             setAssignmentMessage("");
             setShareCamera(false);
+            setCaptureVideo(false);
             setResult(null);
             setMessage("");
             if (event.target.value) { setFile(null); setPreview(""); }
@@ -187,8 +191,18 @@ export default function VisionPage() {
               {camera.name} ({camera.source === "blink" ? "Blink" : "Network camera"})
             </option>)}
           </select></label>
+          {selectedCamera?.liveSampling && selectedCamera.pen && <label>Camera inspection type
+            <select value={captureVideo ? "video" : "still"} onChange={event => {
+              setCaptureVideo(event.target.value === "video");
+              setShareCamera(false);
+            }}>
+              <option value="still">Fresh snapshot</option>
+              <option value="video">Short live video sample</option>
+            </select>
+          </label>}
           {cameraName && <label><input type="checkbox" checked={shareCamera} onChange={(event) => setShareCamera(event.target.checked)} />
-            Send one new camera image to the vision provider for this inspection and save it in farm history.
+            {captureVideo ? "Wake this camera if needed and send three ordered video frames for analysis."
+              : "Send one new camera image to the vision provider for this inspection and save it in farm history."}
           </label>}
         </div>}
         {preview && <div className="vision-preview"><img src={preview} alt="Selected poultry inspection" /></div>}
@@ -205,7 +219,7 @@ export default function VisionPage() {
           {selectedCamera.pen && <span>Assigned to {selectedCamera.pen.name}</span>}
           {assignmentMessage && <span role="status">{assignmentMessage}</span>}
         </div>}
-        <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? "Analyzing photo…" : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
+        <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? (captureVideo ? "Capturing and analyzing…" : "Analyzing photo…") : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
       </form>
 
       {result && <section className="section"><div className="section-head"><div><h3>Inspection result</h3><p>Visible findings only. Review the checks before taking action.</p></div><span className={`pill ${String(result.severity || "LOW").toLowerCase()}`}>{result.severity || "LOW"}</span></div>
@@ -241,7 +255,7 @@ export default function VisionPage() {
             return <label key={title}>{title}<select required value={value} onChange={(event) => {
               setter(event.target.value); setComparison(null); setComparisonError("");
             }}><option value="">Choose a camera inspection</option>{comparableHistory.map((item) =>
-              <option key={item.id} value={item.id}>{item.visionAssessment?.source.name} · {new Date(item.observedAt).toLocaleString()}</option>
+              <option key={item.id} value={item.id}>{item.visionAssessment?.source.name}{item.visionAssessment?.capture ? " · Video sample" : " · Still"} · {new Date(item.observedAt).toLocaleString()}</option>
             )}</select></label>;
           })}</div>
           <button className="button button-primary" type="submit" disabled={comparing || !earlier || !later || earlier === later}>Compare inspections</button>
@@ -255,7 +269,7 @@ export default function VisionPage() {
           </li>)}</ul> : <p>No category had visible evidence in both inspections.</p>}
         </div>}
       </section>}
-      <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong>{item.visionAssessment && <span>{item.visionAssessment.pen?.name ? item.visionAssessment.pen.name + " · " : ""}{describe(item.visionAssessment.status)}</span>}<span>{item.notes?.slice(0, 280) || "No notes recorded."}</span></div></article>)}</div>}</section>
+      <section className="section"><div className="section-head"><div><h3>Vision history</h3><p>Compare what Flockence has seen over time.</p></div></div>{history.length === 0 ? <div className="card empty">No Farm Vision inspections recorded.</div> : <div className="vision-history">{history.map(item => <article className="card vision-history-item" key={item.id}>{item.imageUrl && <img src={item.imageUrl} alt="Farm Vision inspection" />}<div><span className="badge">{String(item.category || "VISION").replace("VISION:", "")}</span><strong>{new Date(item.observedAt).toLocaleString()}</strong>{item.visionAssessment && <span>{item.visionAssessment.pen?.name ? item.visionAssessment.pen.name + " · " : ""}{describe(item.visionAssessment.status)}{item.visionAssessment.capture ? " · Video sample (3 frames)" : ""}</span>}<span>{item.notes?.slice(0, 280) || "No notes recorded."}</span></div></article>)}</div>}</section>
     </main>
   </div>;
 }

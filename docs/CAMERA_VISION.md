@@ -64,3 +64,14 @@ rename. Older workers and locally configured network sources use the
 configured camera name. Check and reassign those mappings after a rename or
 replacement. Farm identity comes from the session, and assignment changes
 are recorded in the farm audit log.
+
+
+## Sample live video from an assigned camera
+
+On the VPS, deploy the application and the matching private Blink or network-camera worker together. Set `FLOCKENCE_CAMERA_VISION=on` and `FLOCKENCE_LIVE_CAMERA_VISION=on` in the application environment. Farm Vision also needs its server-side model key and a plan and account that allow image analysis.
+
+1. Open **Cameras** and verify Live View plays for the device. Then select that camera in **Farm Vision** and save its pen assignment.
+2. Select **Short live video sample**, review the image-sharing consent, and run the inspection. The worker starts a stream as needed and samples three ordered frames from distinct segments. If Live View is already running, the worker samples new segments while leaving that stream available.
+3. Verify that Vision history shows the assigned pen and labels the entry as a video sample. Repeat the inspection with the same camera and compare the two results. A comparison requires the same pen, camera and capture mode.
+
+The model receives three JPEG frames. The app retains one private preview and the structured inspection. It does not retain the sampled video. Samples report what is visible and can miss activity between frames. Scheduled video jobs, persistent bird tracks, and validated scores need further implementation and field testing. Keep sampling disabled until a real camera passes the steps above.

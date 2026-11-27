@@ -7,7 +7,7 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { isTrustedAppOrigin } from "@/lib/request-origin";
-import { captureVisionCamera, maxVisionImageBytes, validVisionCameraName, visionCameraRoles, visionCamerasEnabled } from "@/lib/vision-camera";
+import { captureVisionCamera, captureVisionVideoSample, maxVisionImageBytes, validVisionCameraName, visionCameraByName, visionCameraRoles, visionCamerasEnabled, visionLiveEnabled } from "@/lib/vision-camera";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
@@ -16,6 +16,7 @@ import { createVisionAssessment, visionResultSchema } from "@/lib/vision-assessm
 import { safeJson, visionPrompt, VISION_MODEL, visionCategories, type VisionCategory } from "@/lib/vision";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 function isCategory(value: string): value is VisionCategory {
   return (visionCategories as readonly string[]).includes(value);
@@ -76,10 +77,12 @@ export async function POST(request: Request) {
       if (!pen) return NextResponse.json({ error: "Pen not found." }, { status: 404 });
     }
     const cameraName = form.get("camera");
+    const video = form.get("captureMode") === "video-sample";
     if (cameraName !== null) {
       if (!isTrustedAppOrigin(request) || !visionCameraRoles().includes(session.user.role)) {
         return NextResponse.json({ error: "Camera inspections require an authorized farm manager or owner." }, { status: 403 });
       }
+      if (video && !visionLiveEnabled()) return NextResponse.json({ error: "Live video inspections are unavailable." }, { status: 503 });
       if (!visionCamerasEnabled()) return NextResponse.json({ error: "Camera inspections are unavailable." }, { status: 503 });
       if (file !== null || form.get("shareCameraImage") !== "yes" || !validVisionCameraName(cameraName)) {
         return NextResponse.json({ error: "Choose one camera and confirm that its image can be shared for analysis." }, { status: 400 });
@@ -88,7 +91,7 @@ export async function POST(request: Request) {
       if (!cameraLimit.allowed) return NextResponse.json({ error: "Camera inspection limit reached. Try again shortly." }, {
         status: 429, headers: { "Retry-After": String(cameraLimit.retryAfterSeconds) },
       });
-    } else if (!(file instanceof File)) {
+    } else if (video || !(file instanceof File)) {
       return NextResponse.json({ error: "An image is required." }, { status: 400 });
     }
     if (!isCategory(categoryRaw)) return NextResponse.json({ error: "Invalid inspection category." }, { status: 400 });
@@ -110,17 +113,29 @@ export async function POST(request: Request) {
       batchContext = `Batch ${batch.name}; age about ${ageDays} days; initial chicks ${batch.initialChicks}; current live count about ${live}; recorded mortality ${mortality}.`;
     }
 
-    const capture = typeof cameraName === "string" ? await captureVisionCamera(cameraName).catch(() => null) : null;
-    if (capture) {
-      const assigned = await assignedCameraPen(capture.camera);
+    const camera = typeof cameraName === "string" ? await visionCameraByName(cameraName).catch(() => null) : null;
+    if (cameraName !== null && !camera) return NextResponse.json({ error: "The camera could not deliver a usable image." }, { status: 502 });
+    if (camera) {
+      const assigned = await assignedCameraPen(camera);
       if (assigned && pen && assigned.id !== pen.id) {
         return NextResponse.json({ error: "The camera is assigned to a different pen. Update the assignment before inspecting." }, { status: 409 });
       }
+      if (video && !assigned) return NextResponse.json({ error: "Save this camera's pen assignment before sampling live video." }, { status: 409 });
       pen = assigned ?? pen;
     }
+    const liveCapture = camera && video ? await captureVisionVideoSample(camera).catch(() => null) : null;
+    if (video && !liveCapture) {
+      return NextResponse.json({ error: "The camera could not complete a live video sample. Check Live View and the private worker." }, { status: 502 });
+    }
+    if (camera && liveCapture && (await assignedCameraPen(camera))?.id !== pen?.id) {
+      return NextResponse.json({ error: "The camera assignment changed during capture. Try again." }, { status: 409 });
+    }
+    const capture = liveCapture ?? (camera ? await captureVisionCamera(camera).catch(() => null) : null);
     const bytes = capture?.bytes ?? (file instanceof File ? Buffer.from(await file.arrayBuffer()) : null);
     if (!bytes) return NextResponse.json({ error: "The camera could not deliver a usable image." }, { status: 502 });
-    const dataUrl = `data:${mimeType};base64,${bytes.toString("base64")}`;
+    const frames = (liveCapture?.samples ?? [bytes]).map(frame => ({
+      type: "input_image", image_url: `data:${mimeType};base64,${frame.toString("base64")}`,
+    }));
 
     const openaiResponse = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -134,8 +149,8 @@ export async function POST(request: Request) {
         input: [{
           role: "user",
           content: [
-            { type: "input_text", text: visionPrompt(categoryRaw, batchContext + (notes ? ` Farmer note: ${notes}` : "")) },
-            { type: "input_image", image_url: dataUrl },
+            { type: "input_text", text: visionPrompt(categoryRaw, batchContext + (notes ? ` Farmer note: ${notes}` : "") + (liveCapture ? " The three following images are ordered video samples of this camera. Describe only visible changes across the frames. Do not infer individual identities, continuous behavior, or an exact flock count." : "")) },
+            ...frames,
           ],
         }],
       }),
@@ -170,6 +185,7 @@ export async function POST(request: Request) {
     const concerns = Array.isArray(parsed.concerns) ? parsed.concerns : [];
     const checks = Array.isArray(parsed.checks) ? parsed.checks : [];
     const noteBody = [
+      liveCapture ? "Evidence: three ordered live video frames. Preview shows the first frame." : "",
       capture ? `Camera: ${capture.camera.name} (${capture.camera.source})` : "",
       parsed.summary ? `Summary: ${parsed.summary}` : "",
       `Confidence: ${parsed.confidence || "UNKNOWN"}`,
@@ -195,6 +211,7 @@ export async function POST(request: Request) {
       const visionAssessment = createVisionAssessment(parsed, {
         model: VISION_MODEL, inspectionCategory: categoryRaw, evidenceId: media.id,
         ...(pen ? { pen } : {}),
+        ...(liveCapture ? { capture: { mode: "VIDEO_SAMPLE", frames: 3 } as const } : {}),
         source: capture ? { kind: "CAMERA", name: capture.camera.name, provider: capture.camera.source } : { kind: "UPLOAD" },
       });
       const observation = await tx.healthObservation.create({

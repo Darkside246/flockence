@@ -35,6 +35,7 @@ from clip_archive import ClipArchive, configured_archive
 from immi import extract_transport_stream_packets, patch_liveview_auth_header
 from settings import DATA_DIR, FFMPEG, LIVE_DIR, MIN_TOKEN_LENGTH, TOKEN, client_allowed, credentials_encrypted, open_credentials, require_token, seal_credentials, slug as _slug
 from transport import DEFAULT_IMPERSONATE, CurlCffiAiohttpAdapter
+from video_sample import sample_live_playlist
 
 log = logging.getLogger("flockence.blink")
 
@@ -54,6 +55,7 @@ class State:
 state = State()
 archive_storage = ClipArchive(DATA_DIR / "archives", set())
 reading_lock = asyncio.Lock()
+live_operation_lock = asyncio.Lock()
 last_temperature_sample = None
 
 
@@ -657,6 +659,11 @@ async def _reaper(name: str, live: Live, max_seconds: int):
 
 @app.post("/cameras/{name}/live/start")
 async def live_start(name: str):
+    async with live_operation_lock:
+        return await _live_start(name)
+
+
+async def _live_start(name: str):
     if not FFMPEG:
         raise HTTPException(501, "ffmpeg not found; set FFMPEG_PATH")
     is_rtsp = rtsp.has(name)
@@ -696,7 +703,7 @@ async def live_start(name: str):
                     "-hls_flags", "delete_segments+omit_endlist+independent_segments", str(out / "index.m3u8"),
                     stdout=asyncio.subprocess.DEVNULL, stderr=ffmpeg_log,
                 )
-    except Exception:
+    except (Exception, asyncio.CancelledError):
         if feed_task and not feed_task.done():
             feed_task.cancel()
         if feed_task:
@@ -746,8 +753,36 @@ async def live_start(name: str):
 
 @app.post("/cameras/{name}/live/stop")
 async def live_stop(name: str):
-    await _stop_live(name)
+    async with live_operation_lock:
+        await _stop_live(name)
     return {"live": False}
+
+
+@app.post("/cameras/{name}/inspection-sample")
+async def inspection_sample(name: str):
+    if live_operation_lock.locked():
+        raise HTTPException(409, "Another camera operation is in progress.")
+    async with live_operation_lock:
+        if not rtsp.has(name):
+            _camera(name)
+        playlist = LIVE_DIR / _slug(name) / "index.m3u8"
+        existing = state.lives.get(name)
+        if existing and (existing.proc.returncode is not None or not playlist.is_file()):
+            raise HTTPException(409, "The current camera stream is not ready for sampling.")
+        try:
+            async with asyncio.timeout(54):
+                if existing is None:
+                    await _live_start(name)
+                captured = datetime.now(timezone.utc)
+                frames = await sample_live_playlist(playlist, FFMPEG, reuse_existing=existing is not None)
+            if len(frames) != 3:
+                raise HTTPException(502, "The live stream did not produce three usable frames.")
+            return {"capturedAt": captured.isoformat(), "frames": frames}
+        except TimeoutError:
+            raise HTTPException(504, "The live camera sample timed out.")
+        finally:
+            if existing is None and name in state.lives:
+                await _stop_live(name)
 
 
 @app.get("/live/{slug}/{filename}")
