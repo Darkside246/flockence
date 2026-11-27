@@ -123,6 +123,37 @@ The last operator-confirmed application release is `33322ad`. Establish the runn
 
 [Earlier GitHub CI evidence](https://github.com/Darkside246/flockence/actions/runs/45926287374) applies to the revision shown on that run. Check CI for the revision being deployed.
 
+## Owner request: automatic camera vision (November 27, 2026)
+
+The owner wants Farm Vision (https://flockence.com/vision) to work from the farm cameras automatically, not only when
+someone presses "Check my flock". This is the next feature to build. It extends checklist item 4 below.
+
+**Requested:**
+1. **Pull from the cameras.** Use the connected Blink and network cameras as inspection sources. Today this works
+   one inspection at a time, by hand.
+2. **Save the pictures.** Keep every captured image on the server, in private farm storage
+   (`/var/lib/flockence/vision` on the VPS). Link each image to the camera and the pen that camera is assigned to.
+   Blink clips are archived separately by the camera worker (`BLINK_ARCHIVE_CAMERAS`).
+3. **Run on a timer.** On a schedule, wake each chosen camera, take a short live video sample (three ordered frames,
+   as the manual "Short live video sample" does), and run the vision analysis. No one needs to be signed in.
+4. **Automatic notes.** Record each result as a dated observation for that pen. Raise anything flagged for attention
+   on the dashboard and in the farm's alerts.
+
+**Design notes for the build:**
+- **Per-farm switch and schedule.** Owners and managers turn it on per camera. The interval is chosen from a list
+  (for example every 1, 2, 4 or 6 hours). Quiet hours, such as night, are skipped unless chosen.
+- **Budget limits.** Each run costs an OpenAI request and wakes a Blink camera, which drains Blink batteries and
+  counts against Blink's limits. Set a daily cap per camera and per farm, and show the expected cost per day.
+- **One run at a time per camera.** If a run is still going or Live View is open, skip it; don't queue behind it.
+  Retry a bounded number of times, then mark the camera "needs attention".
+- **Where the timer runs.** Use a systemd timer on the VPS that calls a signed internal route, like
+  `flockence-devices.timer`. It reuses the existing live-sample code (`captureVisionVideoSample`,
+  `services/blink/video_sample.py`) and the assignment, pen and farm checks in `app/api/vision/route.ts`.
+- **Keeping pictures.** Set a retention period (for example 30 days) and a storage cap, and show both in Settings.
+- **Turning it off.** One switch stops the schedule. Stopping keeps past results.
+- **Recordings.** Running vision on already-recorded clips (Cameras → Recordings) is a separate option. Sample frames
+  from a chosen clip the same way the live sample does.
+
 ## Review checklist for Claude
 
 Work from GitHub `main` and use the Spaceship VPS for staging. Audit the existing implementation before widening its scope. Record the revision reviewed, test evidence, defects, and remaining work in this document.
