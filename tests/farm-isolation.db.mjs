@@ -624,3 +624,29 @@ test("retry-safe uploads: a retry finds its own farm's saved inspection, and a r
   assert.equal(runs, 1, "the retry waited for the first attempt instead of analysing again");
   assert.deepEqual(first, second);
 });
+
+test("background checks: status is running, then done for its own farm; a failed attempt can be tried again", async () => {
+  const { runOnce, uploadStatus, earlierReply } = await import("../lib/vision-upload-requests.ts");
+  const id = `bg-${Date.now()}-abcdef123456`;
+  assert.deepEqual(await runAsFarm(A, () => uploadStatus(id)), { state: "UNKNOWN" });
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const job = runAsFarm(A, () => runOnce(id, async () => { await gate; return { status: 201, body: { analysis: { summary: "ok" } } }; }));
+  assert.deepEqual(await runAsFarm(A, () => uploadStatus(id)), { state: "RUNNING" });
+  assert.deepEqual(await runAsFarm(B, () => uploadStatus(id)), { state: "UNKNOWN" }, "farm B cannot see farm A's check");
+  release();
+  await job;
+  const done = await runAsFarm(A, () => uploadStatus(id));
+  assert.equal(done.state, "DONE");
+  assert.equal(done.reply.status, 201);
+  assert.equal((await runAsFarm(A, () => earlierReply(id))).body.repeated, true);
+
+  const failing = `${id}-fail`;
+  await runAsFarm(A, () => runOnce(failing, async () => { throw new Error("model down"); }));
+  const failed = await runAsFarm(A, () => uploadStatus(failing));
+  assert.equal(failed.reply.status, 500, "a crash becomes an error reply, not a lost check");
+  assert.equal(await runAsFarm(A, () => earlierReply(failing)), null, "an error is not final: the same id may be tried again");
+  let runs = 0;
+  await runAsFarm(A, () => runOnce(failing, async () => { runs += 1; return { status: 201, body: {} }; }));
+  assert.equal(runs, 1);
+});

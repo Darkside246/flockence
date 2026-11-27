@@ -185,3 +185,18 @@ The limits are enforced on the server in three places:
 - **Every "Check my flock":** the monthly allowance of manual inspections applies.
 
 The Farm Vision page shows the plan, what it includes, and the month's use.
+
+## Photos from phones (2026-11-27)
+
+- **Smaller uploads.** The phone shrinks a photo to 2576 px on the long side (the most current Claude vision models
+  see) as a quality-0.9 JPEG before sending (`lib/photo-shrink.ts`, `lib/photo-size.mjs`).
+- **Answer at once, check in the background.** The page sends `Prefer: respond-async` and an `Idempotency-Key`. The
+  server reads the photo, answers 202 straight away and runs the check; the phone asks
+  `GET /api/vision/status?id=…` every few seconds. Leaving the page is fine: the result is saved to the history.
+- **Never twice.** A retry with the same id shares the running check or gets the saved one, so a photo is analysed,
+  saved and charged once (`lib/vision-upload-requests.ts`). Finished replies are kept in the service for an hour. If
+  the service restarts mid-check, the status is "unknown" and the phone sends the photo again; nothing was saved.
+- **No signal.** A photo (not a live camera check) taken with no signal is kept on the phone in IndexedDB
+  (`flockence-vision-queue`, per user and farm, dropped after 7 days) and sent with the same id when the phone is back
+  online or the Farm Vision page is opened. Shown as "N photos saved on this phone" with a Send now button.
+- The queue is sent while the Flockence app is open; sending with the app closed (background sync) is not built yet.
