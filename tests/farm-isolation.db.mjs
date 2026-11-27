@@ -775,3 +775,35 @@ test("pen layout: the pen's records, its flock's live birds and weight, and what
   assert.ok(a.recommendations.some((r) => /bunched around the heat/.test(r.text)));
   assert.equal(await runAsFarm(B, () => penLayout(penRow.id)), null, "farm B cannot read farm A's pen");
 });
+
+test("vision context: feed, weight, health, pen and findings from the farm's records, ordered for the check, own farm only", async () => {
+  const { inspectionContext } = await import("../lib/vision-context.ts");
+  const stamp = Date.now();
+  const penName = `Context Pen ${stamp}`;
+  const penRow = await runAsFarm(A, () => prisma.setting.create({ data: { key: `PENCFG::u::ctx-${stamp}`, value: JSON.stringify({ name: penName, lengthM: 10, widthM: 12, feederPans: 8, nipples: 80, heatSources: 2, active: true }) } }));
+  const placed = new Date(Date.now() - 24 * 86_400_000);
+  const batch = await runAsFarm(A, () => prisma.batch.create({ data: { name: "Context flock", startDate: placed, initialChicks: 850, chickCostMinor: 0, status: "ACTIVE", placementHouse: penName } }));
+  await runAsFarm(A, () => prisma.birdCount.create({ data: { batchId: batch.id, date: placed, liveCount: 850, note: "Initial count" } }));
+  await runAsFarm(A, () => prisma.mortalityEvent.create({ data: { batchId: batch.id, date: new Date(Date.now() - 3_600_000), quantity: 8 } }));
+  await runAsFarm(A, () => prisma.feedUsage.create({ data: { batchId: batch.id, date: new Date(Date.now() - 2 * 3_600_000), feedType: "Grower", quantityKg: 80, costMinor: 0 } }));
+  await runAsFarm(A, () => prisma.weightRecord.create({ data: { batchId: batch.id, date: new Date(), scope: "SAMPLE", quantity: 20, avgWeightKg: 1.2, liveOrDressed: "LIVE" } }));
+  await runAsFarm(A, () => prisma.healthCase.create({ data: { batchId: batch.id, caseNumber: `HC-${stamp}`, title: "Coughing in pen 1", severity: "MODERATE" } }));
+  await runAsFarm(A, () => prisma.visionFinding.create({ data: { kind: "LITTER", title: "Wet litter", severity: "HIGH", state: "OBSERVED", incidentKey: `ctx-${stamp}`, penId: penRow.id, penName, firstSeenAt: new Date(), lastSeenAt: new Date(), history: [] } }));
+
+  const c = await runAsFarm(A, () => inspectionContext({ batchId: null, pen: { id: penRow.id, name: penName }, category: "FEED" }));
+  assert.equal(c.batchId, batch.id, "the flock housed in the pen is picked");
+  assert.equal(c.expectedLive, 842);
+  assert.equal(c.sections[0].key, "FEED", "a feed check leads with feed");
+  const get = (k) => c.sections.find((s) => s.key === k)?.lines.join(" | ") ?? "";
+  assert.match(get("FEED"), /80 kg in the last 24 hours \(about 95 g per bird\)/);
+  assert.match(get("WEIGHT"), /1\.2 kg average live weight/);
+  assert.match(get("MORTALITY"), /^8 in the last 24 hours, 8 in the last 7 days/);
+  assert.match(get("HEALTH"), /open case: Coughing in pen 1 \(moderate/);
+  assert.match(get("PEN"), /10 × 12 m \(120 m²\).*about 8\.4 kg\/m² stocking.*8 feeder pans, 80 nipples, 2 heaters/);
+  assert.match(get("FINDINGS"), /Wet litter/);
+  assert.match(c.text, /^Feed: 80 kg/);
+
+  const b = await runAsFarm(B, () => inspectionContext({ batchId: batch.id, pen: { id: penRow.id, name: penName }, category: "PEN" }));
+  assert.equal(b.expectedLive, null, "farm B cannot read farm A's flock");
+  assert.ok(!b.text.includes("Wet litter") && !b.text.includes("120 m²"), "nor its pen or findings");
+});

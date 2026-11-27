@@ -90,7 +90,7 @@ export async function runVisionInspection(request: InspectionRequest): Promise<I
     if (video && !liveCapture) return { ok: false, status: 502, error: "The camera could not complete a live video sample. Check Live View and the private worker." };
     if (camera && liveCapture && (await assignedCameraPen(camera))?.id !== pen?.id) return { ok: false, status: 409, error: "The camera assignment changed during capture. Try again." };
     const capture = liveCapture ?? (camera ? await captureVisionCamera(camera).catch(() => null) : null);
-    const context = await inspectionContext({ batchId: request.batchId, pen });
+    const context = await inspectionContext({ batchId: request.batchId, pen, category });
     const batchId = context.batchId;
     const batchContext = context.text;
     const bytes = capture?.bytes ?? upload?.bytes ?? null;

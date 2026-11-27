@@ -252,3 +252,19 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
   treated as a layout problem (it must repeat). Vision never measures the pen from pictures and never changes the
   records; the size comes from the Pens page or farm setup.
 - Code: `lib/pen-layout-rules.mjs`, `lib/pen-layout.ts`, `app/api/vision/layout`, `components/pen-layout.tsx`.
+
+## What Vision knows about the farm (2026-11-27)
+
+- Every check is sent the farm's own records, in sections, with the ones that matter most for the kind of check first
+  (a feed check leads with feed, a dead-bird check with deaths and health): flock (type, breed, age, placed and live),
+  deaths (24 hours and 7 days, and the week's percentage), feed put out (and grams per bird), water (and litres per kg
+  of feed), the latest live weight, house conditions (daily check and sensors), open health cases and treatments in
+  withdrawal, eggs for layers (laying %, floor and cracked eggs), the pen (size, stocking kg/m², recorded equipment)
+  and open Vision findings for the pen. Only recorded facts; missing ones are left out.
+- The Farm Vision page shows them under the form as **What Vision already knows**, refreshed as the type, batch or pen
+  changes. The note box is now "Anything the records do not show?".
+- Oriya's Operator Mode pen report (`/api/integrations/oriya/pen-report`) keeps its data fields and adds `formatted`:
+  a title, a status line, sections (latest check, open findings, the farm records above, earlier checks) and ready-made
+  Markdown with bold headings and bullet points. The pen list has a `formatted` version too.
+- Code: `lib/vision-context.ts`, `lib/vision-context-rules.mjs`, `lib/oriya-pen-report-format.mjs`,
+  `app/api/vision/context`, `components/vision-known.tsx`.

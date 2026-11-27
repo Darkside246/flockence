@@ -10,6 +10,8 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { visionAssessmentSchema } from "@/lib/vision-assessment";
 import { visionPens } from "@/lib/vision-pens";
+import { inspectionContext } from "@/lib/vision-context";
+import { penReportFormatted, pensFormatted } from "@/lib/oriya-pen-report-format.mjs";
 
 export const runtime = "nodejs";
 
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
     if (!(await claimOriyaRequestId(ask.requestId))) return respond({ error: "ALREADY_RECEIVED" }, 409);
 
     const pens = await visionPens();
-    if (!ask.pen) return respond({ version: 1, kind: "PENS", pens: pens.slice(0, 40), more: pens.length > 40 });
+    if (!ask.pen) return respond({ version: 1, kind: "PENS", pens: pens.slice(0, 40), more: pens.length > 40, formatted: pensFormatted(pens.slice(0, 40), pens.length > 40) });
     const target = ask.pen.toLowerCase();
     const candidates = pens.filter((pen) => pen.id === ask.pen || pen.name.toLowerCase() === target);
     if (!candidates.length) return respond({ error: "PEN_NOT_FOUND" }, 404);
@@ -81,6 +83,18 @@ export async function POST(request: Request) {
       feedKg: numberOrNull(latest.feedKg), waterLiters: numberOrNull(latest.waterLiters),
       temperatureC: numberOrNull(latest.temperatureC), humidityPercent: numberOrNull(latest.humidityPercent),
     } : null;
-    return respond({ version: 1, kind: "PEN", pen, inspections, farmContext });
+    // The same farm facts Vision uses, and the open findings, laid out for Operator Mode (bold headings, lists).
+    const [context, open] = await Promise.all([
+      inspectionContext({ batchId: null, pen, category: "PEN" }).catch(() => null),
+      prisma.visionFinding.findMany({
+        where: { penId: pen.id, state: { in: ["OBSERVED", "SUSPECTED", "REQUIRES_INSPECTION", "INCONCLUSIVE", "CONFIRMED"] } },
+        orderBy: [{ lastSeenAt: "desc" }], take: 5, select: { title: true, severity: true, state: true, occurrences: true, lastSeenAt: true },
+      }).catch(() => []),
+    ]);
+    const formatted = penReportFormatted({
+      pen: pen.name, inspections, findings: open.map((f) => ({ ...f, lastSeenAt: f.lastSeenAt.toISOString() })),
+      sections: context?.sections ?? [], now: new Date().toISOString(),
+    });
+    return respond({ version: 1, kind: "PEN", pen, inspections, farmContext, formatted });
   });
 }
