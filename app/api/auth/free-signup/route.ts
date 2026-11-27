@@ -40,9 +40,9 @@ export async function POST(request: Request) {
         return reply("Too many requests. Please try again later.", 429);
       }
       const hostname = new URL(signupUrl("")).hostname;
-      const captcha = await verifySignupCaptcha(data.captchaToken, hostname);
+      const captcha = await verifySignupCaptcha(data.captchaToken, hostname, "free_signup");
       if (captcha === "unavailable") return reply("Signup security check is temporarily unavailable.", 503);
-      if (captcha === "rejected") return reply("Complete the security check and try again.", 400);
+      if (captcha === "rejected") return reply("Could not verify the security check. Please try again.", 400);
       if (!(await checkRateLimit("free-signup-email:" + email, 3, 3600000)).allowed) {
         return reply("Too many requests. Please try again later.", 429);
       }

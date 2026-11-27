@@ -2,7 +2,7 @@ import { isIP } from "node:net";
 import { NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { isTrustedAppOrigin } from "@/lib/request-origin";
-import { accountCaptchaSiteKey, verifySignupCaptcha } from "@/lib/signup-captcha";
+import { accountCaptchaSiteKey, verifySignupCaptcha, type CaptchaAction } from "@/lib/signup-captcha";
 
 export function accountClientIp(request: Request) {
   const ip = request.headers.get("x-real-ip")?.trim() ?? "";
@@ -23,7 +23,7 @@ export function accountFormOriginResponse(request: Request) {
   return null;
 }
 
-export async function accountCaptchaResponse(token: unknown) {
+export async function accountCaptchaResponse(token: unknown, action: CaptchaAction) {
   if (accountCaptchaSiteKey() === null) return null;
   let hostname: string;
   try {
@@ -31,9 +31,9 @@ export async function accountCaptchaResponse(token: unknown) {
   } catch {
     return refuse("Account security check is temporarily unavailable.", 503);
   }
-  const status = await verifySignupCaptcha(token, hostname);
+  const status = await verifySignupCaptcha(token, hostname, action);
   if (status === "unavailable") return refuse("Account security check is temporarily unavailable.", 503);
-  if (status === "rejected") return refuse("Complete the security check and try again.", 400);
+  if (status === "rejected") return refuse("Could not verify the security check. Please try again.", 400);
   return null;
 }
 

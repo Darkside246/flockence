@@ -45,7 +45,7 @@ async function signup(request: Request) {
     const ipResponse = await accountRateLimitResponse("signup:ip:" + ip, 10, 60 * 60_000, message);
     if (ipResponse) return ipResponse;
 
-    const captchaResponse = await accountCaptchaResponse(body.captchaToken);
+    const captchaResponse = await accountCaptchaResponse(body.captchaToken, "signup");
     if (captchaResponse) return captchaResponse;
 
     const emailResponse = await accountRateLimitResponse("signup:email:" + email, 5, 60 * 60_000, message);

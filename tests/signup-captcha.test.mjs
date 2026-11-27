@@ -36,3 +36,23 @@ test("signup requires a server-verified reCAPTCHA token from the signup domain",
     else process.env.RECAPTCHA_SECRET_KEY = previousSecret;
   }
 });
+
+test("v3 requires a matching form action and risk score in addition to the hostname", async (t) => {
+  for (const [key, value] of Object.entries({
+    RECAPTCHA_MODE: "v3", RECAPTCHA_SITE_KEY: "test-site", RECAPTCHA_SECRET_KEY: "test-secret",
+  })) {
+    const prior = process.env[key];
+    process.env[key] = value;
+    t.after(() => { if (prior === undefined) delete process.env[key]; else process.env[key] = prior; });
+  }
+  const result = { success: true, hostname: "flockence.com", action: "signup", score: 0.5 };
+  const provider = t.mock.method(globalThis, "fetch", async () => Response.json(result));
+  assert.equal(await verifySignupCaptcha("test-token", "flockence.com", "signup"), "verified");
+  assert.equal(await verifySignupCaptcha("test-token", "flockence.com", "login"), "rejected");
+  assert.equal(await verifySignupCaptcha("test-token", "other.example", "signup"), "rejected");
+  assert.equal(await verifySignupCaptcha("test-token", "flockence.com"), "rejected");
+  for (const score of [undefined, "0.9", 0.49, 1.1]) {
+    provider.mock.mockImplementation(async () => Response.json({ ...result, score }));
+    assert.equal(await verifySignupCaptcha("test-token", "flockence.com", "signup"), "rejected");
+  }
+});

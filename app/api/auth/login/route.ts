@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     const ipResponse = await accountRateLimitResponse("login:ip:" + ip, 40, 15 * 60_000, message);
     if (ipResponse) return ipResponse;
 
-    const captchaResponse = await accountCaptchaResponse(body.captchaToken);
+    const captchaResponse = await accountCaptchaResponse(body.captchaToken, "login");
     if (captchaResponse) return captchaResponse;
 
     const emailResponse = await accountRateLimitResponse("login:email:" + email, 8, 15 * 60_000, message);

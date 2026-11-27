@@ -16,3 +16,21 @@ No schema migration is needed. Account creation, proof consumption, and the new 
 The same two reCAPTCHA keys enable the server-verified challenge on password sign-in, invitation or owner setup, password-reset requests, and public Free signup. Set `FLOCKENCE_AUTH_CAPTCHA="on"` on the hosted instance to require the keys even if the environment is accidentally incomplete. Verify the production hostname and keys in staging before enabling that setting. It applies to all local account roles and plans.
 
 The email link itself proves inbox control for Free signup. Reset completion uses a single-use recovery token, same-origin JSON requests, rate limits and no-referrer headers. The reset page does not load a third-party CAPTCHA script. Oriya sign-in continues through its existing provider. Farm operations, device endpoints, and offline sync keep their existing access controls. Invitation creation and role changes require authorized users, same-origin JSON and farm-scoped limits.
+
+## Switch to reCAPTCHA v3
+
+Use a [reCAPTCHA v3 key pair](https://developers.google.com/recaptcha/docs/v3)
+registered to the exact public hostname. On a release that includes v3,
+set `RECAPTCHA_MODE="v3"` and replace both `RECAPTCHA_SITE_KEY` and
+`RECAPTCHA_SECRET_KEY` together. Preserve the working v2 pair privately
+until the rollout passes. The application generates a fresh token for
+each submit and checks the hostname, action and a minimum score of 0.5
+on the server. The v3 mode displays no checkbox. Password sign-in,
+invited and owner signup, reset requests, and Free signup each have a
+separate action.
+
+Test login in a second browser session and verify the reset email before
+opening public signup. If legitimate submissions are rejected, check the
+Google console and restore the matched v2 pair with `RECAPTCHA_MODE="v2"`
+while reviewing the scores. A change to the service environment requires
+a restart. The signed-in account and offline workflows do not load reCAPTCHA.
