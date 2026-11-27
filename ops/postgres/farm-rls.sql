@@ -31,6 +31,8 @@ BEGIN
       ('FeedPurchase', 'farmId', NULL),
       ('HealthCase', 'farmId', NULL),
       ('HealthCaseEvent', 'farmId', NULL),
+      ('VisionFinding', 'farmId', NULL),
+      ('CameraPenLink', 'farmId', NULL),
       ('BirdMovement', 'farmId', NULL),
       ('WaterReading', 'farmId', NULL),
       ('FeedProduct', 'farmId', NULL),

@@ -528,3 +528,43 @@ test("vision answers: still birds, what was not in view, the count and questions
   const prompt = visionPrompt("PEN", "Flock A, about 12 days old.");
   for (const part of ["1. Birds.", "2. Feed.", "3. Water.", "5. Heat and cold.", "stillBirds", "notVisible"]) assert.ok(prompt.includes(part), part);
 });
+
+test("vision findings: grouped into incidents, reviewed by a person, kept to their farm, and shown in the pen history", async () => {
+  const { recordFindings, listFindings, reviewVisionFinding, penTimeline } = await import("../lib/vision-findings.ts");
+  const pen = await runAsFarm(A, () => prisma.setting.create({ data: { key: `PEN::u::finding-pen-${Date.now()}`, value: JSON.stringify({ name: "Finding Pen" }) } }));
+  const penRef = { id: pen.id, name: "Finding Pen" };
+  const t0 = new Date(Date.now() - 3_600_000), t1 = new Date(Date.now() - 1_800_000);
+  const obs = await runAsFarm(A, () => prisma.healthObservation.create({ data: {
+    observedAt: t0, symptom: "Farm Vision inspection", category: "VISION:PEN", affectedCount: 0, notes: "Summary: Damp patch near the drinker.",
+    visionAssessment: { pen: penRef },
+  } }));
+  const analysis = { confidence: "MEDIUM", signals: [{ category: "LITTER", state: "ATTENTION", evidence: "damp patch near the drinker" }], stillBirds: [{ where: "by the wall", confidence: "LOW" }] };
+  await runAsFarm(A, () => recordFindings({ analysis, expectedLive: 116, at: t0, pen: penRef, batchId: null, cameraName: "Cam 1", observationId: obs.id, evidenceUrl: null }));
+  // The same problems seen again 30 minutes later, worse litter: still two incidents, seen twice, worst severity kept.
+  await runAsFarm(A, () => recordFindings({ analysis: { ...analysis, signals: [{ category: "LITTER", state: "WARNING", evidence: "wet area spreading" }] }, expectedLive: 116, at: t1, pen: penRef, batchId: null, cameraName: "Cam 1", observationId: obs.id, evidenceUrl: null }));
+  const open = await runAsFarm(A, () => listFindings({ open: true, penId: pen.id }));
+  assert.equal(open.length, 2);
+  const litter = open.find((f) => f.kind === "LITTER");
+  assert.equal(litter.occurrences, 2);
+  assert.equal(litter.severity, "HIGH");
+  assert.equal(litter.detail, "wet area spreading");
+  assert.equal((await runAsFarm(B, () => listFindings({ open: true }))).length, 0, "farm B sees none of farm A's findings");
+  assert.equal((await runAsFarm(B, () => reviewVisionFinding(litter.id, { state: "RESOLVED" }, { id: "x", name: "B" }))).status, 404, "farm B cannot review farm A's finding");
+
+  const owner = await runAsFarm(A, () => prisma.user.create({ data: { name: "Finding owner", email: `finding-${Date.now()}@a.test`, role: "OWNER" } }));
+  const reviewed = await runAsFarm(A, () => reviewVisionFinding(litter.id, { state: "RESOLVED", note: "fixed the leaking nipple" }, { id: owner.id, name: "Finding owner" }));
+  assert.equal(reviewed.ok, true);
+  assert.equal(reviewed.finding.state, "RESOLVED");
+  assert.equal(reviewed.finding.title, litter.title, "the original wording is kept");
+  assert.equal(reviewed.finding.history.length, 2);
+  assert.equal((await runAsFarm(A, () => listFindings({ open: true, penId: pen.id }))).length, 1);
+  // Seen again after it was fixed: a new incident, not the closed one reopened.
+  await runAsFarm(A, () => recordFindings({ analysis: { signals: [{ category: "LITTER", state: "ATTENTION", evidence: "damp again" }] }, expectedLive: null, at: new Date(), pen: penRef, batchId: null, cameraName: "Cam 1", observationId: obs.id, evidenceUrl: null }));
+  assert.equal((await runAsFarm(A, () => listFindings({ penId: pen.id }))).filter((f) => f.kind === "LITTER").length, 2);
+
+  const timeline = await runAsFarm(A, () => penTimeline(pen.id, new Date(Date.now() - 86_400_000), new Date()));
+  assert.ok(timeline.some((e) => e.kind === "inspection" && e.text === "Damp patch near the drinker."));
+  assert.ok(timeline.some((e) => e.kind === "review" && /Finding owner marked .* as resolved: fixed the leaking nipple/.test(e.text)));
+  assert.ok(timeline.every((e, i) => i === 0 || timeline[i - 1].at <= e.at), "in date order");
+  assert.equal(await runAsFarm(A, () => prisma.mortalityEvent.count()), await runAsFarm(A, () => prisma.mortalityEvent.count()), "no mortality written");
+});

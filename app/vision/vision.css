@@ -30,3 +30,21 @@
 .vision-report h4 { margin: 0; font-size: 13px; color: var(--text-heading, var(--text-primary)); }
 .vision-report p, .vision-report li { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; }
 .vision-report ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+
+/* Vision findings (Vision Intelligence phase 1) */
+.finding-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+.finding { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border-default); border-left-width: 4px; background: var(--bg-surface); display: grid; gap: 6px; }
+.finding-critical { border-left-color: var(--status-danger); }
+.finding-high { border-left-color: var(--status-warning); }
+.finding-medium { border-left-color: var(--status-info, var(--accent-primary)); }
+.finding-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.finding-severity, .finding-state { font-size: 11px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border-default); color: var(--text-secondary); }
+.finding-critical .finding-severity { color: var(--status-danger); border-color: var(--status-danger); }
+.finding-high .finding-severity { color: var(--status-warning); border-color: var(--status-warning); }
+.finding-state { margin-left: auto; }
+.finding-where, .finding-detail { margin: 0; font-size: 13px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.finding-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.finding-actions .button { min-height: 36px; padding: 6px 12px; font-size: 12px; }
+.pen-timeline { margin-top: 18px; display: grid; gap: 10px; }
+.pen-timeline h4 { margin: 0; }
+.pen-timeline-controls { display: flex; flex-wrap: wrap; gap: 10px; }

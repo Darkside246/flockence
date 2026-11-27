@@ -101,7 +101,7 @@ export function runUnscoped<T>(work: () => T | Promise<T>): Promise<T> {
 /** Tables that carry farmId themselves. */
 export const FARM_MODELS = new Set([
   "AuditLog", "Batch", "BeddingPurchase", "BiosecurityLog", "Customer", "DailyFlockCheck", "DiagnosticTest", "EggCollection",
-  "EggPackRun", "Equipment", "Expense", "FarmTask", "FeedPurchase", "HealthCase", "HealthCaseEvent", "BirdMovement", "WaterReading", "FeedProduct", "FeedProductSupplier", "FeedMeasure", "HealthObservation", "InventoryMovement",
+  "EggPackRun", "Equipment", "Expense", "FarmTask", "FeedPurchase", "HealthCase", "HealthCaseEvent", "VisionFinding", "CameraPenLink", "BirdMovement", "WaterReading", "FeedProduct", "FeedProductSupplier", "FeedMeasure", "HealthObservation", "InventoryMovement",
   "LayerStageEvent", "ManureRecord", "Product", "ProductionPlan", "RecurringExpense", "Sale", "Setting", "StorageLocation",
   "StorageTemperatureLog", "Supplier", "ThermometerReading", "TransportEvent", "TransportationExpense", "Treatment", "User",
   "VisionMedia", "WeatherSnapshot",

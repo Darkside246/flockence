@@ -99,6 +99,15 @@ export async function farmBriefing(tx: Tx, farmId: string, today: Date, operatio
   const lastFeed = await tx.feedPurchase.findFirst({ where: { farmId }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], include: { supplier: { select: { name: true } } } });
   if (lastFeed) items.push({ id: "last-feed", tone: "info", text: `Last feed bought: ${Number(lastFeed.quantityBags)} × ${Number(lastFeed.bagSizeKg)} kg ${lastFeed.feedType} on ${key(lastFeed.date)}${lastFeed.supplier ? ` from ${lastFeed.supplier.name}` : ""}.` });
 
+  // Vision findings waiting for a person: urgent and high ones, grouped in one line.
+  const pending = await tx.visionFinding.findMany({ where: { farmId, state: { in: ["OBSERVED", "SUSPECTED", "REQUIRES_INSPECTION", "INCONCLUSIVE"] }, severity: { in: ["CRITICAL", "HIGH"] } }, orderBy: { lastSeenAt: "desc" }, take: 5, select: { title: true, severity: true, penName: true } });
+  if (pending.length) items.push({
+    id: "vision-findings", tone: pending.some(p => p.severity === "CRITICAL") ? "urgent" : "attention",
+    text: `Vision found ${pending.length === 5 ? "5 or more things" : pending.length === 1 ? "something" : `${pending.length} things`} to check: ${pending.slice(0, 3).map(p => p.title + (p.penName ? ` (${p.penName})` : "")).join("; ")}.`,
+    action: { label: "Check them", href: "/vision" },
+    basis: "From camera and photo inspections. A person confirms each one; Vision never changes the bird count.",
+  });
+
   // Automatic camera checks (Farm Vision): each camera's latest result in a sentence, problems first.
   const visionRows = await tx.setting.findMany({ where: { farmId, key: { in: [SCHEDULE_KEY, STATE_KEY] } }, select: { key: true, value: true } });
   const schedule = readSchedule(visionRows.find(r => r.key === SCHEDULE_KEY)?.value);

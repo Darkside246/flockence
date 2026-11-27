@@ -41,6 +41,9 @@ export async function saveCameraPen(camera: VisionCamera, penId: string | null, 
     else await tx.setting.upsert({
       where: { farmId_key: { farmId, key } }, create: { farmId, key, value: penId }, update: { value: penId },
     });
+    const now = new Date();
+    await tx.cameraPenLink.updateMany({ where: { farmId, cameraName: camera.name, toAt: null }, data: { toAt: now } });
+    if (penId !== null) await tx.cameraPenLink.create({ data: { farmId, cameraName: camera.name, penId, fromAt: now } });
     await tx.auditLog.create({ data: {
       farmId, userId, action: "VISION_CAMERA_PEN_CHANGED", entity: "CameraPen", entityId: key,
       beforeJson: JSON.stringify({ penId: existing?.value ?? null }), afterJson: JSON.stringify({ penId }),
