@@ -27,7 +27,8 @@ html[data-theme="crystal"] .shell .dash .cx-hero-title { font-size: 26px; }
 /* ---------- KPI strip ---------- */
 html[data-theme] .shell .dash .cx-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
 html[data-theme] .shell .dash .cx-kpi { min-height: 0; gap: 2px; padding: var(--space-3) !important; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-2); align-items: center; }
-html[data-theme] .shell .dash .cx-kpi .cx-kpi-icon { grid-row: span 2; width: 28px; height: 28px; }
+html[data-theme] .shell .dash .cx-kpi .cx-kpi-icon { position: static; grid-row: span 2; width: 28px; height: 28px; margin: 0; }
+html[data-theme] .shell .dash .cx-kpi > :is(.metric-label, .metric-value) { grid-column: 2; }
 html[data-theme] .shell .dash .cx-kpi .cx-kpi-icon svg { width: 15px; height: 15px; }
 html[data-theme] .shell .dash .cx-kpi .metric-label { font-size: var(--text-xs); }
 html[data-theme] .shell .dash .cx-kpi .metric-value { font-size: var(--text-xl); margin: 0; line-height: 1.15; }

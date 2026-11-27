@@ -47,9 +47,10 @@
 /* Table: 40px rows, sticky head inside its own scroll box. */
 .ds-table-wrap { overflow-x: auto; border: 1px solid var(--ds-border); border-radius: var(--ds-card-radius); background: var(--ds-surface); }
 .ds-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
-.ds-table th { position: sticky; top: 0; z-index: 1; padding: 8px 12px; background: var(--ds-surface-2); color: var(--ds-text-2); font-size: 11px; font-weight: var(--weight-bold); letter-spacing: .04em; text-transform: uppercase; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--ds-border); }
-.ds-table td { padding: 9px 12px; border-bottom: 1px solid var(--ds-border); color: var(--ds-text); vertical-align: middle; }
-.ds-table tbody tr:last-child td { border-bottom: 0; }
+.ds-table thead th { position: sticky; top: 0; z-index: 1; padding: 8px 12px; background: var(--ds-surface-2); color: var(--ds-text-2); font-size: 11px; font-weight: var(--weight-bold); letter-spacing: .04em; text-transform: uppercase; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--ds-border); }
+.ds-table tbody th { text-align: left; font-size: var(--text-sm); }
+.ds-table :is(td, tbody th) { padding: 9px 12px; border-bottom: 1px solid var(--ds-border); color: var(--ds-text); vertical-align: middle; }
+.ds-table tbody tr:last-child :is(td, th) { border-bottom: 0; }
 .ds-table tbody tr:hover { background: color-mix(in srgb, var(--ds-surface-2) 60%, transparent); }
 .ds-table :is(.num, [data-num]) { text-align: right; font-variant-numeric: tabular-nums; }
 
