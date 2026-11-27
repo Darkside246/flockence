@@ -132,7 +132,16 @@ try {
         report.push({ device, theme, route, ...metrics, overflow });
         await snapshot(page, device + "-" + theme + "-" + name);
         if (process.env.VISUAL_REVISION === "after" && process.env.VISUAL_SEED_DASHBOARD === "true") {
-          assert.equal(overflow, false, "Horizontal overflow on " + device + " " + route);
+          if (overflow) {
+            // Name the widest offenders so a failure says what to fix.
+            const culprits = await page.evaluate(() => {
+              const limit = document.documentElement.clientWidth + 1;
+              return [...document.querySelectorAll("body *")].filter((el) => el.getBoundingClientRect().right > limit)
+                .filter((el) => ![...el.children].some((child) => child.getBoundingClientRect().right > limit))
+                .slice(0, 8).map((el) => el.tagName.toLowerCase() + (el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : "") + " right=" + Math.round(el.getBoundingClientRect().right) + " text=" + (el.textContent || "").trim().slice(0, 40));
+            });
+            assert.fail("Horizontal overflow on " + device + " " + route + ": " + culprits.join(" | "));
+          }
         }
       }
 
