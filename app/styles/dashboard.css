@@ -1,0 +1,122 @@
+/* Overview dashboard (2026 redesign, phase 5). Loaded after the theme sheets so the compact
+   sizes win; colour still comes from each theme. Scoped to .dash so other pages are untouched. */
+
+/* View levels are not switchable yet, so the guided-view note stays hidden until they are. */
+[data-guide-only] { display: none; }
+html[data-view-level="guide"] [data-guide-only] { display: block; }
+
+.shell .main.dash { display: grid; gap: var(--space-4); align-content: start; }
+.dash > * { margin: 0; min-width: 0; }
+
+/* ---------- hero: one compact band with the farm photo as a side strip ---------- */
+html[data-theme] .shell .dash .cx-hero { margin: 0; min-height: 0; padding: 0; grid-template-columns: minmax(0, 1fr) minmax(160px, 26%); }
+html[data-theme] .shell .dash .cx-hero-body { padding: var(--space-4) var(--space-5) var(--space-2); max-width: none; }
+html[data-theme] .shell .dash .cx-hero-kicker { font-size: 11px; letter-spacing: .08em; }
+html[data-theme] .shell .dash .cx-hero-title { margin: 2px 0; font-size: var(--text-2xl); line-height: 1.2; letter-spacing: -.02em; }
+html[data-theme] .shell .dash .cx-hero-sub { margin: 0 0 var(--space-3); font-size: var(--text-sm); }
+html[data-theme] .shell .dash .cx-hero-actions { display: flex; flex-wrap: wrap; gap: 6px; max-width: none; }
+html[data-theme] .shell .dash .cx-action { min-height: var(--control-h-sm); padding: 4px 10px; font-size: var(--text-sm); border-radius: var(--ds-control-radius); }
+html[data-theme] .shell .dash .cx-hero-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 var(--space-5) var(--space-4); margin: 0; }
+html[data-theme] .shell .dash .cx-chip { font-size: 11px; padding: 2px 8px; }
+html[data-theme] .shell .dash .cx-hero-photo { min-height: 0; }
+html[data-theme="crystal"] .shell .dash .cx-hero { display: block; padding: var(--space-4) var(--space-5); }
+html[data-theme="crystal"] .shell .dash .cx-hero-body, html[data-theme="crystal"] .shell .dash .cx-hero-chips { padding: 0; max-width: 58%; }
+html[data-theme="crystal"] .shell .dash .cx-hero-chips { margin-top: var(--space-2); }
+html[data-theme="crystal"] .shell .dash .cx-hero-title { font-size: 26px; }
+
+/* ---------- KPI strip ---------- */
+html[data-theme] .shell .dash .cx-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
+html[data-theme] .shell .dash .cx-kpi { min-height: 0; gap: 2px; padding: var(--space-3) !important; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-2); align-items: center; }
+html[data-theme] .shell .dash .cx-kpi .cx-kpi-icon { grid-row: span 2; width: 28px; height: 28px; }
+html[data-theme] .shell .dash .cx-kpi .cx-kpi-icon svg { width: 15px; height: 15px; }
+html[data-theme] .shell .dash .cx-kpi .metric-label { font-size: var(--text-xs); }
+html[data-theme] .shell .dash .cx-kpi .metric-value { font-size: var(--text-xl); margin: 0; line-height: 1.15; }
+html[data-theme] .shell .dash .cx-kpi .cx-foot { grid-column: 1 / -1; font-size: 11px; margin-top: 2px; }
+
+/* ---------- two-column grid of sections ---------- */
+.dash-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; }
+.dash-grid > * { margin: 0; min-width: 0; }
+.dash-wide { grid-column: 1 / -1; }
+.dash-cell { align-self: stretch; }
+.dash-cell > .card, .dash-cell > section { height: 100%; margin: 0; }
+.dash .section-head { margin-bottom: var(--space-2); }
+.dash .section-head h3 { font-size: var(--text-md); }
+.dash .section-head p { font-size: var(--text-xs); }
+.dash .hero-kicker { font-size: 10.5px; margin-bottom: 2px; }
+.dash .cx-section { margin: 0; }
+.dash .cx-section-head { margin-bottom: var(--space-2); padding-bottom: var(--space-2); }
+.dash .cx-section-head h3 { font-size: var(--text-md); }
+.dash .cx-section-head p { font-size: var(--text-xs); }
+.dash-note { margin-top: var(--space-3); }
+.dash-fine { margin-top: var(--space-2); }
+.dash-fine p { margin: 2px 0 0; font-size: 11px; line-height: 1.45; }
+
+/* Briefing and action queue as tight lists. */
+.dash .briefing { height: 100%; }
+.dash-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.dash-list li + li { border-top: 1px solid var(--ds-border); }
+.dash-list a { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-2) 2px; color: var(--ds-text); text-decoration: none; }
+.dash-list a:hover { background: var(--ds-surface-2); }
+.dash-list-main { min-width: 0; }
+.dash-list-main strong { display: block; font-size: var(--text-sm); }
+.dash-list-main span { display: block; color: var(--ds-text-2); font-size: var(--text-xs); }
+.dash-list-side { display: grid; justify-items: end; gap: 2px; flex: none; }
+.dash-list-side small { color: var(--ds-text-3); font-size: 11px; }
+
+/* Daily round: one row of figures, then a table. */
+.dash-figures { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin: 0 0 var(--space-3); overflow: hidden; background: var(--ds-border); border: 1px solid var(--ds-border); border-radius: var(--ds-card-radius); }
+.dash-figures > div { background: var(--ds-surface); padding: var(--space-2) var(--space-3); min-width: 0; }
+.dash-figures dt { color: var(--ds-text-2); font-size: 11px; font-weight: var(--weight-semibold); }
+.dash-figures dd { margin: 0; color: var(--ds-text); font-size: var(--text-lg); font-weight: var(--weight-heavy); font-variant-numeric: tabular-nums; }
+.dash-figures small { display: block; color: var(--ds-text-2); font-size: 11px; line-height: 1.35; }
+.dash-table th[scope="row"] { font-weight: var(--weight-regular); }
+.dash-table th[scope="row"] strong, .dash-table th[scope="row"] small { display: block; }
+.dash-table th[scope="row"] small { color: var(--ds-text-2); font-size: 11px; }
+.dash-table .notice { display: block; margin: 4px 0 0; }
+
+/* Widgets inside sections. */
+.dash .cx-env { gap: var(--space-3); }
+.dash .cx-widget { min-height: 0; padding: var(--space-3) !important; gap: 4px; }
+.dash .cx-widget .metric-value { font-size: var(--text-xl); }
+.dash .cx-prod { gap: var(--space-3); }
+.dash .pipeline { height: 150px; }
+.dash .donut-wrap { grid-template-columns: 112px 1fr; }
+.dash .donut { width: 112px; height: 112px; }
+.dash .donut::after { width: 78px; height: 78px; }
+.dash .stats strong { font-size: var(--text-md); }
+.dash .quick-hub { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.dash .quick-action { min-height: 0; }
+.dash .cx-cams { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.dash .cx-timeline { padding: var(--space-3) var(--space-4) !important; }
+
+/* Advanced figures: one line until opened. */
+.dash-advanced > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-2); cursor: pointer; list-style: none; }
+.dash-advanced > summary::-webkit-details-marker { display: none; }
+.dash-advanced > summary::before { content: "▸"; color: var(--ds-text-2); }
+.dash-advanced[open] > summary::before { content: "▾"; }
+.dash-advanced[open] > summary { margin-bottom: var(--space-3); }
+.dash-advanced .hero-kicker { margin: 0; }
+
+@media (max-width: 1280px) {
+  html[data-theme] .shell .dash .cx-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dash-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dash .quick-hub { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .dash-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .shell .main.dash { gap: var(--space-3); }
+  .dash-grid { gap: var(--space-3); }
+  html[data-theme] .shell .dash .cx-hero { grid-template-columns: minmax(0, 1fr); }
+  html[data-theme] .shell .dash .cx-hero-photo { min-height: 104px; }
+  html[data-theme] .shell .dash .cx-hero-body { padding: var(--space-3) var(--space-4) var(--space-2); }
+  html[data-theme] .shell .dash .cx-hero-chips { padding: 0 var(--space-4) var(--space-3); }
+  html[data-theme="crystal"] .shell .dash .cx-hero { padding: 120px var(--space-4) var(--space-4); }
+  html[data-theme="crystal"] .shell .dash .cx-hero-body, html[data-theme="crystal"] .shell .dash .cx-hero-chips { max-width: none; }
+  html[data-theme] .shell .dash .cx-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+  .dash-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash .quick-hub { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash .cx-env { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-list a { align-items: flex-start; }
+}
