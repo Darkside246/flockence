@@ -91,6 +91,8 @@ jobs:
           python3 -m compileall -q services/blink
           python3 -m unittest discover -s services/blink/tests -p test_clip_archive.py
           python3 -m unittest discover -s services/blink/tests -p test_clip_frames.py
+          python3 -m unittest discover -s services/detector/tests
+          python3 -m py_compile services/detector/app.py scripts/train-bird-detector.py
           python3 tests/chickenverse-research.py
           python3 tests/vision-video-sample.py
           bash -n ops/systemd/enable-local-stack.sh

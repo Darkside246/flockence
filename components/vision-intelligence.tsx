@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { VisionDailyReport } from "@/components/vision-daily-report";
 import { VisionAlerts } from "@/components/vision-alerts";
 import { VisionPeople } from "@/components/vision-people";
+import { VisionDetector } from "@/components/vision-detector";
 
 type Report = {
   scope: { label: string }; period: { label: string };
@@ -91,6 +92,7 @@ export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras:
     <VisionAlerts />
     <VisionDailyReport />
     <VisionPeople />
+    <VisionDetector />
 
     {error && <p role="alert" className="notice">{error}</p>}
     {loading && <p>Building the report…</p>}
