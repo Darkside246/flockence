@@ -34,3 +34,17 @@ opening public signup. If legitimate submissions are rejected, check the
 Google console and restore the matched v2 pair with `RECAPTCHA_MODE="v2"`
 while reviewing the scores. A change to the service environment requires
 a restart. The signed-in account and offline workflows do not load reCAPTCHA.
+
+## Email a farm invitation
+
+Open Team, enter the recipient's email, choose a role and send the invitation.
+The link opens a name and password form. Flockence assigns the email, farm
+and role from the invitation. Opening the email link only previews the farm
+and role. Submitting the form consumes the link.
+
+Use the same verified Resend sender and disable click tracking for this
+transactional email. Team managers can see and revoke pending invitations
+within their permitted roles. A recipient with an existing Flockence account
+needs the existing account support path. Each account currently belongs to
+one farm. Existing manual codes remain available through the original API
+and signup page.

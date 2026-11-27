@@ -178,9 +178,9 @@ export function setSessionCookie(token: string, maxAgeSeconds = SESSION_DAYS * 8
 export const ORIYA_SESSION_SECONDS = 8 * 3600;
 export function clearSessionCookie() { return `${SESSION_COOKIE}=; ${secureCookieOptions(0)}`; }
 
-export async function savePasswordHash(userId: string, passwordHash: string) {
+export async function savePasswordHash(userId: string, passwordHash: string, client: Prisma.TransactionClient = prisma) {
   await ensureFarm();
-  await prisma.setting.upsert({ where: { farmId_key: { farmId: currentFarmId(), key: `${PASSWORD_PREFIX}${userId}` } }, update: { value: passwordHash }, create: { farmId: currentFarmId(), key: `${PASSWORD_PREFIX}${userId}`, value: passwordHash } });
+  await client.setting.upsert({ where: { farmId_key: { farmId: currentFarmId(), key: `${PASSWORD_PREFIX}${userId}` } }, update: { value: passwordHash }, create: { farmId: currentFarmId(), key: `${PASSWORD_PREFIX}${userId}`, value: passwordHash } });
 }
 
 export async function getPasswordHash(userId: string) {

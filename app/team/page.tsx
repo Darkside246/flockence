@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Nav } from "@/components/nav";
 import { useSession } from "@/components/auth-gate";
 
-type UserRole = "OWNER" | "MANAGER" | "WORKER" | "READ_ONLY";
+import { canInviteRole, farmRoleLabels as roleLabels, type FarmRole as UserRole, type InviteRole } from "@/lib/farm-roles";
+
+type PendingInvitation = { id: string; email: string; role: InviteRole; expiresAt: string };
 type TeamMember = { id: string; name: string; email: string; role: UserRole; createdAt: string };
 
 async function readJson(response: Response) {
@@ -14,13 +16,6 @@ async function readJson(response: Response) {
   return data;
 }
 
-const roleLabels: Record<UserRole, string> = {
-  OWNER: "Owner",
-  MANAGER: "Manager",
-  WORKER: "Farm worker",
-  READ_ONLY: "Read only",
-};
-
 export default function TeamPage() {
   const session = useSession();
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -28,12 +23,12 @@ export default function TeamPage() {
   const [savingId, setSavingId] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [revokingId, setRevokingId] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("WORKER");
   const [inviteExpiry, setInviteExpiry] = useState("7");
-  const [inviteCode, setInviteCode] = useState("");
-  const [inviteExpiresAt, setInviteExpiresAt] = useState("");
   const [inviteSaving, setInviteSaving] = useState(false);
-  const [copyMessage, setCopyMessage] = useState("");
 
   const canAssignManagement = session?.role === "OWNER";
   const options = useMemo<UserRole[]>(
@@ -46,6 +41,7 @@ export default function TeamPage() {
     try {
       const data = await readJson(await fetch("/api/team", { cache: "no-store" }));
       setMembers(Array.isArray(data.users) ? data.users : []);
+      setInvitations(Array.isArray(data.invitations) ? data.invitations : []);
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load the farm team.");
@@ -61,17 +57,15 @@ export default function TeamPage() {
     setInviteSaving(true);
     setError("");
     setMessage("");
-    setInviteCode("");
-    setCopyMessage("");
     try {
       const data = await readJson(await fetch("/api/team", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: inviteRole, expiresInDays: Number(inviteExpiry) }),
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole, expiresInDays: Number(inviteExpiry) }),
       }));
-      setInviteCode(data.inviteCode);
-      setInviteExpiresAt(data.expiresAt);
-      setMessage("Invitation created. Copy the code now and share it securely. It can only be redeemed once.");
+      setInvitations(current => [data.invitation, ...current]);
+      setInviteEmail("");
+      setMessage("Invitation sent to " + data.invitation.email + ".");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create an invitation.");
     } finally {
@@ -79,12 +73,20 @@ export default function TeamPage() {
     }
   }
 
-  async function copyInvite() {
+  async function revokeInvite(id: string) {
+    setRevokingId(id);
+    setError("");
+    setMessage("");
     try {
-      await navigator.clipboard.writeText(inviteCode);
-      setCopyMessage("Invitation code copied.");
-    } catch {
-      setCopyMessage("Copy is unavailable in this browser. Select and copy the code manually.");
+      await readJson(await fetch("/api/team", {
+        method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }),
+      }));
+      setInvitations(current => current.filter(invite => invite.id !== id));
+      setMessage("Invitation revoked.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Could not revoke this invitation.");
+    } finally {
+      setRevokingId("");
     }
   }
 
@@ -121,7 +123,7 @@ export default function TeamPage() {
       <section className="section dashboard-grid">
         <div className="card metric-card"><div className="metric-label">Team members</div><div className="metric-value">{members.length}</div><div className="metric-foot">accounts attached to this farm</div></div>
         <div className="card metric-card"><div className="metric-label">Owners</div><div className="metric-value">{members.filter((member) => member.role === "OWNER").length}</div><div className="metric-foot">full farm control</div></div>
-        <div className="card metric-card"><div className="metric-label">Managers</div><div className="metric-value">{members.filter((member) => member.role === "MANAGER").length}</div><div className="metric-foot">operational administration</div></div>
+        <div className="card metric-card"><div className="metric-label">Supervisors</div><div className="metric-value">{members.filter((member) => member.role === "MANAGER").length}</div><div className="metric-foot">operational administration</div></div>
         <div className="card metric-card"><div className="metric-label">Field users</div><div className="metric-value">{members.filter((member) => member.role === "WORKER").length}</div><div className="metric-foot">record normal farm work</div></div>
       </section>
 
@@ -144,24 +146,23 @@ export default function TeamPage() {
       </section>
 
       <section className="section card">
-        <div className="section-head"><div><div className="hero-kicker">Invite securely</div><h3>Invite a team member</h3><p>Create a single-use invitation for this farm. The role is assigned automatically when the person signs up.</p></div></div>
+        <div className="section-head"><div><div className="hero-kicker">Invite securely</div><h3>Invite a team member</h3><p>Send a single-use link. The recipient enters their name and sets a password to join this farm.</p></div></div>
         <form className="form grid2" onSubmit={createInvite}>
+          <label>Recipient email<input type="email" value={inviteEmail} onChange={event => setInviteEmail(event.target.value)} maxLength={254} required /></label>
           <label>Assign role<select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as UserRole)}>
             {options.filter((role) => role !== "OWNER").map((role) => <option key={role} value={role}>{roleLabels[role]}</option>)}
           </select></label>
           <label>Expires after<select value={inviteExpiry} onChange={(event) => setInviteExpiry(event.target.value)}>
             <option value="1">1 day</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option>
           </select></label>
-          <button className="button button-primary" type="submit" disabled={inviteSaving}>{inviteSaving ? "Creating invitation…" : "Generate invitation"}</button>
+          <button className="button button-primary" type="submit" disabled={inviteSaving}>{inviteSaving ? "Sending invitation…" : "Send email invitation"}</button>
         </form>
-        {inviteCode && <div className="section">
-          <label>One-time invitation code<input readOnly value={inviteCode} onFocus={(event) => event.currentTarget.select()}/></label>
-          <div className="row" style={{ gridTemplateColumns: "1fr auto", alignItems: "center" }}>
-            <span className="muted">Expires {new Date(inviteExpiresAt).toLocaleString()} · {roleLabels[inviteRole]}</span>
-            <button className="button" type="button" onClick={() => void copyInvite()}>Copy code</button>
-          </div>
-          {copyMessage && <p className="notice" role="status">{copyMessage}</p>}
-          <p className="muted">The full code is not stored in readable form and cannot be displayed again after you leave this page. Generate a new invite if it is lost.</p>
+        {invitations.length > 0 && <div className="section">
+          <h4>Pending invitations</h4>
+          {invitations.map(invitation => <div key={invitation.id} className="row">
+            <div><strong>{invitation.email}</strong><span>{roleLabels[invitation.role]} · Expires {new Date(invitation.expiresAt).toLocaleString()}</span></div>
+            {canInviteRole(session?.role ?? "", invitation.role) && <button type="button" className="button" disabled={Boolean(revokingId)} onClick={() => void revokeInvite(invitation.id)}>{revokingId === invitation.id ? "Revoking…" : "Revoke invitation"}</button>}
+          </div>)}
         </div>}
       </section>
 
@@ -169,9 +170,9 @@ export default function TeamPage() {
         <div className="section-head"><div><div className="hero-kicker">Role guide</div><h3>What each role can do</h3><p>Permissions are enforced by the API. Hiding a control in the interface is not the security boundary.</p></div></div>
         <div className="grid2">
           <div><strong>Owner</strong><p className="muted">Full farm access, including team roles, settings, financial configuration, stock setup and operational records.</p></div>
-          <div><strong>Manager</strong><p className="muted">Manage most farm setup and operations. Cannot promote people to owner or manager.</p></div>
-          <div><strong>Farm worker</strong><p className="muted">Record daily flock checks, mortality, weights, feed usage, egg collections and routine operational events.</p></div>
-          <div><strong>Read only</strong><p className="muted">Review records and reports without submitting changes.</p></div>
+          <div><strong>Supervisor</strong><p className="muted">Manage most farm setup and operations. Can invite Farm Hands and Read Only users. Owner and Supervisor role changes require an Owner.</p></div>
+          <div><strong>Farm Hand</strong><p className="muted">Record daily flock checks, mortality, weights, feed usage, egg collections and routine operational events.</p></div>
+          <div><strong>Read Only</strong><p className="muted">Review records and reports without submitting changes.</p></div>
         </div>
       </section>
     </main>
