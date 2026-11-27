@@ -10,6 +10,7 @@ import { createVisionAssessment, visionResultSchema } from "@/lib/vision-assessm
 import { safeJson, visionPrompt, type VisionCategory } from "@/lib/vision";
 import { callVisionModel, visionConfigured, visionEscalateModel, type VisionUsage } from "@/lib/vision-provider";
 import { recordVisionUsage } from "@/lib/vision-usage";
+import { recordFindings } from "@/lib/vision-findings";
 import { inspectionContext } from "@/lib/vision-context";
 
 /**
@@ -180,6 +181,11 @@ export async function runVisionInspection(request: InspectionRequest): Promise<I
     });
     uploadedPath = null;
     await recordVisionUsage({ automatic, calls, counted: true }).catch(() => undefined);
+    // Findings for the farmer to check (grouped into incidents). A failure here never loses the saved inspection.
+    await recordFindings({
+      analysis: parsed, expectedLive: context.expectedLive, at: capture?.capturedAt ?? new Date(), pen: pen ?? null, batchId,
+      cameraName: capture?.camera.name ?? null, observationId: saved.observation.id, evidenceUrl: saved.imageUrl,
+    }).catch((error) => console.error("[farm-vision] Findings not recorded", error instanceof Error ? error.name : "UnknownError"));
     return { ok: true, model: modelUsed, calls, observation: saved.observation, imageUrl: saved.imageUrl, analysis: parsed,
       frames: liveCapture?.samples ?? [bytes], pen: pen ?? null, capturedAt: capture?.capturedAt ?? new Date(), video: Boolean(liveCapture) };
   } finally {

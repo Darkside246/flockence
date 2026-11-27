@@ -16,6 +16,7 @@ the final switch.
    2. `add-bird-ledger.sql`
    3. `add-feed-water-eggs.sql`
    4. `add-suppliers-feed-catalogue.sql`
+   5. `add-vision-findings.sql` (from Vision Intelligence phase 1)
 
    Each file runs in a single transaction and is safe to run twice. When the service uses `FARM_RLS_DATABASE_URL`, it
    also re-applies `farm-tenant-access.sql`, so the new tables get the farm boundary.

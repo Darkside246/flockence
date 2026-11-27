@@ -4,6 +4,8 @@ import { ChangeEvent, FormEvent, useEffect, useState } from "react";
 import { Nav } from "@/components/nav";
 import { VisionSchedule } from "@/components/vision-schedule";
 import { VisionReport } from "@/components/vision-report";
+import { VisionFindings } from "@/components/vision-findings";
+import { useSession } from "@/components/auth-gate";
 
 const categories = [
   ["PEN", "Pen / housing", "Look for bedding, space, airflow, heat and sanitation issues."],
@@ -40,6 +42,7 @@ export default function VisionPage() {
   const [batchId, setBatchId] = useState("");
   const [penId, setPenId] = useState("");
   const [pens, setPens] = useState<{ id: string; name: string }[]>([]);
+  const session = useSession();
   const [notes, setNotes] = useState("");
   const [batches, setBatches] = useState<Batch[]>([]);
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -224,6 +227,7 @@ export default function VisionPage() {
         <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? (captureVideo ? "Capturing and analyzing…" : "Analyzing photo…") : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
       </form>
       {cameras.length > 0 && <VisionSchedule cameras={cameras} />}
+      <VisionFindings pens={pens} canReview={session?.role === "OWNER" || session?.role === "MANAGER" || session?.role === "WORKER"} />
 
       {result && <section className="section"><div className="section-head"><div><h3>Inspection result</h3><p>Visible findings only. Review the checks before taking action.</p></div><span className={`pill ${String(result.severity || "LOW").toLowerCase()}`}>{result.severity || "LOW"}</span></div>
         <div className="vision-result-grid">

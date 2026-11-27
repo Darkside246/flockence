@@ -205,6 +205,8 @@ model Farm {
   productionPlans ProductionPlan[]
   healthCases HealthCase[]
   healthCaseEvents HealthCaseEvent[]
+  visionFindings VisionFinding[]
+  cameraPenLinks CameraPenLink[]
   treatments Treatment[]
   healthObservations HealthObservation[]
   diagnosticTests DiagnosticTest[]
@@ -1282,4 +1284,54 @@ model FeedMeasure {
   createdAt DateTime @default(now())
   farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
   @@unique([farmId, name])
+}
+
+/// Vision Intelligence: something Vision saw that a person should check. Repeat sightings of the same kind in the same
+/// pen join one incident. Never a record of fact: mortality, live counts, feed, water and eggs are never changed by it.
+model VisionFinding {
+  id String @id @default(cuid())
+  farmId String
+  /// DEAD_OR_DOWN_BIRD, THERMAL, LITTER, FEED_WATER, EQUIPMENT, HEALTH, BEHAVIOUR, POPULATION
+  kind String
+  title String
+  detail String?
+  /// INFO, MEDIUM, HIGH, CRITICAL
+  severity String
+  /// OBSERVED, SUSPECTED, REQUIRES_INSPECTION, INCONCLUSIVE (from Vision); CONFIRMED, DISMISSED, RESOLVED (by a person)
+  state String
+  /// The model's own confidence (LOW, MEDIUM, HIGH); not a measured accuracy.
+  confidence String?
+  incidentKey String
+  penId String?
+  penName String?
+  batchId String?
+  cameraName String?
+  firstSeenAt DateTime
+  lastSeenAt DateTime
+  occurrences Int @default(1)
+  /// The latest health observation (inspection) that supports it, and its picture.
+  observationId String?
+  evidenceUrl String?
+  /// Every state change: [{at, from, to, by, note}]. The original title and detail are kept.
+  history Json @default("[]")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  @@index([farmId, state, lastSeenAt])
+  @@index([farmId, incidentKey, lastSeenAt])
+  @@index([farmId, penId, firstSeenAt])
+}
+
+/// Which pen a camera looked at, and when, so older pictures stay with the right pen and batch after a camera moves.
+model CameraPenLink {
+  id String @id @default(cuid())
+  farmId String
+  cameraName String
+  penId String
+  fromAt DateTime
+  toAt DateTime?
+  createdAt DateTime @default(now())
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  @@index([farmId, cameraName, fromAt])
+  @@index([farmId, penId, fromAt])
 }

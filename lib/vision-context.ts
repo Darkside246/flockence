@@ -14,6 +14,7 @@ export async function inspectionContext(input: { batchId: string | null; pen?: {
   const now = input.now ?? new Date();
   const farmId = currentFarmId();
   let batchId = input.batchId;
+  let expectedLive: number | null = null;
   if (!batchId) {
     const active = await prisma.batch.findMany({ where: { farmId, status: "ACTIVE" }, select: { id: true, placementHouse: true } });
     const inPen = input.pen ? active.filter((b) => b.placementHouse && b.placementHouse.trim().toLowerCase() === input.pen!.name.trim().toLowerCase()) : [];
@@ -40,6 +41,7 @@ export async function inspectionContext(input: { batchId: string | null; pen?: {
         ...batch.mortalityEvents.map((m) => ({ quantity: m.quantity, date: m.date, createdAt: m.createdAt })),
         ...batch.slaughterEvents.map((e) => ({ quantity: e.sentQuantity, date: e.date, createdAt: e.createdAt })),
       ], now);
+      expectedLive = typeof live === "number" ? live : null;
       const ageDays = Math.max(0, Math.floor((now.getTime() - (batch.hatchDate ?? batch.startDate).getTime()) / 86_400_000));
       const lostDay = batch.mortalityEvents.filter((m) => m.date >= dayAgo).reduce((s, m) => s + m.quantity, 0);
       const lostWeek = batch.mortalityEvents.filter((m) => m.date >= weekAgo).reduce((s, m) => s + m.quantity, 0);
@@ -70,5 +72,5 @@ export async function inspectionContext(input: { batchId: string | null; pen?: {
     const list = [...latest.values()].slice(0, 6).map((r) => `${r.sensor} ${Number(r.temperatureC)} °C${r.humidityPercent != null ? ` / ${Number(r.humidityPercent)}%` : ""} (${Math.max(0, Math.round((now.getTime() - r.readAt.getTime()) / 60_000))} min ago)`);
     parts.push(`Sensor readings: ${list.join("; ")}.`);
   }
-  return { batchId, text: parts.join(" ") };
+  return { batchId, text: parts.join(" "), expectedLive };
 }

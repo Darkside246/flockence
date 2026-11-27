@@ -36,7 +36,7 @@ service=flockence.service
 dropin_dir=/etc/systemd/system/$service.d
 dropin=$dropin_dir/zz-release.conf
 # The SQL this release needs, in order. Each file only adds columns, tables and indexes, and is safe to run twice.
-sql_files=(add-health-case-lifecycle.sql add-bird-ledger.sql add-feed-water-eggs.sql add-suppliers-feed-catalogue.sql)
+sql_files=(add-health-case-lifecycle.sql add-bird-ledger.sql add-feed-water-eggs.sql add-suppliers-feed-catalogue.sql add-vision-findings.sql)
 
 new_app=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd -P)
 old_app=$(systemctl show "$service" -p WorkingDirectory --value)
@@ -96,8 +96,8 @@ unset database_url
 command -v psql >/dev/null && command -v pg_dump >/dev/null && command -v pg_restore >/dev/null || die "Install the PostgreSQL client tools (psql, pg_dump, pg_restore)."
 psql -X -qAt -c "select 1" >/dev/null || die "Could not connect to the live database with the service's settings."
 note "Database:      $PGDATABASE on $PGHOST:$PGPORT (as $PGUSER)"
-applied=$(psql -X -qAt -c "select count(*) from information_schema.tables where table_schema='public' and table_name in ('HealthCaseEvent','BirdMovement','WaterReading','FeedProduct')")
-note "New tables already present: $applied of 4"
+applied=$(psql -X -qAt -c "select count(*) from information_schema.tables where table_schema='public' and table_name in ('HealthCaseEvent','BirdMovement','WaterReading','FeedProduct','VisionFinding','CameraPenLink')")
+note "New tables already present: $applied of 6"
 note "Farm row security (FARM_RLS_DATABASE_URL): $rls_in_use"
 
 # Files that live in the release directory but are not in git: settings and private storage.
