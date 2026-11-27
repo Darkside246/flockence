@@ -60,6 +60,8 @@ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="
   outline: none;
   transition: border-color var(--duration) ease, box-shadow var(--duration) ease;
 }
+/* Labels and controls may shrink inside grid and flex tracks; a long <option> must not widen the page. */
+label, input, select, textarea, .form > * { min-width: 0; max-width: 100%; }
 textarea { min-height: 88px; resize: vertical; line-height: var(--leading-normal); }
 input[type="file"] { padding: 6px 8px; }
 :is(input, textarea)::placeholder { color: var(--ds-text-3); opacity: 1; }
