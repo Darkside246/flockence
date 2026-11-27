@@ -46,6 +46,7 @@ export async function DELETE(request: Request, ctx: Context) {
 
 export async function PUT(request: Request, ctx: Context) {
   const { id } = await ctx.params;
+  if (!gatewayIdPattern.test(id)) return denied();
   const credential = parseGatewayToken(request.headers.get("authorization"), id);
   if (!credential) return denied();
   if (!gatewayEnabled()) return unavailable();

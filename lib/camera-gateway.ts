@@ -6,10 +6,14 @@ const PREFIX = "CAMERA_GATEWAY::";
 export const MAX_FRAME_BYTES = 256 * 1024;
 export const gatewayIdPattern = /^[a-f0-9]{32}$/;
 const farmPattern = /^[A-Za-z0-9_-]{3,64}$/;
+const BRIDGE_KEY = PREFIX + "WYZE_BRIDGE";
+const bridgePattern = /^wb1\.([A-Za-z0-9_-]{3,64})\.[A-Za-z0-9_-]{43}$/;
 const tokenPattern = /^cg1\.([A-Za-z0-9_-]{3,64})\.([a-f0-9]{32})\.[A-Za-z0-9_-]{43}$/;
 
 export type GatewayBrand = "wyze" | "network";
-type Gateway = { name: string; brand: GatewayBrand; tokenHash: string; frame?: { time: string; sealed: string } };
+type BridgeState = { tokenHash: string; lastSync?: string; seen?: number };
+export type BridgeCamera = { device: string; name: string };
+type Gateway = { name: string; brand: GatewayBrand; tokenHash?: string; bridgeDevice?: string; frame?: { time: string; sealed: string } };
 type GatewayRow = { id: string; key: string; value: string };
 
 let gatewayDb: PrismaClient | undefined;
@@ -58,7 +62,14 @@ export function parseGatewayToken(header: string | null, id: string) {
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice(7);
   const match = tokenPattern.exec(token);
-  return match && match[2] === id ? { farmId: match[1], token } : null;
+  return match && match[2] === id ? { farmId: match[1], token } : parseWyzeBridgeToken(header);
+}
+
+export function parseWyzeBridgeToken(header: string | null) {
+  if (!header?.startsWith("Bearer ")) return null;
+  const token = header.slice(7);
+  const match = bridgePattern.exec(token);
+  return match ? { farmId: match[1], token } : null;
 }
 
 function publicFeed(row: GatewayRow) {
@@ -69,7 +80,7 @@ function publicFeed(row: GatewayRow) {
 export function listGateways() {
   return withGateway(async (tx, farmId) => {
     const rows = await tx.setting.findMany({
-      where: { farmId, key: { startsWith: PREFIX } },
+      where: { farmId, key: { startsWith: PREFIX, not: BRIDGE_KEY } },
       select: { id: true, key: true, value: true },
       orderBy: { key: "asc" }, take: 6,
     });
@@ -80,7 +91,7 @@ export function listGateways() {
 export function createGateway(name: string, brand: GatewayBrand) {
   return withGateway(async (tx, farmId) => {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${farmId}, 8194))::text`;
-    if (await tx.setting.count({ where: { farmId, key: { startsWith: PREFIX } } }) >= 6) return null;
+    if (await tx.setting.count({ where: { farmId, key: { startsWith: PREFIX, not: BRIDGE_KEY } } }) >= 6) return null;
 
     const id = randomUUID().replaceAll("-", "");
     const token = "cg1." + farmId + "." + id + "." + randomBytes(32).toString("base64url");
@@ -97,22 +108,106 @@ export function removeGateway(id: string) {
 export function gatewayUploadAllowed(id: string, token: string) {
   return withGateway(async (tx, farmId) => {
     const row = await tx.setting.findUnique({ where: { farmId_key: { farmId, key: keyFor(id) } } });
-    return authorized(read(row), token);
+    return authorized(tx, farmId, read(row), token);
   });
 }
 
-function authorized(entry: Gateway | null, token: string): entry is Gateway {
-  return Boolean(entry && /^[a-f0-9]{64}$/.test(entry.tokenHash)
-    && timingSafeEqual(Buffer.from(entry.tokenHash, "hex"), Buffer.from(hash(token), "hex")));
+function matches(stored: string | undefined, token: string) {
+  return Boolean(stored && /^[a-f0-9]{64}$/.test(stored)
+    && timingSafeEqual(Buffer.from(stored, "hex"), Buffer.from(hash(token), "hex")));
+}
+
+async function readBridge(tx: Prisma.TransactionClient, farmId: string) {
+  const row = await tx.setting.findUnique({ where: { farmId_key: { farmId, key: BRIDGE_KEY } } });
+  return row ? JSON.parse(row.value) as BridgeState : null;
+}
+
+async function authorized(tx: Prisma.TransactionClient, farmId: string, entry: Gateway | null, token: string) {
+  if (!entry) return false;
+  if (!entry.bridgeDevice) return matches(entry.tokenHash, token);
+  if (entry.brand !== "wyze" || !bridgePattern.test(token)) return false;
+  const bridge = await readBridge(tx, farmId);
+  return matches(bridge?.tokenHash, token);
+}
+
+export function wyzeBridgeStatus() {
+  return withGateway(async (tx, farmId) => {
+    const bridge = await readBridge(tx, farmId);
+    return { linked: Boolean(bridge), lastSync: bridge?.lastSync ?? null, seen: bridge?.seen ?? 0 };
+  });
+}
+
+export function createWyzeBridgeLink() {
+  return withGateway(async (tx, farmId) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${farmId}, 8194))::text`;
+    const token = "wb1." + farmId + "." + randomBytes(32).toString("base64url");
+    const value = JSON.stringify({ tokenHash: hash(token) } satisfies BridgeState);
+    await tx.setting.upsert({
+      where: { farmId_key: { farmId, key: BRIDGE_KEY } },
+      create: { farmId, key: BRIDGE_KEY, value },
+      update: { value },
+    });
+    return { token };
+  });
+}
+
+export function revokeWyzeBridgeLink() {
+  return withGateway(async (tx, farmId) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${farmId}, 8194))::text`;
+    await tx.setting.deleteMany({ where: { farmId, key: BRIDGE_KEY } });
+  });
+}
+
+export function wyzeBridgeAllowed(token: string) {
+  return withGateway(async (tx, farmId) => matches((await readBridge(tx, farmId))?.tokenHash, token));
+}
+
+export function syncWyzeBridge(token: string, cameras: BridgeCamera[]) {
+  return withGateway(async (tx, farmId) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${farmId}, 8194))::text`;
+    const bridge = await readBridge(tx, farmId);
+    if (!bridge || !matches(bridge.tokenHash, token)) return null;
+    const rows = await tx.setting.findMany({
+      where: { farmId, key: { startsWith: PREFIX, not: BRIDGE_KEY } },
+      select: { id: true, key: true, value: true },
+    });
+    const existing = new Map(rows.flatMap(row => {
+      const entry = read(row);
+      return entry?.bridgeDevice ? [[entry.bridgeDevice, { row, entry }] as const] : [];
+    }));
+    const feeds = [];
+    let count = rows.length;
+    for (const camera of cameras) {
+      const match = existing.get(camera.device);
+      if (match) {
+        if (match.entry.name !== camera.name) {
+          await tx.setting.update({ where: { id: match.row.id }, data: { value: JSON.stringify({ ...match.entry, name: camera.name }) } });
+        }
+        feeds.push({ device: camera.device, id: match.row.key.slice(PREFIX.length) });
+      } else if (count < 6) {
+        const id = randomUUID().replaceAll("-", "");
+        const feed: Gateway = { name: camera.name, brand: "wyze", bridgeDevice: camera.device };
+        await tx.setting.create({ data: { farmId, key: keyFor(id), value: JSON.stringify(feed) } });
+        feeds.push({ device: camera.device, id });
+        count++;
+      }
+    }
+    await tx.setting.update({
+      where: { farmId_key: { farmId, key: BRIDGE_KEY } },
+      data: { value: JSON.stringify({ ...bridge, lastSync: new Date().toISOString(), seen: cameras.length }) },
+    });
+    return { feeds, skipped: cameras.length - feeds.length };
+  });
 }
 
 const aad = (farmId: string, id: string, time: string) => Buffer.from("flockence-gateway:v1:" + farmId + ":" + id + ":" + time);
 
 export function saveGatewayFrame(id: string, token: string, time: string, bytes: Uint8Array) {
   return withGateway(async (tx, farmId) => {
+    if (bridgePattern.test(token)) await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${farmId}, 8194))::text`;
     const row = await tx.setting.findUnique({ where: { farmId_key: { farmId, key: keyFor(id) } } });
     const entry = read(row);
-    if (!row || !authorized(entry, token)) return "unauthorized";
+    if (!row || !entry || !await authorized(tx, farmId, entry, token)) return "unauthorized";
     if (entry.frame && entry.frame.time >= time) return "stale";
     const iv = randomBytes(12);
     const cipher = createCipheriv("aes-256-gcm", frameKey()!, iv);

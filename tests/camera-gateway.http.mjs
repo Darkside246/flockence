@@ -115,6 +115,46 @@ try {
   assert.equal((await fetch(frame(a), { method: "DELETE", headers: { Cookie: ownerB, Origin: origin } })).status, 404);
   assert.equal((await fetch(frame(a), { method: "DELETE", headers: { Cookie: ownerA, Origin: origin } })).status, 200);
   assert.equal((await push(a, a.token)).status, 401);
+  const wyze = gateway + "/wyze";
+  const pair = (cookie, requestOrigin = origin) => fetch(wyze, {
+    method: "POST", headers: { Cookie: cookie, Origin: requestOrigin },
+  });
+  assert.equal((await pair(worker)).status, 403);
+  assert.equal((await pair(ownerA, "https://other.example")).status, 403);
+  const firstPair = await pair(ownerA);
+  assert.equal(firstPair.status, 201);
+  const { token: pairing } = await firstPair.json();
+  assert.match(pairing, /^wb1\.gateway-ci-a\./);
+  const discover = (token, cameras) => fetch(wyze, {
+    method: "PUT", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ cameras }),
+  });
+  const discoveredCamera = { device: "a".repeat(64), name: "Wyze Brooder" };
+  assert.equal((await discover(pairing.replace("gateway-ci-a", "gateway-ci-b"), [discoveredCamera])).status, 401);
+  assert.equal((await discover(pairing, [discoveredCamera, discoveredCamera])).status, 400);
+  const discovery = await discover(pairing, [discoveredCamera]);
+  assert.equal(discovery.status, 200);
+  const [wyzeFeed] = (await discovery.json()).feeds;
+  const rename = await discover(pairing, [{ ...discoveredCamera, name: "Wyze Hatchery" }]);
+  assert.equal((await rename.json()).feeds[0].id, wyzeFeed.id);
+  const { feeds: wyzeA } = await list(ownerA);
+  assert.deepEqual(wyzeA.map(({ id, name, brand }) => ({ id, name, brand })), [
+    { id: wyzeFeed.id, name: "Wyze Hatchery", brand: "wyze" },
+  ]);
+  assert.equal((await list(ownerB)).feeds.some(feed => feed.id === wyzeFeed.id), false);
+  assert.equal((await push(b, pairing)).status, 401);
+  assert.equal((await push(wyzeFeed, pairing)).status, 201);
+  assert.equal((await fetch(frame(wyzeFeed), { headers: { Cookie: ownerB } })).status, 404);
+  const state = await fetch(wyze, { headers: { Cookie: ownerA } }).then(response => response.json());
+  assert.equal(state.seen, 1);
+  assert.equal(typeof state.lastSync, "string");
+  assert.equal(JSON.stringify(state).includes(pairing), false);
+  const { token: rotated } = await (await pair(ownerA)).json();
+  assert.equal((await discover(pairing, [discoveredCamera])).status, 401);
+  assert.equal((await push(wyzeFeed, pairing)).status, 401);
+  assert.equal((await discover(rotated, [discoveredCamera])).status, 200);
+  assert.equal((await fetch(wyze, { method: "DELETE", headers: { Cookie: ownerA, Origin: origin } })).status, 200);
+  assert.equal((await push(wyzeFeed, rotated)).status, 401);
   console.log("Gateway isolation, encrypted snapshots, owner permissions and revocation passed.");
 
   // The same already-authenticated farm sessions can use the Devices workspace.

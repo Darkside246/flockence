@@ -129,7 +129,8 @@ jobs:
           node --experimental-strip-types --import ./tests/support/register-alias.mjs --test tests/farm-isolation.db.mjs
           node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-gateway.http.mjs
           node --experimental-strip-types --import ./tests/support/register-alias.mjs tests/camera-workers.http.mjs
-          python3 -m py_compile scripts/push-camera-frame.py scripts/push-device-gateway.py
+          python3 -m py_compile scripts/push-camera-frame.py scripts/sync-wyze-bridge.py scripts/push-device-gateway.py
+          python3 tests/wyze-bridge-edge.py
           python3 tests/device_gateway_edge.py
 
       - name: Upload diagnostics
