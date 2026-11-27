@@ -121,3 +121,6 @@ html[data-theme] .shell .dash .cx-kpi .cx-foot { grid-column: 1 / -1; font-size:
   .dash .cx-env { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dash-list a { align-items: flex-start; }
 }
+
+/* Crystal uppercases every table heading; row headers in data tables are names, not labels. */
+html[data-theme] .main .ds-table tbody th { text-transform: none; letter-spacing: 0; font-size: var(--text-sm); }
