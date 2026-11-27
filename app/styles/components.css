@@ -204,17 +204,19 @@
 }
 
 /* ======================= Page: Flocks (phase 6) ======================= */
-.flocks-layout { align-items: start; }
+.flocks-layout { align-items: start; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); }
 .flocks-layout .card { margin: 0; }
 .flocks-layout h2 { font-size: var(--text-lg); margin: 0; }
 .flocks-list .section-head { align-items: center; }
+.flocks-table th[scope="row"] { min-width: 200px; }
 .flocks-table th[scope="row"] strong { display: block; font-size: var(--text-sm); }
+.flocks-table td > strong { white-space: nowrap; }
 .flocks-table :is(th[scope="row"], td) > span { display: block; color: var(--ds-text-2); font-size: var(--text-xs); line-height: 1.35; }
 .flocks-table :is(th[scope="row"], td) > strong { display: block; }
 .flocks-table td > strong { font-weight: var(--weight-semibold); }
 .flocks-actions .row-actions { justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
 .flocks-actions .button { min-height: var(--control-h-sm); padding: 0 var(--space-3); font-size: var(--text-xs); }
-.flocks-mortality { grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; }
+.flocks-mortality { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 1fr) auto; align-items: end; }
 .flocks-new { position: sticky; top: var(--space-4); max-height: calc(100dvh - 2 * var(--space-4)); overflow-y: auto; }
 .flocks-new .grid2 { gap: var(--space-2) var(--space-3); }
 .flocks-sub { margin-top: var(--space-1); padding-top: var(--space-3); border-top: 1px solid var(--ds-border); }
@@ -226,9 +228,13 @@
   .flocks-mortality { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 1050px) {
+  .flocks-layout { grid-template-columns: minmax(0, 1fr); }
   .flocks-new { position: static; max-height: none; overflow: visible; }
 }
 @media (max-width: 760px) {
+  /* The title bar keeps one action on phones; Record mortality is right under the list. */
+  .shell .topbar .ds-actions .button:not(.button-primary) { display: none; }
+  .shell .topbar .ds-actions .button { min-height: var(--control-h-sm); padding: 0 var(--space-3); font-size: var(--text-xs); }
   .flocks-table thead { display: none; }
   .flocks-table, .flocks-table tbody, .flocks-table tr { display: block; }
   .flocks-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-3); padding: var(--space-3); border-bottom: 1px solid var(--ds-border); }
