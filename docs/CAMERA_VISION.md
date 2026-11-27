@@ -75,3 +75,10 @@ On the VPS, deploy the application and the matching private Blink or network-cam
 3. Verify that Vision history shows the assigned pen and labels the entry as a video sample. Repeat the inspection with the same camera and compare the two results. A comparison requires the same pen, camera and capture mode.
 
 The model receives three JPEG frames. The app retains one private preview and the structured inspection. It does not retain the sampled video. Samples report what is visible and can miss activity between frames. Scheduled video jobs, persistent bird tracks, and validated scores need further implementation and field testing. Keep sampling disabled until a real camera passes the steps above.
+
+## Recordings screen (2026-11-27)
+
+- **Layout:** Cameras, Recordings shows each clip as a small thumbnail, about 2 x 1.5 inches (192 x 144 CSS pixels) on a computer and two per row on a phone.
+- **Player:** the chosen clip plays in a player pinned under the top bar while the list scrolls. It has Previous, Next and Close, and an optional "play the next clip automatically" (remembered on that device).
+- **Styles:** `app/camera-recordings.css`.
+- **Vision:** Farm Vision does not read recorded clips. It analyses a fresh still from a camera, or three ordered frames sampled from live video (`captureVisionVideoSample`). Analysing a recorded clip would be a separate feature.

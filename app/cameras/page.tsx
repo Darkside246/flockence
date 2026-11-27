@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Nav } from "@/components/nav";
+import "../camera-recordings.css";
 import { BlinkSettings } from "@/components/blink-settings";
 import { CameraGateways } from "@/components/camera-gateways";
 import { BlinkConnectCard, NetworkCameraSetup, cameraApi as api, cameraJson as json, type Camera, type Status } from "@/components/camera-connection-controls";
@@ -223,9 +224,18 @@ function ImportClips({ cameras, onDone }: { cameras: Camera[]; onDone: () => voi
   </div>;
 }
 
+const clipTime = (iso: string) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+/**
+ * Recordings: small thumbnails (about 2 x 1.5 inches; two per row on a phone) so a day of footage fits on one screen.
+ * The player stays pinned under the top bar while the list scrolls, so the next clip can be chosen without scrolling
+ * back up to the video.
+ */
 function Recordings({ cameras }: { cameras: Camera[] }) {
   const [period, setPeriod] = useState("7");
   const [camera, setCamera] = useState(""), [clips, setClips] = useState<Clip[] | null>(null), [error, setError] = useState(""), [playing, setPlaying] = useState<Clip | null>(null), [refresh, setRefresh] = useState(0);
+  const [autoNext, setAutoNext] = useState(false);
+  const [stickyTop, setStickyTop] = useState(8);
   useEffect(() => {
     setClips(null); setError("");
     const query = new URLSearchParams({ period, ...(camera ? { camera } : {}) });
@@ -234,27 +244,62 @@ function Recordings({ cameras }: { cameras: Camera[] }) {
       .catch((error) => { if (active) setError(error.message); });
     return () => { active = false; };
   }, [camera, period, refresh]);
+  useEffect(() => {
+    try { setAutoNext(localStorage.getItem("flockence.clips.autoNext") === "1"); } catch { /* storage unavailable */ }
+    // Pin the player just below the top bar when the top bar itself stays on screen.
+    const measure = () => {
+      const bar = document.querySelector<HTMLElement>(".topbar");
+      const pinned = bar && ["sticky", "fixed"].includes(getComputedStyle(bar).position);
+      setStickyTop(pinned ? Math.round(bar.getBoundingClientRect().height) + 8 : 8);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, []);
+  const index = playing && clips ? clips.findIndex((c) => c.id === playing.id) : -1;
+  const step = (by: number) => { if (clips && index >= 0 && clips[index + by]) setPlaying(clips[index + by]); };
+  function chooseAutoNext(on: boolean) {
+    setAutoNext(on);
+    try { localStorage.setItem("flockence.clips.autoNext", on ? "1" : "0"); } catch { /* storage unavailable */ }
+  }
   async function removeImported(clip: Clip) {
     if (!confirm(`Remove this imported clip from ${clip.camera}? The file is deleted from this farm's storage.`)) return;
     try { await json(api(clip.media), { method: "DELETE" }); setPlaying(null); setRefresh((n) => n + 1); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not remove the clip"); }
   }
-  return <><div className="card"><div className="section-head"><div><h3>Stored recordings</h3><p>Available Blink, network camera, and imported clips.</p></div>
+  return <><div className="card recordings-card"><div className="section-head"><div><h3>Stored recordings</h3><p>Available Blink, network camera, and imported clips.</p></div>
     <label>Period<select value={period} onChange={(event) => { setPlaying(null); setPeriod(event.target.value); }}><option value="1">Last 24 hours</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></label>
     <select value={camera} onChange={(e) => { setPlaying(null); setCamera(e.target.value); }} aria-label="Camera"><option value="">All cameras</option>{cameras.map((c) => <option key={c.name}>{c.name}</option>)}</select></div>
     {error && <p role="alert">{error}</p>}
-    <p><a href={api("archives?format=csv")} download>Download archive index (CSV)</a></p>
+    <p className="recordings-tools"><a href={api("archives?format=csv")} download>Download archive index (CSV)</a>
+      {clips && clips.length > 0 && <label className="recordings-autonext"><input type="checkbox" checked={autoNext} onChange={(e) => chooseAutoNext(e.target.checked)} /> Play the next clip automatically</label>}</p>
     {!clips && !error && <p>Loading recordings…</p>}
     {clips?.length === 0 && <p>No recordings in this period.</p>}
-    {playing && <div style={{ marginBottom: 16 }}>
-      <video src={playing.source === "blink" ? api(`media/clip?path=${enc(playing.media)}`) : api(playing.media)} controls autoPlay playsInline style={{ width: "100%", maxHeight: 520, background: "#000" }} />
-      <p>{playing.camera} · {new Date(playing.createdAt).toLocaleString()}{playing.source === "import" ? " · imported" : ""}</p>
-      {playing.source === "archive" && <a className="button" href={api(`${playing.media}?download=true`)} download>Download MP4</a>}
-      {playing.source === "import" && <button className="button" onClick={() => void removeImported(playing)}>Remove this imported clip</button>}</div>}
-    <div className="grid2">{clips?.map((c) => <button key={c.id} className="button" onClick={() => setPlaying(c)} style={{ textAlign: "left" }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      {c.thumbnail ? <img src={api(`media/thumb?path=${enc(c.thumbnail)}`)} alt="" style={{ width: "100%" }} loading="lazy" /> : <div aria-hidden="true" style={{ aspectRatio: "16/9", background: "#000", opacity: 0.6 }} />}
-      <div>{c.camera}</div><small>{c.source === "import" ? "Imported · " : c.source === "archive" ? "Archived · " : ""}{new Date(c.createdAt).toLocaleString()}</small></button>)}</div></div>
+    {playing && <div className="clip-player" style={{ top: stickyTop }} aria-label="Recording player">
+      <video key={playing.id} src={playing.source === "blink" ? api(`media/clip?path=${enc(playing.media)}`) : api(playing.media)} controls autoPlay playsInline
+        onEnded={() => { if (autoNext) step(1); }} />
+      <div className="clip-player-bar">
+        <span className="clip-player-title"><strong>{playing.camera}</strong> · {clipTime(playing.createdAt)}{playing.source === "import" ? " · imported" : ""}{clips && index >= 0 ? ` · ${index + 1} of ${clips.length}` : ""}</span>
+        <span className="clip-player-actions">
+          <button type="button" className="button" onClick={() => step(-1)} disabled={index <= 0} aria-label="Previous clip">‹ Previous</button>
+          <button type="button" className="button" onClick={() => step(1)} disabled={!clips || index < 0 || index >= clips.length - 1} aria-label="Next clip">Next ›</button>
+          {playing.source === "archive" && <a className="button" href={api(`${playing.media}?download=true`)} download>Download</a>}
+          {playing.source === "import" && <button type="button" className="button" onClick={() => void removeImported(playing)}>Remove</button>}
+          <button type="button" className="button" onClick={() => setPlaying(null)} aria-label="Close the player">Close</button>
+        </span>
+      </div>
+    </div>}
+    {clips && clips.length > 0 && <ul className="clip-grid" aria-label="Recordings">{clips.map((c) => {
+      const active = playing?.id === c.id;
+      return <li key={c.id}><button type="button" className={"clip-tile" + (active ? " is-playing" : "")} aria-pressed={active} onClick={() => setPlaying(c)}>
+        <span className="clip-thumb">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {c.thumbnail ? <img src={api(`media/thumb?path=${enc(c.thumbnail)}`)} alt="" loading="lazy" decoding="async" /> : <span className="clip-thumb-empty" aria-hidden="true">No preview</span>}
+          {active && <span className="clip-badge">Playing</span>}
+        </span>
+        <span className="clip-meta"><strong>{c.camera}</strong><small>{c.source === "import" ? "Imported · " : c.source === "archive" ? "Archived · " : ""}{clipTime(c.createdAt)}</small></span>
+      </button></li>;
+    })}</ul>}</div>
     <ImportClips cameras={cameras} onDone={() => setRefresh((n) => n + 1)} /></>;
 }
 
