@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession } from "@/components/auth-gate";
 
 type Camera = { name: string; source: "blink" | "rtsp"; liveSampling?: boolean; pen?: { id: string; name: string } | null };
 type CameraPlan = { everyHours: number; mode: "video" | "still"; category: string };
@@ -29,6 +30,7 @@ const DEFAULT_PLAN = (camera: Camera, minHours = 2): CameraPlan => ({ everyHours
  * when available, quiet 19:00-05:30, 24 a day, pictures kept 30 days); everything else is folded away.
  */
 export function VisionSchedule({ cameras }: { cameras: Camera[] }) {
+  const isOwner = useSession()?.role === "OWNER";
   const [data, setData] = useState<Data | null>(null);
   const [draft, setDraft] = useState<Schedule | null>(null);
   const [message, setMessage] = useState("");
@@ -135,7 +137,8 @@ export function VisionSchedule({ cameras }: { cameras: Camera[] }) {
     </details>
 
     <div className="actions">
-      <button type="button" className="button button-primary" disabled={saving} onClick={() => void save(draft)}>{saving ? "Saving…" : "Save"}</button>
+      {isOwner ? <button type="button" className="button button-primary" disabled={saving} onClick={() => void save(draft)}>{saving ? "Saving…" : "Save"}</button>
+        : <span className="muted">Only the farm owner can change the automatic schedule.</span>}
       {draft.enabled && <span className="muted">About {data.perDay} check{data.perDay === 1 ? "" : "s"} a day · {data.state.runsToday} so far today · {data.usage.automatic} this month</span>}
       {message && <span role="status">{message}</span>}
     </div>

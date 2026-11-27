@@ -7,6 +7,7 @@ import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { SettingsCameraProviders } from "@/components/settings-camera-providers";
 import { useSession } from "@/components/auth-gate";
+import { farmRoleLabels, type FarmRole } from "@/lib/farm-roles";
 import { useTheme } from "@/components/theme-provider";
 import { themes } from "@/lib/theme-registry";
 
@@ -44,8 +45,11 @@ function selectedSection(): Section {
 
 export default function SettingsPage() {
   const user = useSession();
-  const editable = user?.role === "OWNER" || user?.role === "MANAGER";
-  const [section, setSection] = useState<Section>("account");
+  // Farm-wide settings are the owner's only (lib/farm-roles.ts). Others see their own account, appearance, team and storage.
+  const editable = user?.role === "OWNER";
+  const visibleSections = sections.filter(([key]) => editable || ["account", "appearance", "team", "storage"].includes(key));
+  const [chosen, setSection] = useState<Section>("account");
+  const section: Section = visibleSections.some(([key]) => key === chosen) ? chosen : "account";
   const [farm, setFarm] = useState<{ name: string; currency: string } | null>(null);
   const [loaded, setLoaded] = useState<Partial<Preferences> | null>(null);
   const [preferences, setPreferences] = useState<Preferences>(defaults);
@@ -114,7 +118,7 @@ export default function SettingsPage() {
     <Nav />
     <main className="main">
       <nav aria-label="Settings categories" className="section card quick">
-        {sections.map(([key, label]) => <a key={key} className={section === key ? "button button-primary" : "button"} href={"#" + key}
+        {visibleSections.map(([key, label]) => <a key={key} className={section === key ? "button button-primary" : "button"} href={"#" + key}
           onClick={() => { setSection(key); setNotice(null); }} aria-current={section === key ? "location" : undefined}>{label}</a>)}
       </nav>
 
@@ -167,8 +171,15 @@ export default function SettingsPage() {
 
       {section === "team" && <section className="section card">
         <h2>Team &amp; permissions</h2>
-        <p>Your farm role is {user?.role.toLowerCase().replaceAll("_", " ") ?? "loading"}.</p>
-        {user?.role === "OWNER" && <Link href="/team" className="button">Manage members and invitations</Link>}
+        <p>Your farm role is {user ? farmRoleLabels[user.role as FarmRole] ?? user.role : "loading"}.</p>
+        <ul>
+          <li><strong>Owner:</strong> everything, including farm-wide settings, camera and device connections, keys, schedules, catalogues and all team roles.</li>
+          <li><strong>Supervisor:</strong> pens, flocks, records, sales and expenses, and inviting or changing Farm Hands and Read Only members. No farm-wide settings.</li>
+          <li><strong>Farm Hand:</strong> day-to-day records only (deaths, feed, eggs, weights, daily checks, health notes, tasks, Vision photo checks).</li>
+          <li><strong>Read Only:</strong> can look, not change.</li>
+        </ul>
+        <p className="muted">Everyone can change their own name and password and sign themselves out.</p>
+        {(user?.role === "OWNER" || user?.role === "MANAGER") && <Link href="/team" className="button">{user.role === "OWNER" ? "Manage members and invitations" : "Invite or manage Farm Hands and Read Only members"}</Link>}
       </section>}
 
       {section === "devices" && <section className="section card">

@@ -38,7 +38,7 @@ function EggCountsSwitch({ on }: { on: boolean }) {
     const next = e.target.checked;
     setNote("");
     const r = await fetch("/api/vision/eggs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ counts: next }) }).catch(() => null);
-    if (r?.ok) { setValue(next); setNote("Saved. New checks and reports use this."); } else setNote(r?.status === 403 ? "Only owners and managers can change this." : "Could not save.");
+    if (r?.ok) { setValue(next); setNote("Saved. New checks and reports use this."); } else setNote(r?.status === 403 ? "Only the farm owner can change this." : "Could not save.");
   }} /> Show egg counts from pictures (switch on after comparing a few days of Vision's counts with your collections){note && <small className="muted"> {note}</small>}</label>;
 }
 

@@ -1,3 +1,4 @@
+import { SETTINGS_ROLES } from "@/lib/farm-roles";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await currentUserOrRoleResponse(request, [...roles]);
+  const session = await currentUserOrRoleResponse(request, SETTINGS_ROLES);
   if (session.response) return session.response;
   const origin = accountFormOriginResponse(request);
   if (origin) return origin;

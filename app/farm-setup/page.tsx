@@ -116,7 +116,7 @@ export default function FarmSetupPage() {
         <div className="setup-photo theme-photo theme-photo-housing" aria-hidden="true" />
       </header>
       {loading ? <section className="card setup-panel" aria-busy="true"><p>Loading farm profile…</p></section>
-        : loadError ? <section className="card setup-panel"><p role="alert">{session?.role === "OWNER" || session?.role === "MANAGER" ? "We couldn’t load your farm profile." : "A farm owner or manager can set up this farm."}</p><button type="button" className="button" onClick={() => { setLoadError(false); setLoading(true); setRetry(retry + 1); }}>Try again</button></section>
+        : loadError ? <section className="card setup-panel"><p role="alert">{session?.role === "OWNER" ? "We couldn’t load your farm profile." : "Only the farm owner can set up or change the farm profile."}</p><button type="button" className="button" onClick={() => { setLoadError(false); setLoading(true); setRetry(retry + 1); }}>Try again</button></section>
         : finished ? <section className="card setup-panel"><h2 ref={heading} tabIndex={-1}>Your farm profile is saved</h2><p>Your setup records are available in Pens and Flocks.</p><div className="setup-actions"><Link href="/" className="button button-primary">Go to dashboard</Link><Link href="/pens" className="button">Manage pens</Link><Link href="/batches" className="button">Manage flocks</Link></div></section>
         : <form className="card setup-panel" onSubmit={next}>
           <ol className="setup-stages" aria-label="Setup steps">{stages.map((stage, index) => <li key={stage} aria-current={index === step ? "step" : undefined}>{stage}</li>)}</ol>

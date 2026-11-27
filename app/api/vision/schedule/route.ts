@@ -1,3 +1,4 @@
+import { SETTINGS_ROLES } from "@/lib/farm-roles";
 import { NextResponse } from "next/server";
 import { accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
@@ -44,7 +45,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await currentUserOrRoleResponse(request, visionCameraRoles());
+  const session = await currentUserOrRoleResponse(request, SETTINGS_ROLES);
   if (session.response) return session.response;
   const origin = accountFormOriginResponse(request);
   if (origin) return origin;

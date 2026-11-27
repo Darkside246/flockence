@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { CATEGORY_LABEL } from "@/lib/suppliers";
+import { useSession } from "@/components/auth-gate";
 
 export type Supplier = { id: string; name: string; category: string; businessName?: string | null; phone?: string | null; whatsapp?: string | null; active?: boolean };
 
@@ -33,7 +34,10 @@ export function SupplierPicker({ value, onChange, category, label = "Supplier (o
   }, [list, q, category]);
   const exact = list.some(s => s.name.toLowerCase() === q);
 
+  // The supplier list is the owner's (lib/farm-roles.ts); others pick from it.
+  const canAdd = useSession()?.role === "OWNER";
   async function addNew() {
+    if (!canAdd) { setMsg("Only the farm owner can add a supplier. Pick one from the list, or ask the owner to add it."); return; }
     if (!q || busy) return;
     setBusy(true); setMsg("");
     try {
@@ -53,8 +57,9 @@ export function SupplierPicker({ value, onChange, category, label = "Supplier (o
       onKeyDown={e => { if (e.key === "Escape") setOpen(false); if (e.key === "Enter" && open) { e.preventDefault(); if (matches[0] && (exact || !q)) { onChange(matches[0].id, matches[0]); setText(matches[0].name); setOpen(false); } else if (q) void addNew(); } }} />
     {open && <ul id={id + "-list"} role="listbox" className="supplier-options">
       {matches.map(s => <li key={s.id} role="option" aria-selected={s.id === value}><button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { onChange(s.id, s); setText(s.name); setOpen(false); }}>{s.name}<small>{CATEGORY_LABEL[s.category] ?? s.category}{s.phone ? ` · ${s.phone}` : ""}</small></button></li>)}
-      {q && !exact && <li role="option" aria-selected={false}><button type="button" className="supplier-add" disabled={busy} onMouseDown={e => e.preventDefault()} onClick={() => void addNew()}>{busy ? "Adding…" : `+ Add “${text.trim()}” as a new supplier`}</button></li>}
-      {!q && !matches.length && <li className="muted">No suppliers yet. Type a name to add one.</li>}
+      {q && !exact && canAdd && <li role="option" aria-selected={false}><button type="button" className="supplier-add" disabled={busy} onMouseDown={e => e.preventDefault()} onClick={() => void addNew()}>{busy ? "Adding…" : `+ Add “${text.trim()}” as a new supplier`}</button></li>}
+      {q && !exact && !matches.length && !canAdd && <li className="muted">Not on the list. Ask the farm owner to add it.</li>}
+      {!q && !matches.length && <li className="muted">{canAdd ? "No suppliers yet. Type a name to add one." : "No suppliers yet. The farm owner adds them."}</li>}
     </ul>}
     {value && <button type="button" className="button" onClick={() => { onChange(""); setText(""); }}>Clear</button>}
     {msg && <small className="muted" role="status">{msg}</small>}

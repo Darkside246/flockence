@@ -1,3 +1,4 @@
+import { SETTINGS_ROLES } from "@/lib/farm-roles";
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
@@ -143,7 +144,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
+  const session = await currentUserOrRoleResponse(request, SETTINGS_ROLES);
   if (session.response) return session.response;
 
   try {
@@ -163,7 +164,7 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const session = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
+  const session = await currentUserOrRoleResponse(request, SETTINGS_ROLES);
   if (session.response) return session.response;
 
   try {

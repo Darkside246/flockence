@@ -1,3 +1,4 @@
+import { SETTINGS_ROLES } from "@/lib/farm-roles";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const access = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
+  const access = await currentUserOrRoleResponse(request, SETTINGS_ROLES);
   if (access.response) return access.response;
   if (!isTrustedAppOrigin(request)) return NextResponse.json({ error: "Request origin is not allowed." }, { status: 403, headers });
   const input = updatesSchema.safeParse(await request.json().catch(() => null));

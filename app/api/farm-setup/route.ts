@@ -1,3 +1,4 @@
+import { SETTINGS_ROLES } from "@/lib/farm-roles";
 import { NextResponse } from "next/server";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
 import { runAsFarm } from "@/lib/farm-scope";
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const access = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
+  const access = await currentUserOrRoleResponse(request, SETTINGS_ROLES);
   if (access.response) return access.response;
   const input = await request.json().catch(() => null);
   const parsed = farmSetupSchema.safeParse(input?.profile);
