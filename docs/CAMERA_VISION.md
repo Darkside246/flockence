@@ -82,3 +82,51 @@ The model receives three JPEG frames. The app retains one private preview and th
 - **Player:** the chosen clip plays in a player pinned under the top bar while the list scrolls. It has Previous, Next and Close, and an optional "play the next clip automatically" (remembered on that device).
 - **Styles:** `app/camera-recordings.css`.
 - **Vision:** Farm Vision does not read recorded clips. It analyses a fresh still from a camera, or three ordered frames sampled from live video (`captureVisionVideoSample`). Analysing a recorded clip would be a separate feature.
+
+## Automatic inspections (2026-11-27)
+
+Farm Vision can check the cameras by itself. On **https://flockence.com/vision**, an owner or manager uses
+**Automatic inspections**:
+- one switch, which includes every camera that has a pen
+- per camera: how often (every hour to once a day) and the type (a short live video, or a single picture, which uses
+  less battery)
+- under **More options**: quiet hours (default 19:00–05:30), the most checks a day (default 24) and how long automatic
+  pictures are kept (default 30 days)
+
+**What happens each round** (a server timer every 10 minutes):
+- Only farms that switched this on, with Premium and cameras enabled, are checked. Quiet hours are skipped, and one
+  round runs per farm at a time.
+- Due cameras are checked most overdue first: at most 4 per round, within the daily limit.
+- Each camera must be assigned to a pen. The live sample is the same one the "Check my flock" button takes (three
+  ordered frames), with the same pen checks.
+- The model is told the flock in that pen (the flock placed in the pen, or the farm's only active flock): its age,
+  breed, recorded live birds, deaths in the last day and week, the latest daily check (temperature, humidity,
+  ammonia, litter, panting) and the local time.
+- It returns its usual findings, plus an approximate count of the birds in view (never the flock total) and up to
+  three questions when it is not sure.
+- The result is saved as a health observation ("Farm Vision automatic inspection"). It appears in Vision history
+  and in "Today on your farm" on the dashboard, problems first.
+- **Oriya:** when the farm is linked to Oriya and the camera is one it shares (`ORIYA_CAMERAS`), the same frames go to
+  Oriya's `flock-snapshots` link. The camera is not woken twice. Oriya's count and alerts come back as health
+  observations, and Oriya sends the WhatsApp message when its `FLOCK_ALERTS_WHATSAPP` is on. No camera name or
+  address is sent.
+- **Failures:** after 3 in a row, the camera shows "Needs attention" with the reason.
+- **Clean-up:** automatic pictures older than the keep-days are deleted. Their written results stay. Manual
+  inspections are never deleted.
+
+**Server setup, once, after deploying:**
+
+```bash
+sudo bash "$(systemctl show flockence.service -p WorkingDirectory --value)/ops/systemd/enable-vision-rounds.sh" --cameras-on
+```
+
+The script:
+- creates `VISION_ROUNDS_TOKEN` in the app's `.env`, after backing the file up
+- switches on `FLOCKENCE_CAMERA_VISION` and `FLOCKENCE_LIVE_CAMERA_VISION` (with `--cameras-on`)
+- restarts Flockence only when `.env` changed
+- installs `flockence-vision-rounds.timer` and runs one round
+
+The timer always uses the live release directory, so a release switch needs no change. To stop it:
+`sudo systemctl disable --now flockence-vision-rounds.timer`. Analysis needs `OPENAI_API_KEY`.
+
+**Cost:** each check is one model request and wakes a Blink camera. The page shows the expected checks per day.

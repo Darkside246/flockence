@@ -198,7 +198,7 @@ export async function currentFlockCheck(house: string) {
   return check;
 }
 
-type OriyaAnswer = { accepted?: boolean; alertDetails?: Array<{ kind: string; urgent: boolean; text: string }>; findings?: { peopleVisible?: boolean }; nextCheckMinutes?: unknown };
+export type OriyaAnswer = { accepted?: boolean; alertDetails?: Array<{ kind: string; urgent: boolean; text: string }>; findings?: { peopleVisible?: boolean }; nextCheckMinutes?: unknown };
 
 // Schedule state, kept in Settings so it survives restarts.
 const LAST_NUMBERS = "ORIYA_LAST_NUMBERS_AT";
@@ -227,7 +227,7 @@ async function rememberNextCheck(answers: OriyaAnswer[], now: Date) {
 }
 
 /** Keeps Oriya's alerts as health observations, so they show in Flockence's health pages. Text is Oriya's fixed wording. */
-async function keepAlerts(answer: OriyaAnswer, source: string) {
+export async function keepAlerts(answer: OriyaAnswer, source: string) {
   const alerts = Array.isArray(answer.alertDetails) ? answer.alertDetails.slice(0, 20) : [];
   for (const alert of alerts) {
     if (typeof alert?.kind !== "string" || !/^[A-Z_]{3,40}$/.test(alert.kind) || typeof alert.text !== "string") continue;
