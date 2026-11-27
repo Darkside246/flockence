@@ -1,3 +1,7 @@
+/* Cyber Crystal (premium theme). One sheet, merged in cascade order from crystal.css,
+   crystal-depth.css, crystal-pages.css and crystal-photos.css (2026 redesign). Shell layout
+   lives in styles/shell.css; this sheet only adds Crystal colour and character. */
+
 /* Flockence Cyber-Crystal design system.
    Loaded last. Everything is scoped to html[data-theme="crystal"] so the other themes are untouched.
    Palette: obsidian + midnight glass, cyber-teal / ice-blue accents. No gold, yellow or bronze. */
@@ -10,7 +14,7 @@ html[data-theme="crystal"] {
   --cx-text: #edf8fc; --cx-text-2: #a7bbc8; --cx-text-3: #718b9c;
   --cx-ok: #46ddb6; --cx-warn: #ff8295; --cx-crit: #ff526c;
   --cx-edge: rgba(105, 217, 245, .20); --cx-edge-hot: rgba(53, 224, 208, .55);
-  --cx-font: "Geist", "Inter", "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --cx-font: "Manrope Variable", Manrope, "Geist", "Inter", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
 
   /* semantic tokens consumed by accessibility-theme.css */
   --surface-canvas: var(--cx-bg-0); --text-on-canvas: var(--cx-text);
@@ -95,7 +99,7 @@ html[data-theme="crystal"] .shell .nav {
   border-right: 1px solid var(--cx-edge) !important; box-shadow: 18px 0 50px rgba(0, 0, 0, .35) !important;
   -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
 }
-html[data-theme="crystal"] .shell .nav a { color: var(--cx-text-2) !important; font-weight: 600; letter-spacing: .01em; border-radius: 10px; min-height: 40px; transition: background .15s, color .15s; }
+html[data-theme="crystal"] .shell .nav a { color: var(--cx-text-2) !important; font-weight: 600; letter-spacing: .01em; border-radius: 8px; min-height: 32px; transition: background .15s, color .15s; }
 html[data-theme="crystal"] .shell .nav a:hover { color: var(--cx-text) !important; background: rgba(105, 217, 245, .07) !important; }
 html[data-theme="crystal"] .shell .nav a.active {
   color: var(--cx-text) !important; background: linear-gradient(90deg, rgba(53, 224, 208, .16), rgba(53, 224, 208, .03)) !important;
@@ -182,24 +186,12 @@ html[data-theme="crystal"] .appearance-button { background: rgba(8, 21, 34, .9) 
 .cx-ring span { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 600; font-size: 15px; font-variant-numeric: tabular-nums; }
 .cx-na { color: #718b9c; font-size: 12.5px; }
 
-/* ---------- bottom navigation (mobile) ---------- */
-.bottom-nav { display: none; }
+/* ---------- bottom navigation (mobile): layout is in styles/shell.css; Crystal colours only ---------- */
 @media (max-width: 760px) {
-  html[data-theme="crystal"] body { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
-  html[data-theme="crystal"] :is(.mobile-nav-toggle, .nav-command-trigger, .shell .mobile-search-trigger) { display: none !important; }
-  html[data-theme="crystal"] .bottom-nav {
-    display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
-    padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: rgba(5, 10, 18, .92);
-    border-top: 1px solid var(--cx-edge); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
-  }
-  .bottom-nav a, .bottom-nav button {
-    display: grid; justify-items: center; gap: 3px; padding: 7px 2px 5px; min-height: 54px; border: 0; background: transparent !important;
-    color: #718b9c !important; font-size: 10.5px; font-weight: 600; text-decoration: none; position: relative; border-radius: 10px;
-  }
-  .bottom-nav svg { width: 22px; height: 22px; }
-  .bottom-nav a.active { color: #35e0d0 !important; }
-  .bottom-nav a.active::before { content: ""; position: absolute; top: -7px; left: 22%; right: 22%; height: 2px; border-radius: 2px; background: #35e0d0; box-shadow: 0 0 10px rgba(53, 224, 208, .6); }
-  html[data-theme="crystal"] .appearance-control { bottom: calc(86px + env(safe-area-inset-bottom)); right: 12px; }
+  html[data-theme="crystal"] .bottom-nav { background: rgba(5, 10, 18, .92); border-top: 1px solid var(--cx-edge); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+  html[data-theme="crystal"] :is(.bottom-nav a, .bottom-nav button) { color: #718b9c; }
+  html[data-theme="crystal"] .bottom-nav a.active { color: #35e0d0; }
+  html[data-theme="crystal"] .bottom-nav a.active::before { background: #35e0d0; box-shadow: 0 0 10px rgba(53, 224, 208, .6); }
 }
 
 /* ---------- responsive ---------- */
@@ -216,9 +208,6 @@ html[data-theme="crystal"] .appearance-button { background: rgba(8, 21, 34, .9) 
   html[data-theme="crystal"] * { transition: none !important; animation: none !important; }
 }
 
-/* keep the floating search button clear of the page heading */
-html[data-theme="crystal"] .shell .main { padding-top: 70px; }
-@media (max-width: 760px) { html[data-theme="crystal"] .shell .main { padding-top: 18px; } }
 
 /* old decorative footer from the previous shell */
 html[data-theme="crystal"] .nav::after { display: none !important; }
@@ -254,10 +243,6 @@ html[data-theme="crystal"] .donut-label { background: #0b1b2b !important; }
 html[data-theme="crystal"] .legend-dot { background: var(--cx-teal) !important; } html[data-theme="crystal"] .legend-dot.warn { background: var(--cx-warn) !important; } html[data-theme="crystal"] .legend-dot.danger { background: var(--cx-crit) !important; }
 html[data-theme="crystal"] .empty-chart { background: rgba(5, 10, 18, .35) !important; border: 1px dashed var(--cx-edge) !important; border-radius: 14px; }
 
-/* Some pages render <Nav/> inside the (hidden) legacy header. Keep the header's own
-   content hidden but let the navigation inside it exist, so no page is a dead end. */
-html[data-theme="crystal"] .shell .topbar:has(> .bottom-nav) { display: contents !important; }
-html[data-theme="crystal"] .shell .topbar:has(> .bottom-nav) > .brand { display: none; }
 
 /* hero panels from the light design used a white gradient: put them on dark glass */
 html[data-theme="crystal"] .hero,
@@ -322,3 +307,272 @@ html[data-theme="crystal"] .shell .nav a, html[data-theme="crystal"] .bottom-nav
   .cx-skel::after { animation: none; }
   .cx-cam img { transition: none; }
 }
+
+/* ===== from crystal-depth.css ===== */
+/* =====================================================================
+   Flockence Cyber-Crystal: character and depth layer.
+   Layered elevation, feature hero, icon tiles, framed cameras, brand signature.
+   Loaded after crystal.css; scoped to the crystal theme.
+   ===================================================================== */
+html[data-theme="crystal"] {
+  --cx-shadow-1: inset 0 1px 0 rgba(162, 233, 255, .07), 0 1px 2px rgba(0, 0, 0, .45), 0 10px 26px -10px rgba(0, 0, 0, .65);
+  --cx-shadow-2: inset 0 1px 0 rgba(162, 233, 255, .11), 0 2px 5px rgba(0, 0, 0, .40), 0 22px 46px -16px rgba(0, 0, 0, .75), 0 0 0 1px rgba(105, 217, 245, .08);
+  --cx-shadow-glow: inset 0 1px 0 rgba(162, 233, 255, .16), 0 2px 5px rgba(0, 0, 0, .4), 0 26px 54px -16px rgba(0, 0, 0, .8), 0 0 0 1px rgba(53, 224, 208, .45), 0 0 40px -12px rgba(53, 224, 208, .45);
+  --shadow-card: var(--cx-shadow-1);
+  --shadow-hover: var(--cx-shadow-glow);
+  --cx-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+}
+
+/* fine grain over the canvas so large dark areas are not flat */
+html[data-theme="crystal"] .shell {
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%27160%27><filter id=%27n%27><feTurbulence type=%27fractalNoise%27 baseFrequency=%27.9%27 numOctaves=%272%27 stitchTiles=%27stitch%27/><feColorMatrix values=%270 0 0 0 .6  0 0 0 0 .85  0 0 0 0 1  0 0 0 .05 0%27/></filter><rect width=%27100%25%27 height=%27100%25%27 filter=%27url(%2523n)%27/></svg>"),
+    radial-gradient(1100px 520px at 78% -8%, rgba(53, 224, 208, .11), transparent 62%),
+    radial-gradient(900px 600px at -6% 30%, rgba(105, 217, 245, .07), transparent 60%),
+    linear-gradient(115deg, transparent 0 46%, rgba(105, 217, 245, .03) 46% 47%, transparent 47% 100%),
+    linear-gradient(62deg, transparent 0 62%, rgba(53, 224, 208, .025) 62% 63%, transparent 63% 100%),
+    linear-gradient(180deg, var(--cx-bg-0), #060d17) !important;
+}
+
+/* raised surfaces: layered shadow, and a lift on hover */
+html[data-theme="crystal"] .cx-kpi, html[data-theme="crystal"] .cx-cam, html[data-theme="crystal"] .cx-widget,
+html[data-theme="crystal"] .cx-prod-card, html[data-theme="crystal"] a.card, html[data-theme="crystal"] .cx-timeline {
+  box-shadow: var(--cx-shadow-2) !important;
+  transition: transform .22s cubic-bezier(.2, .7, .2, 1), box-shadow .22s ease, border-color .22s ease;
+}
+html[data-theme="crystal"] .cx-kpi:hover, html[data-theme="crystal"] .cx-cam:hover, html[data-theme="crystal"] .cx-widget:hover,
+html[data-theme="crystal"] .cx-prod-card:hover, html[data-theme="crystal"] a.card:hover {
+  transform: translateY(-3px); box-shadow: var(--cx-shadow-glow) !important; border-color: var(--cx-edge-hot) !important;
+}
+
+/* buttons: raised, with a lit top edge; primary glows */
+html[data-theme="crystal"] .button, html[data-theme="crystal"] button.button {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(255, 255, 255, .02)), rgba(105, 217, 245, .06) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), 0 8px 16px -10px rgba(0, 0, 0, .9);
+}
+html[data-theme="crystal"] .button:hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 12px 22px -10px rgba(53, 224, 208, .45); }
+html[data-theme="crystal"] .button-primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 12px 26px -10px rgba(53, 224, 208, .75) !important; }
+
+/* ---------- feature hero ---------- */
+.cx-hero {
+  position: relative; overflow: hidden; margin: 0 0 24px; padding: 38px 36px 26px; border-radius: 24px;
+  border: 1px solid rgba(105, 217, 245, .22);
+  background:
+    radial-gradient(900px 360px at 88% -25%, rgba(53, 224, 208, .26), transparent 62%),
+    radial-gradient(620px 320px at -4% 125%, rgba(105, 217, 245, .16), transparent 60%),
+    linear-gradient(135deg, #11304a 0%, #0a1d2f 52%, #07121e 100%);
+  box-shadow: inset 0 1px 0 rgba(162, 233, 255, .16), 0 2px 6px rgba(0, 0, 0, .4), 0 34px 70px -28px rgba(0, 0, 0, .85), 0 0 80px -34px rgba(53, 224, 208, .35);
+}
+.cx-hero-art { position: absolute; inset: 0; pointer-events: none; }
+.cx-hero-art i { position: absolute; display: block; clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%); }
+.cx-hero-art i:nth-child(1) { right: -50px; top: -70px; width: 360px; height: 360px; transform: rotate(24deg); background: linear-gradient(135deg, rgba(105, 217, 245, .20), rgba(105, 217, 245, 0) 70%); }
+.cx-hero-art i:nth-child(2) { right: 120px; top: 30px; width: 210px; height: 210px; transform: rotate(-12deg); background: linear-gradient(160deg, rgba(53, 224, 208, .16), rgba(53, 224, 208, 0) 70%); }
+.cx-hero-art i:nth-child(3) { right: -10px; bottom: -90px; width: 260px; height: 260px; transform: rotate(48deg); background: linear-gradient(200deg, rgba(162, 233, 255, .10), rgba(162, 233, 255, 0) 70%); }
+.cx-hero-body { position: relative; z-index: 1; max-width: 760px; }
+.cx-hero-kicker { display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: #35e0d0; }
+.cx-hero-title { margin: 12px 0 14px; font-family: var(--cx-serif); font-weight: 500; font-size: clamp(32px, 4.6vw, 54px); line-height: 1.04; letter-spacing: -.022em; color: #edf8fc; text-shadow: 0 2px 24px rgba(0, 0, 0, .45); }
+.cx-hero-title em { font-style: italic; color: #35e0d0; text-shadow: 0 0 30px rgba(53, 224, 208, .45); }
+.cx-hero-sub { margin: 0 0 22px; max-width: 58ch; font-size: 14.5px; line-height: 1.6; color: #a7bbc8; }
+.cx-hero-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.cx-action {
+  display: inline-flex; align-items: center; gap: 9px; padding: 10px 15px 10px 10px; border-radius: 13px; text-decoration: none;
+  font-size: 13px; font-weight: 600; color: #edf8fc !important; border: 1px solid rgba(105, 217, 245, .24);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .02)), rgba(8, 21, 34, .55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 10px 20px -12px rgba(0, 0, 0, .95);
+  transition: transform .2s cubic-bezier(.2, .7, .2, 1), box-shadow .2s ease, border-color .2s ease;
+}
+.cx-action:hover { transform: translateY(-2px); border-color: rgba(53, 224, 208, .6); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18), 0 14px 26px -12px rgba(53, 224, 208, .55); }
+.cx-action-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: #35e0d0; background: rgba(53, 224, 208, .12); border: 1px solid rgba(53, 224, 208, .28); }
+.cx-action:first-child { background: linear-gradient(180deg, #5ceee0, #25c9bb); color: #03121a !important; border-color: transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 14px 28px -12px rgba(53, 224, 208, .85); }
+.cx-action:first-child .cx-action-icon { color: #03121a; background: rgba(3, 18, 26, .14); border-color: rgba(3, 18, 26, .18); }
+.cx-hero-chips { position: relative; z-index: 1; margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(105, 217, 245, .14); }
+
+/* ---------- KPI icon tiles ---------- */
+.cx-kpi { position: relative; }
+html[data-theme="crystal"] .cx-kpi .metric-label::before { display: none !important; }
+.cx-kpi-icon {
+  position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: #35e0d0;
+  background: linear-gradient(145deg, rgba(53, 224, 208, .22), rgba(105, 217, 245, .05)); border: 1px solid rgba(53, 224, 208, .32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 8px 16px -8px rgba(53, 224, 208, .55);
+}
+.cx-kpis > .cx-kpi:nth-child(even) .cx-kpi-icon { color: #69d9f5; background: linear-gradient(145deg, rgba(105, 217, 245, .22), rgba(105, 217, 245, .04)); border-color: rgba(105, 217, 245, .34); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 8px 16px -8px rgba(105, 217, 245, .55); }
+.cx-kpi .metric-value { font-size: clamp(26px, 2.5vw, 34px); text-shadow: 0 2px 18px rgba(0, 0, 0, .4); }
+
+/* ---------- section headers with presence ---------- */
+.cx-section-head { padding-bottom: 12px; border-bottom: 1px solid transparent; border-image: linear-gradient(90deg, rgba(105, 217, 245, .30), rgba(105, 217, 245, 0) 70%) 1; }
+.cx-section-head h3 { display: flex; align-items: center; gap: 11px; font-size: 19px; letter-spacing: -.01em; }
+.cx-section-head h3::before { content: ""; width: 4px; height: 1.05em; border-radius: 3px; background: linear-gradient(180deg, #35e0d0, #69d9f5); box-shadow: 0 0 12px rgba(53, 224, 208, .6); flex: none; }
+
+/* ---------- camera prints: framed, with viewfinder corners ---------- */
+.cx-cam { border-radius: 16px !important; border: 1px solid rgba(105, 217, 245, .26) !important; }
+.cx-cam::before {
+  content: ""; position: absolute; inset: 36px 12px 34px 12px; z-index: 2; pointer-events: none; opacity: .5; transition: opacity .25s ease, inset .25s ease;
+  background:
+    linear-gradient(#35e0d0, #35e0d0) top left / 16px 2px no-repeat, linear-gradient(#35e0d0, #35e0d0) top left / 2px 16px no-repeat,
+    linear-gradient(#35e0d0, #35e0d0) top right / 16px 2px no-repeat, linear-gradient(#35e0d0, #35e0d0) top right / 2px 16px no-repeat,
+    linear-gradient(#35e0d0, #35e0d0) bottom left / 16px 2px no-repeat, linear-gradient(#35e0d0, #35e0d0) bottom left / 2px 16px no-repeat,
+    linear-gradient(#35e0d0, #35e0d0) bottom right / 16px 2px no-repeat, linear-gradient(#35e0d0, #35e0d0) bottom right / 2px 16px no-repeat;
+}
+.cx-cam:hover::before { opacity: 1; inset: 32px 8px 30px 8px; }
+
+/* ---------- brand signature and sidebar depth ---------- */
+html[data-theme="crystal"] .nav::after {
+  display: block !important; content: "Powered by Oriya." !important; white-space: normal; margin: 10px 8px 2px; padding: 12px 6px 4px;
+  background: none; border: 0; border-top: 1px solid rgba(105, 217, 245, .14); border-radius: 0; box-shadow: none;
+  text-align: center; font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: #718b9c; font-weight: 600;
+}
+html[data-theme="crystal"] .shell .nav { box-shadow: 20px 0 54px rgba(0, 0, 0, .5), inset -1px 0 0 rgba(105, 217, 245, .10) !important; }
+html[data-theme="crystal"] .shell .nav a.active { box-shadow: inset 2px 0 var(--cx-teal), 0 10px 22px -14px rgba(53, 224, 208, .6) !important; }
+
+/* ---------- responsive tuning ---------- */
+@media (max-width: 760px) {
+  .cx-hero { padding: 26px 20px 20px; border-radius: 20px; }
+  .cx-hero-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cx-action { padding-right: 10px; font-size: 12.5px; }
+  .cx-hero-art i:nth-child(2) { display: none; }
+  html[data-theme="crystal"] .cx-kpi:hover, html[data-theme="crystal"] .cx-cam:hover { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="crystal"] .cx-kpi:hover, html[data-theme="crystal"] .cx-cam:hover, html[data-theme="crystal"] .cx-widget:hover,
+  html[data-theme="crystal"] .cx-prod-card:hover, html[data-theme="crystal"] a.card:hover, .cx-action:hover { transform: none; }
+}
+
+/* the app's global span color rule must not wash out hero button labels */
+.cx-action span:not(.cx-action-icon) { color: #edf8fc !important; }
+.cx-action:first-child span:not(.cx-action-icon) { color: #03121a !important; }
+.cx-hero-body { max-width: 940px; }
+.cx-hero-title { max-width: 18ch; }
+@media (max-width: 760px) { .cx-hero-title { max-width: none; } }
+
+/* a camera that is still loading shows a shimmer instead of an empty frame */
+.cx-cam-wait { position: absolute; inset: 0; z-index: 0; }
+.cx-section-head .button, .cx-section-head a.button { white-space: nowrap; }
+
+/* ===== from crystal-pages.css ===== */
+/* =====================================================================
+   Flockence Cyber-Crystal: page banners and shared page furniture.
+   Every page already carries a hidden header with its real title, description
+   and badge. Show it as a feature banner so all pages share the same character.
+   ===================================================================== */
+
+/* Compact page header with Crystal glass. Position and spacing come from styles/shell.css. */
+html[data-theme="crystal"] .shell .topbar > .brand {
+  position: relative; overflow: hidden; padding: 14px 20px; border-radius: 16px; border: 1px solid rgba(105, 217, 245, .22);
+  background:
+    radial-gradient(640px 220px at 96% -30%, rgba(53, 224, 208, .22), transparent 62%),
+    radial-gradient(420px 220px at -2% 130%, rgba(105, 217, 245, .12), transparent 62%),
+    linear-gradient(135deg, #10283a 0%, #0a1c2d 55%, #07121e 100%);
+  box-shadow: inset 0 1px 0 rgba(162, 233, 255, .14), 0 2px 5px rgba(0, 0, 0, .4), 0 18px 40px -26px rgba(0, 0, 0, .85);
+}
+/* one crystal facet in the corner */
+html[data-theme="crystal"] .shell .topbar > .brand::before {
+  content: ""; position: absolute; right: -40px; top: -60px; width: 230px; height: 230px; transform: rotate(26deg); pointer-events: none;
+  background: linear-gradient(135deg, rgba(105, 217, 245, .16), rgba(105, 217, 245, 0) 70%);
+  clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
+}
+html[data-theme="crystal"] .shell .topbar > .brand > * { position: relative; z-index: 1; }
+html[data-theme="crystal"] .shell .topbar .brand h1 {
+  margin: 0; font-family: var(--cx-serif); font-weight: 500; font-size: 24px; line-height: 1.15; letter-spacing: -.01em;
+  color: #edf8fc !important; text-shadow: 0 2px 22px rgba(0, 0, 0, .45);
+}
+html[data-theme="crystal"] .shell .topbar .brand p { margin: 2px 0 0; max-width: 90ch; font-size: 13px; line-height: 1.45; color: #a7bbc8 !important; }
+html[data-theme="crystal"] .shell .topbar .brand .badge { flex: none; align-self: flex-start; white-space: nowrap; }
+
+/* ---------- shared page furniture ---------- */
+html[data-theme="crystal"] .section-head h3, html[data-theme="crystal"] .section-head h2 { letter-spacing: -.01em; }
+html[data-theme="crystal"] .main .section-head > div > h3 { display: flex; align-items: center; gap: 10px; }
+html[data-theme="crystal"] .main .section-head > div > h3::before {
+  content: ""; width: 4px; height: 1em; border-radius: 3px; flex: none;
+  background: linear-gradient(180deg, #35e0d0, #69d9f5); box-shadow: 0 0 10px rgba(53, 224, 208, .55);
+}
+html[data-theme="crystal"] .main .card { box-shadow: var(--cx-shadow-1) !important; }
+html[data-theme="crystal"] .main .row.card { transition: transform .2s cubic-bezier(.2, .7, .2, 1), box-shadow .2s ease, border-color .2s ease; }
+html[data-theme="crystal"] .main a.row.card:hover { transform: translateY(-2px); }
+
+/* forms and tables */
+html[data-theme="crystal"] .main label { color: #a7bbc8 !important; letter-spacing: .02em; }
+html[data-theme="crystal"] .main table { border-collapse: separate; border-spacing: 0; width: 100%; }
+html[data-theme="crystal"] .main th {
+  text-align: left; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; font-weight: 700; color: #718b9c !important;
+  padding: 10px 12px; border-bottom: 1px solid rgba(105, 217, 245, .18);
+}
+html[data-theme="crystal"] .main td { padding: 12px; border-bottom: 1px solid rgba(105, 217, 245, .08); }
+html[data-theme="crystal"] .main tbody tr { transition: background .15s ease; }
+html[data-theme="crystal"] .main tbody tr:hover { background: rgba(53, 224, 208, .05); }
+html[data-theme="crystal"] .main .empty, html[data-theme="crystal"] .main .empty-chart { border-radius: 14px; }
+html[data-theme="crystal"] .main .empty strong { font-family: var(--cx-serif); font-weight: 500; font-size: 18px; }
+
+/* ---------- phones: the header is the sticky title bar, so drop the glass card ---------- */
+@media (max-width: 760px) {
+  html[data-theme="crystal"] .shell .topbar { background: rgba(5, 10, 18, .92); border-bottom-color: var(--cx-edge); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+  html[data-theme="crystal"] .shell .topbar > .brand { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+  html[data-theme="crystal"] .shell .topbar > .brand::before, html[data-theme="crystal"] .shell .topbar > .brand::after { display: none; }
+  html[data-theme="crystal"] .shell .topbar .brand h1 { font-size: 18px; text-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="crystal"] .main a.row.card:hover { transform: none; }
+}
+
+/* ===== from crystal-photos.css ===== */
+/* =====================================================================
+   Flockence Cyber-Crystal: farm photography.
+   Free stock photos (see public/brand/CREDITS.md), cropped, tinted and faded into
+   the glass so the app feels like a family poultry farm while staying professional.
+   Swap an image by replacing the file in public/brand/ with one of the same name.
+   ===================================================================== */
+
+/* keep the buttons in the left column so the photo has clear space on the right */
+.cx-hero-actions { max-width: 540px; }
+.cx-hero-chips { max-width: 100%; }
+
+/* ---------- page banners: a slice of farm photo on the right of every page header ---------- */
+html[data-theme="crystal"] .shell .topbar > .brand::after {
+  content: ""; position: absolute; top: 0; right: 0; bottom: 0; width: 46%; z-index: 0; pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(10, 28, 45, .82), rgba(10, 28, 45, .12) 58%, rgba(53, 224, 208, .12)),
+    url("/brand/chick-eggs.jpg") 50% 40% / cover no-repeat;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 62%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 62%);
+  opacity: .9; filter: saturate(.92);
+}
+html[data-banner="eggs"][data-theme="crystal"] .shell .topbar > .brand::after {
+  background:
+    linear-gradient(90deg, rgba(10, 28, 45, .82), rgba(10, 28, 45, .12) 58%, rgba(53, 224, 208, .12)),
+    url("/brand/eggs-hands.jpg") 50% 62% / cover no-repeat;
+}
+html[data-banner="hens"][data-theme="crystal"] .shell .topbar > .brand::after {
+  background:
+    linear-gradient(90deg, rgba(10, 28, 45, .82), rgba(10, 28, 45, .12) 58%, rgba(53, 224, 208, .12)),
+    url("/brand/hen-dusk.jpg") 50% 30% / cover no-repeat, url("/brand/hen-chicks.jpg") 50% 56% / cover no-repeat;
+}
+
+/* ---------- sign-in, sign-up and reset: the farmyard behind the card ---------- */
+html[data-theme="crystal"] .auth-shell { position: relative; isolation: isolate; }
+html[data-theme="crystal"] .auth-shell::before {
+  content: ""; position: fixed; inset: 0; z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(5, 10, 18, .45) 0%, rgba(5, 10, 18, .88) 72%),
+    radial-gradient(900px 480px at 80% -10%, rgba(53, 224, 208, .16), transparent 60%),
+    url("/brand/hen-dusk.jpg") 50% 30% / cover no-repeat, url("/brand/hen-chicks.jpg") 50% 56% / cover no-repeat;
+  filter: blur(2px) saturate(.9);
+}
+html[data-theme="crystal"] .auth-card { position: relative; z-index: 1; }
+
+/* ---------- phones ---------- */
+@media (max-width: 760px) {
+  html[data-theme="crystal"] :is(.cx-hero-title, .cx-hero-kicker) { text-shadow: 0 2px 18px rgba(0, 0, 0, .85); }
+}
+
+/* banner badges sit on top of the photo: give them their own dark glass so they stay legible */
+html[data-theme="crystal"] .shell .topbar .brand .badge {
+  background: rgba(5, 10, 18, .72) !important; border: 1px solid rgba(53, 224, 208, .45) !important; color: #35e0d0 !important;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: 0 6px 16px -8px rgba(0, 0, 0, .9);
+}
+
+/* primary buttons keep their teal: the raised-button rule must not win over them */
+html[data-theme="crystal"] .button.button-primary, html[data-theme="crystal"] button.button.button-primary {
+  background: linear-gradient(180deg, #5ceee0, #25c9bb) !important; color: #03121a !important; border-color: transparent !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45), 0 12px 26px -10px rgba(53, 224, 208, .75) !important;
+}
+html[data-theme="crystal"] .button.button-primary:hover { background: linear-gradient(180deg, #7ff3e8, #35e0d0) !important; }
+html[data-theme="crystal"] .button.button-primary span { color: #03121a !important; }

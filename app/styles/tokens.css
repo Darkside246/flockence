@@ -1,0 +1,120 @@
+/* Flockence design tokens (2026 redesign).
+   Structural tokens live here. Colour comes from the per-theme semantic palette in
+   app/theme-system.css; the component colour tokens below are derived from it, so every
+   one of the seven themes gets the same components without its own overrides. */
+
+:root {
+  /* Brand (Poultry Farm). Leaf and Harvest are fills and chart marks only: they are
+     below 3:1 as text on white. */
+  --brand-forest: #2e5a12;
+  --brand-forest-deep: #23450e;
+  --brand-leaf: #7cb733;
+  --brand-slate: #232b1c;
+  --brand-harvest: #e0a21e;
+  --brand-canvas: #f5f6f1;
+
+  /* Type */
+  --font-sans: "Manrope Variable", Manrope, "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 22px;
+  --text-3xl: 28px;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-heavy: 800;
+
+  /* Space: 4 / 8 / 12 / 16 / 20 / 24 / 32 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+
+  /* Radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  /* Controls */
+  --control-h-sm: 32px;
+  --control-h: 40px;
+  --control-h-touch: 44px;
+
+  /* Layout */
+  --rail-w: 232px;
+  --content-max: 1360px;
+  --gutter: var(--space-6);
+  --header-h: 56px;
+  --bottom-bar-h: 64px;
+
+  /* Motion */
+  --ease: cubic-bezier(.2, .7, .2, 1);
+  --duration: .16s;
+}
+
+/* Component colour and shape tokens, derived from whichever theme palette is active. */
+html:is(:root, [data-theme]) {
+  --ds-canvas: var(--bg-canvas);
+  --ds-surface: var(--bg-surface);
+  --ds-surface-2: var(--bg-surface-secondary);
+  --ds-surface-raised: var(--bg-surface-elevated);
+  --ds-text: var(--text-primary);
+  --ds-text-2: var(--text-secondary);
+  --ds-text-3: var(--text-muted);
+  --ds-heading: var(--text-heading, var(--text-primary));
+  --ds-accent: var(--accent-primary);
+  --ds-accent-hover: var(--accent-primary-hover);
+  --ds-accent-soft: var(--accent-soft);
+  --ds-on-accent: var(--accent-contrast);
+  --ds-border: var(--border-default);
+  --ds-border-strong: var(--border-strong);
+  --ds-focus: var(--border-focus);
+  --ds-success: var(--status-success);
+  --ds-warning: var(--status-warning);
+  --ds-danger: var(--status-danger);
+  --ds-info: var(--status-info);
+  --ds-success-soft: color-mix(in srgb, var(--status-success) 13%, var(--bg-surface));
+  --ds-warning-soft: color-mix(in srgb, var(--status-warning) 14%, var(--bg-surface));
+  --ds-danger-soft: color-mix(in srgb, var(--status-danger) 12%, var(--bg-surface));
+  --ds-info-soft: color-mix(in srgb, var(--status-info) 12%, var(--bg-surface));
+  --ds-card-radius: min(var(--card-radius, 12px), var(--radius-xl));
+  --ds-control-radius: var(--control-radius, var(--radius-md));
+
+  /* Elevation scale, built from the theme's own shadows. */
+  --elev-0: none;
+  --elev-1: var(--shadow-card);
+  --elev-2: var(--shadow-hover, var(--shadow-elevated));
+  --elev-3: var(--shadow-elevated);
+  --elev-4: var(--shadow-elevated), 0 24px 64px #0000002e;
+}
+
+/* Compact density tightens the space scale one step; sharp radius squares controls. */
+html[data-density="compact"] {
+  --space-3: 10px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 20px;
+  --control-h: 36px;
+}
+html[data-radius="sharp"] {
+  --ds-card-radius: var(--radius-sm);
+  --ds-control-radius: var(--radius-xs);
+}
+
+/* Fingers and gloves: touch screens keep 44px targets. */
+@media (pointer: coarse), (max-width: 760px) {
+  :root, html[data-density] { --control-h: var(--control-h-touch); --gutter: 16px; }
+}
