@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
 import { calendarDateInTimeZone } from "@/lib/poultry-metrics.mjs";
+import { offlineSnapshot } from "@/lib/offline-snapshot";
 
 export async function GET(request: Request) {
   const access = await currentUserOrRoleResponse(request);
   if (access.response) return access.response;
   const canRecordSales = access.user.role === "OWNER" || access.user.role === "MANAGER";
-  const [farm, flocks, saleLots] = await Promise.all([
+  const [farm, flocks, saleLots, snapshot] = await Promise.all([
     prisma.farm.findUniqueOrThrow({ where: { id: access.user.farmId }, select: { name: true, currency: true } }),
     prisma.batch.findMany({ where: { status: "ACTIVE" }, select: { id: true, name: true, productionType: true, species: true }, orderBy: { name: "asc" } }),
     canRecordSales ? prisma.inventoryItem.findMany({
@@ -15,6 +16,8 @@ export async function GET(request: Request) {
       orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: 100,
       select: { id: true, batchId: true, lotCode: true, quantity: true, sellingPriceMinor: true, product: { select: { name: true, unit: true } } },
     }) : Promise.resolve([]),
+    // "Farm at a glance", kept on the device (encrypted) for reading with no signal (lib/offline-snapshot.ts).
+    offlineSnapshot().catch(() => null),
   ]);
   return NextResponse.json({
     scope: { farmId: access.user.farmId, userId: access.user.id },
@@ -26,5 +29,6 @@ export async function GET(request: Request) {
     canRecordExpenses: access.user.role === "OWNER" || access.user.role === "MANAGER",
     today: calendarDateInTimeZone(new Date()),
     flocks: flocks.map(({ id, name, productionType, species }) => ({ id, name, layer: productionType === "LAYER" || species.toUpperCase() === "LAYER" })),
+    snapshot,
   }, { headers: { "Cache-Control": "private, no-store" } });
 }

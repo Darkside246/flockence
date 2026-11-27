@@ -807,3 +807,26 @@ test("vision context: feed, weight, health, pen and findings from the farm's rec
   assert.equal(b.expectedLive, null, "farm B cannot read farm A's flock");
   assert.ok(!b.text.includes("Wet litter") && !b.text.includes("120 m²"), "nor its pen or findings");
 });
+
+test("offline snapshot: each flock's records and today's daily check, open findings and the latest check per pen, own farm only", async () => {
+  const { offlineSnapshot } = await import("../lib/offline-snapshot.ts");
+  const stamp = Date.now();
+  const batch = await runAsFarm(A, () => prisma.batch.create({ data: { name: `Glance flock ${stamp}`, startDate: new Date(Date.now() - 10 * 86_400_000), initialChicks: 500, chickCostMinor: 0, status: "ACTIVE" } }));
+  await runAsFarm(A, () => prisma.birdCount.create({ data: { batchId: batch.id, date: new Date(Date.now() - 10 * 86_400_000), liveCount: 500, note: "Initial count" } }));
+  await runAsFarm(A, () => prisma.visionFinding.create({ data: { kind: "LITTER", title: `Glance wet litter ${stamp}`, severity: "HIGH", state: "OBSERVED", incidentKey: `glance-${stamp}`, penName: "Glance Pen", firstSeenAt: new Date(), lastSeenAt: new Date(), history: [] } }));
+  await runAsFarm(A, () => prisma.healthObservation.create({ data: { observedAt: new Date(), symptom: "Farm Vision inspection", category: "VISION:PEN", affectedCount: 0, notes: "x",
+    visionAssessment: { version: 1, model: "m", source: { kind: "UPLOAD" }, inspectionCategory: "PEN", status: "GOOD", signals: Array.from({ length: 7 }, (_, i) => ({ category: ["BEHAVIOR", "DISTRIBUTION", "LITTER", "COMFORT", "FEED_WATER", "EQUIPMENT", "VISIBLE_HEALTH"][i], state: "NOT_OBSERVED" })), confidence: "HIGH", summary: "Birds spread evenly.", checks: [], evidenceId: "e1", pen: { id: `glance-pen-${stamp}`, name: "Glance Pen" } } } }));
+
+  const s = await runAsFarm(A, () => offlineSnapshot());
+  const f = s.flocks.find((x) => x.id === batch.id);
+  assert.ok(f, "the active flock is in the snapshot");
+  assert.equal(f.dailyCheckToday, false);
+  assert.ok(f.sections.some((x) => x.title === "Flock" && /500 placed; 500 live/.test(x.lines.join(" "))));
+  assert.ok(!f.sections.some((x) => x.title === "Time"), "no time line");
+  assert.ok(s.findings.some((x) => x.title === `Glance wet litter ${stamp}` && x.place === "Glance Pen"));
+  assert.ok(s.pens.some((p) => p.name === "Glance Pen" && p.summary === "Birds spread evenly."));
+
+  const b = await runAsFarm(B, () => offlineSnapshot());
+  assert.ok(!b.flocks.some((x) => x.id === batch.id), "farm B's phone never gets farm A's flocks");
+  assert.ok(!b.findings.some((x) => x.title === `Glance wet litter ${stamp}`));
+});

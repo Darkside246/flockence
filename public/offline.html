@@ -26,6 +26,17 @@
       <div id="workspace" hidden>
         <h2 id="farm"></h2>
         <p id="last-sync"></p>
+        <section id="glance" aria-labelledby="glance-title" hidden>
+          <h2 id="glance-title">Farm at a glance</h2>
+          <p id="glance-time"></p>
+          <div id="glance-today"></div>
+          <div id="glance-flocks"></div>
+          <h3>Open Vision findings</h3>
+          <ul id="glance-findings"></ul>
+          <h3>Latest Vision check of each pen</h3>
+          <ul id="glance-pens"></ul>
+        </section>
+        <h2>Record</h2>
         <form id="entry">
           <label for="record-kind">Record type</label>
           <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option><option value="feed">Feed consumption</option><option value="inspection">Flock inspection</option><option id="treatment-option" value="treatment" hidden disabled>Treatment record</option><option id="sale-option" value="sale" hidden disabled>Sale draft</option><option id="expense-option" value="expense" disabled hidden>Farm expense</option></select>

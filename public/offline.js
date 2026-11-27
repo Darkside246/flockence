@@ -55,6 +55,7 @@ async function render(active) {
   const rows = await list(active);
   if (current !== active) return;
   find("farm").textContent = active.profile.farm;
+  renderGlance(active.profile.snapshot);
   find("last-sync").textContent = active.profile.lastSync
     ? "Last synced " + new Date(active.profile.lastSync).toLocaleString()
     : "No farm records have synced from this device yet.";
@@ -141,6 +142,46 @@ async function render(active) {
     entries.append(li);
   }
   indicator();
+}
+
+const STATUS_TEXT = { CRITICAL: "Urgent", WARNING: "Needs attention", ATTENTION: "Needs attention", INSUFFICIENT_EVIDENCE: "Not enough seen", GOOD: "Looks good" };
+const SEVERITY_TEXT = { CRITICAL: "urgent", HIGH: "high", MEDIUM: "medium", INFO: "low" };
+function el(tag, text, className) {
+  const node = document.createElement(tag);
+  if (text !== undefined) node.textContent = text;
+  if (className) node.className = className;
+  return node;
+}
+/** "Farm at a glance": read-only, from the last sync, kept on this device encrypted (lib/offline-snapshot.ts). */
+function renderGlance(snapshot) {
+  const box = find("glance");
+  if (!snapshot || !Array.isArray(snapshot.flocks)) { box.hidden = true; return; }
+  box.hidden = false;
+  const taken = new Date(snapshot.takenAt);
+  const hours = Math.round((Date.now() - taken.getTime()) / 3600000);
+  find("glance-time").textContent = "As of " + taken.toLocaleString() + (hours >= 1 ? " (" + hours + " hour" + (hours === 1 ? "" : "s") + " ago). Entries saved since then are not included." : ".");
+  const missing = snapshot.flocks.filter(f => !f.dailyCheckToday).map(f => f.name);
+  find("glance-today").replaceChildren(el("p", snapshot.flocks.length
+    ? (missing.length ? "Daily check not yet recorded today for: " + missing.join(", ") + "." : "Daily check recorded today for every flock.")
+    : "No active flocks.", missing.length ? "glance-todo" : "glance-done"));
+  find("glance-flocks").replaceChildren(...snapshot.flocks.map(f => {
+    const card = el("details", undefined, "glance-flock");
+    card.open = snapshot.flocks.length <= 3;
+    card.append(el("summary", f.name + (f.dailyCheckToday ? "" : " · daily check due")));
+    for (const s of f.sections || []) {
+      card.append(el("h4", s.title));
+      const ul = el("ul");
+      for (const line of s.lines || []) ul.append(el("li", line));
+      card.append(ul);
+    }
+    return card;
+  }));
+  const findings = snapshot.findings || [];
+  find("glance-findings").replaceChildren(...(findings.length ? findings.map(f => el("li", f.title + (f.place ? " (" + f.place + ")" : "") + ": " + (SEVERITY_TEXT[f.severity] || f.severity) + ", last seen " + new Date(f.lastSeenAt).toLocaleString()))
+    : [el("li", "None open.")]));
+  const pens = snapshot.pens || [];
+  find("glance-pens").replaceChildren(...(pens.length ? pens.map(p => el("li", p.name + ": " + (STATUS_TEXT[p.status] || p.status) + " (" + new Date(p.at).toLocaleString() + "). " + p.summary))
+    : [el("li", "No Vision checks in the last 7 days.")]));
 }
 
 function lock(message) {
