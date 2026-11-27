@@ -3,6 +3,7 @@ import { useEffect,useState } from "react";
 import { Nav } from "@/components/nav";
 import { TypeToConfirm } from "@/components/type-to-confirm";
 import { FlockEditDialog } from "@/components/flock-edit-dialog";
+import { useSession } from "@/components/auth-gate";
 
 type Batch={id:string;name:string;startDate:string;liveBirdCount?:number;productionType?:string|null;layerStage?:string|null;species?:string;breed?:string|null;placementNotes?:string|null;strain?:string|null;sex?:string|null;hatchery?:string|null;sourceLot?:string|null;placementQuality?:string|null;hatchDate?:string|null;purchaseDate?:string|null;expectedSlaughter?:string|null;targetSlaughterAgeDays:number;slaughterDecisionMode:string;targetLiveWeightKg?:number|null;status:string;initialChicks:number;chickCostMinor:number;mortalityEvents:{quantity:number}[];birdCounts?:{liveCount:number}[]};
 
@@ -10,6 +11,7 @@ async function readJson(r:Response){const t=await r.text();if(!r.ok)throw new Er
 
 export default function Batches(){
  const [batches,setBatches]=useState<Batch[]>([]); const [error,setError]=useState("");
+ const isOwner=useSession()?.role==="OWNER";
  const [houses,setHouses]=useState<string[]>([]);
  useEffect(()=>{fetch("/api/settings").then(r=>r.ok?r.json():null).then(d=>{const breed=(d?.settings??[]).find((x:{key:string})=>x.key==="default_breed")?.value;if(breed)setForm(f=>f.breed?f:{...f,breed})}).catch(()=>{})},[]);
  useEffect(()=>{fetch("/api/pens").then(r=>r.ok?r.json():[]).then(rows=>Array.isArray(rows)&&setHouses(rows.filter((p:{active?:boolean})=>p.active!==false).map((p:{name:string})=>p.name))).catch(()=>{})},[]);
@@ -61,7 +63,7 @@ export default function Batches(){
     <label>Chick dealer<select value={form.dealer} onChange={e=>chooseDealer(e.target.value)}><option value="">Usual dealer (BBD {(prices.defaultPriceMinor/100).toFixed(2)})</option>{prices.dealers.map(d=><option key={d.id} value={d.id}>{d.name}{d.lastPriceMinor!=null?` (last BBD ${(d.lastPriceMinor/100).toFixed(2)})`:""}</option>)}<option value="__new">+ A different dealer…</option></select></label>
     {form.dealer==="__new"&&<label>Dealer name<input value={form.newDealer} maxLength={80} onChange={e=>setForm({...form,newDealer:e.target.value})} placeholder="e.g. the dealer's name" required/></label>}
     <label>Price per chick BBD<input type="number" step="0.01" min="0" value={Number(form.chickCost)/100} onChange={e=>{setPriceTouched(true);setForm({...form,chickCost:String(Math.round(Number(e.target.value)*100))})}}/>
-      {form.dealer===""&&Number(form.chickCost)!==prices.defaultPriceMinor&&<button type="button" className="button" style={{marginTop:6}} onClick={()=>void saveUsualPrice()}>Make BBD {(Number(form.chickCost)/100).toFixed(2)} my usual price</button>}</label>
+      {isOwner&&form.dealer===""&&Number(form.chickCost)!==prices.defaultPriceMinor&&<button type="button" className="button" style={{marginTop:6}} onClick={()=>void saveUsualPrice()}>Make BBD {(Number(form.chickCost)/100).toFixed(2)} my usual price</button>}</label>
   </div>
   {form.productionType==="LAYER" && <div className="card" style={{marginTop:4}}><div className="section-head"><div><h3>Current layer stage</h3><p>Choose where this flock is today so egg collection and stage history are correct.</p></div><span className="badge">REQUIRED FOR EGGS</span></div><label>Stage<select value={form.layerStage} onChange={e=>setForm({...form,layerStage:e.target.value})}><option value="CHICK">Chick</option><option value="GROWER">Grower</option><option value="PULLET">Pullet</option><option value="PRE_LAY">Pre-lay</option><option value="LAYING">Laying</option><option value="MOLT">Molt</option><option value="SPENT">Spent</option></select></label></div>}
   {form.productionType==="BROILER" && <div className="card" style={{marginTop:4}}><div className="section-head"><div><h3>Broiler harvest target</h3><p>These are planning settings, not an automatic harvest instruction.</p></div><span className="badge">OPTIONAL</span></div><div className="grid2"><label>Target harvest age (days)<input type="number" min="1" value={form.targetAge} onChange={e=>setForm({...form,targetAge:e.target.value})}/></label><label>Harvest decision<select value={form.mode} onChange={e=>setForm({...form,mode:e.target.value})}><option value="AGE_OR_WEIGHT">Age or weight</option><option value="AGE_TARGET">Age target</option><option value="WEIGHT_TARGET">Weight target</option><option value="MANUAL">Manual review</option></select></label><label>Target live weight kg<input type="number" min="0" step="0.01" value={form.targetWeight} onChange={e=>setForm({...form,targetWeight:e.target.value})} placeholder="Optional"/></label></div></div>}

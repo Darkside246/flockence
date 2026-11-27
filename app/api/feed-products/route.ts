@@ -1,3 +1,4 @@
+import { SETTINGS_ROLES } from "@/lib/farm-roles";
 import { NextResponse } from "next/server";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
 import { prisma } from "@/lib/prisma";
@@ -43,7 +44,7 @@ function validate(input: Record<string, unknown>) {
 }
 
 export async function POST(request: Request) {
-  const session = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
+  const session = await currentUserOrRoleResponse(request, SETTINGS_ROLES);
   if (session.response) return session.response;
   await ensureFarm();
   const input = await request.json().catch(() => ({}));
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const session = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
+  const session = await currentUserOrRoleResponse(request, SETTINGS_ROLES);
   if (session.response) return session.response;
   await ensureFarm();
   const id = new URL(request.url).searchParams.get("id");

@@ -12,7 +12,8 @@ const blank = { name: "", category: "FEED", businessName: "", contactPerson: "",
 /** Everyone who supplies the farm, by kind; added here or in the middle of a purchase. */
 export default function SuppliersPage() {
   const session = useSession();
-  const canEdit = session?.role === "OWNER" || session?.role === "MANAGER";
+  // The supplier list is a farm-wide catalogue: the owner's (lib/farm-roles.ts).
+  const canEdit = session?.role === "OWNER";
   const [rows, setRows] = useState<Supplier[]>([]);
   const [q, setQ] = useState(""), [cat, setCat] = useState(""), [showInactive, setShowInactive] = useState(false);
   const [form, setForm] = useState<typeof blank & { id?: string; customCategory?: string }>(blank);
