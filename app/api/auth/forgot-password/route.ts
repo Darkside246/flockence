@@ -23,7 +23,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "If an account exists for that email, a password reset link will be sent shortly." });
     }
 
-    const captchaResponse = await accountCaptchaResponse(body.captchaToken);
+    const captchaResponse = await accountCaptchaResponse(body.captchaToken, "password_reset");
     if (captchaResponse) return captchaResponse;
 
     const emailResponse = await accountRateLimitResponse("password-reset:email:" + email, 3, 60 * 60_000, message);

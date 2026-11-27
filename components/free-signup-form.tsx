@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import type { CaptchaMode } from "@/lib/signup-captcha";
 import { useAccountCaptcha } from "@/components/account-captcha";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
-export function FreeSignupForm({ captchaSiteKey }: { captchaSiteKey: string }) {
+export function FreeSignupForm({ captchaSiteKey, captchaMode }: { captchaSiteKey: string; captchaMode: CaptchaMode }) {
   const router = useRouter();
   const [token, setToken] = useState("");
   const [email, setEmail] = useState("");
@@ -16,7 +17,7 @@ export function FreeSignupForm({ captchaSiteKey }: { captchaSiteKey: string }) {
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
-  const captcha = useAccountCaptcha(captchaSiteKey);
+  const captcha = useAccountCaptcha(captchaSiteKey, captchaMode, "free_signup");
 
   useEffect(() => {
     const proof = new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
@@ -35,7 +36,7 @@ export function FreeSignupForm({ captchaSiteKey }: { captchaSiteKey: string }) {
     try {
       const response = await fetch("/api/auth/free-signup", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(token ? { action: "finish", token, ownerName, farmName, password } : { action: "send", email, captchaToken: captcha.token }),
+        body: JSON.stringify(token ? { action: "finish", token, ownerName, farmName, password } : { action: "send", email, captchaToken: await captcha.responseToken() }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) throw new Error(data?.error || "Signup is temporarily unavailable.");

@@ -1,4 +1,11 @@
-export async function verifySignupCaptcha(token: unknown, hostname: string): Promise<"verified" | "rejected" | "unavailable"> {
+export type CaptchaMode = "v2" | "v3";
+export type CaptchaAction = "login" | "signup" | "password_reset" | "free_signup";
+
+export function accountCaptchaMode(): CaptchaMode {
+  return process.env.RECAPTCHA_MODE === "v3" ? "v3" : "v2";
+}
+
+export async function verifySignupCaptcha(token: unknown, hostname: string, expectedAction?: CaptchaAction): Promise<"verified" | "rejected" | "unavailable"> {
   const secret = process.env.RECAPTCHA_SECRET_KEY?.trim();
   if (!secret || !process.env.RECAPTCHA_SITE_KEY?.trim()) return "unavailable";
   if (typeof token !== "string" || !token || token.length > 4096) return "rejected";
@@ -18,7 +25,13 @@ export async function verifySignupCaptcha(token: unknown, hostname: string): Pro
     if (Array.isArray(errors) && errors.some(code => code === "invalid-input-secret" || code === "missing-input-secret")) {
       return "unavailable";
     }
-    return result.success && result.hostname === hostname ? "verified" : "rejected";
+    if (!result.success || result.hostname !== hostname) return "rejected";
+    if (accountCaptchaMode() === "v3") {
+      const score = result.score;
+      if (!expectedAction || result.action !== expectedAction || typeof score !== "number"
+        || !Number.isFinite(score) || score < 0.5 || score > 1) return "rejected";
+    }
+    return "verified";
   } catch {
     return "unavailable";
   }

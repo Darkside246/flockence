@@ -1,8 +1,8 @@
-import { accountCaptchaSiteKey } from "@/lib/signup-captcha";
+import { accountCaptchaMode, accountCaptchaSiteKey } from "@/lib/signup-captcha";
 import { SignupForm } from "@/components/auth-form";
 
 export const dynamic = "force-dynamic";
 
 export default function SignupPage() {
-  return <SignupForm captchaSiteKey={accountCaptchaSiteKey()} />;
+  return <SignupForm captchaSiteKey={accountCaptchaSiteKey()} captchaMode={accountCaptchaMode()} />;
 }
