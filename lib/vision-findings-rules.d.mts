@@ -9,7 +9,7 @@ export const REVIEW_STATES: FindingState[];
 export const KIND_LABELS: Record<FindingKind, string>;
 export const INCIDENT_WINDOW_MS: number;
 export function higher(a: FindingSeverity, b: FindingSeverity): FindingSeverity;
-export function findingsFromAnalysis(analysis: unknown, options?: { expectedLive?: number | null }): NewFinding[];
+export function findingsFromAnalysis(analysis: unknown, options?: { expectedLive?: number | null; eggCounts?: boolean }): NewFinding[];
 export function incidentKey(kind: string, where?: { penId?: string | null; cameraName?: string | null }): string;
 export function joinsIncident(existing: { state: string; lastSeenAt: Date | string } | null | undefined, now: Date): boolean;
 export function reviewFinding(

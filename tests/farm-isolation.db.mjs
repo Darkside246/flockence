@@ -863,3 +863,37 @@ test("recording checks: one clip per part of the day, filed at its filming time,
   assert.ok(Array.isArray(status.missing[camera.name]));
   assert.equal(await runAsFarm(B, () => loadRecordingStatus()), null, "farm B has its own (empty) recording state");
 });
+
+test("eggs: a layer farm's report compares floor eggs seen with collections; counts only once switched on; broiler-only scopes have no eggs area", async () => {
+  const { buildVisionReport, periodFor } = await import("../lib/vision-reports.ts");
+  const { recordFindings } = await import("../lib/vision-findings.ts");
+  const { setEggCounts } = await import("../lib/vision-egg-settings.ts");
+  const stamp = Date.now();
+  const penName = `Layer Pen ${stamp}`;
+  const pen = await runAsFarm(A, () => prisma.setting.create({ data: { key: `PENCFG::u::lay-${stamp}`, value: JSON.stringify({ name: penName, active: true }) } }));
+  const placed = new Date(Date.now() - 200 * 86_400_000);
+  const hens = await runAsFarm(A, () => prisma.batch.create({ data: { name: "Hens", startDate: placed, initialChicks: 1000, chickCostMinor: 0, status: "ACTIVE", placementHouse: penName, productionType: "LAYER" } }));
+  await runAsFarm(A, () => prisma.birdCount.create({ data: { batchId: hens.id, date: placed, liveCount: 1000, note: "Initial count" } }));
+  await runAsFarm(A, () => prisma.eggCollection.create({ data: { batchId: hens.id, date: new Date(Date.now() - 3_600_000), liveHens: 1000, totalEggs: 850, saleableEggs: 820, floorEggs: 12 } }));
+  const at = new Date(Date.now() - 1_800_000);
+  const obs = await runAsFarm(A, () => prisma.healthObservation.create({ data: { observedAt: at, symptom: "Farm Vision inspection", category: "VISION:PEN", affectedCount: 0, notes: "x",
+    visionAssessment: { pen: { id: pen.id, name: penName }, source: { kind: "UPLOAD" }, signals: [], eggs: { floorEggs: 5, nestEggs: 40, floorEggAreas: ["by the door"] } } } }));
+  const found = await runAsFarm(A, () => recordFindings({ analysis: { eggs: { floorEggs: 5, floorEggAreas: ["by the door"] } }, expectedLive: null, at, pen: { id: pen.id, name: penName }, batchId: hens.id, cameraName: null, observationId: obs.id, evidenceUrl: null }));
+  assert.equal(found[0].title, "Floor eggs seen", "no count before the farm switches counts on");
+
+  const report = await runAsFarm(A, () => buildVisionReport({ kind: "PEN", id: pen.id }, periodFor("24h")));
+  assert.ok(report.areas.some((a) => a.area === "EGGS" && a.status === "MONITOR"));
+  assert.equal(report.eggs.recordedEggs, 850);
+  assert.equal(report.eggs.recordedFloorEggs, 12);
+  assert.equal(report.eggs.picturesWithFloorEggs, 1);
+  assert.equal(report.eggs.mostFloorEggsInOnePicture, null);
+  await runAsFarm(A, () => setEggCounts(true));
+  const counted = await runAsFarm(A, () => buildVisionReport({ kind: "PEN", id: pen.id }, periodFor("24h")));
+  assert.equal(counted.eggs.mostFloorEggsInOnePicture, 5);
+  await runAsFarm(A, () => setEggCounts(false));
+
+  const broilerPen = await runAsFarm(A, () => prisma.setting.create({ data: { key: `PENCFG::u::broil-${stamp}`, value: JSON.stringify({ name: `Broiler Pen ${stamp}`, active: true }) } }));
+  const broiler = await runAsFarm(A, () => buildVisionReport({ kind: "PEN", id: broilerPen.id }, periodFor("24h")));
+  assert.ok(!broiler.areas.some((a) => a.area === "EGGS"), "no eggs area for a pen without layers");
+  assert.equal(broiler.eggs, null);
+});

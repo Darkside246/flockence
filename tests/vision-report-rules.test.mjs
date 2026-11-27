@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { areaStatuses, overallStatus, rankedActions, summarise } from "../lib/vision-report-rules.mjs";
+import { AREA_LABELS, areaStatuses, overallStatus, rankedActions, summarise } from "../lib/vision-report-rules.mjs";
 
 test("with no inspections, every area and the whole report are 'insufficient data', never 'good'", () => {
   const areas = areaStatuses([], []);
@@ -41,4 +41,13 @@ test("actions: most serious first, one per kind, closed findings left out", () =
   ]);
   assert.deepEqual(actions.map((a) => a.kind), ["DEAD_OR_DOWN_BIRD", "LITTER"]);
   assert.match(actions[0].action, /record it in Daily Rounds/);
+});
+
+test("eggs area: seen when a picture reported eggs; floor-egg findings set its status and action", () => {
+  const areas = areaStatuses([{ kind: "FLOOR_EGGS", severity: "MEDIUM", state: "OBSERVED", title: "Floor eggs seen" }], [{ signals: [], eggsSeen: true }]);
+  assert.equal(areas.EGGS.status, "MONITOR");
+  assert.equal(AREA_LABELS.EGGS, "Eggs (layers)");
+  assert.equal(areaStatuses([], [{ signals: [], eggsSeen: true }]).EGGS.status, "GOOD");
+  assert.equal(areaStatuses([], [{ signals: [] }]).EGGS.status, "INSUFFICIENT_DATA");
+  assert.match(rankedActions([{ kind: "FLOOR_EGGS", severity: "MEDIUM", state: "OBSERVED", title: "Floor eggs seen" }])[0].action, /nest boxes/);
 });

@@ -15,6 +15,7 @@ type Report = {
   changes: { area: string; label: string; now: number; before: number; trend: string }[];
   evidence: { title: string; at: string; url: string | null }[];
   limitations: string[];
+  eggs: { recordedEggs: number; recordedFloorEggs: number; picturesChecked: number; picturesWithFloorEggs: number; mostFloorEggsInOnePicture: number | null; countsOn: boolean; note: string } | null;
 };
 type Option = { id: string; name: string };
 
@@ -26,6 +27,18 @@ const tone = (status: string) => ({ URGENT: "urgent", ATTENTION: "attention", MO
  * and a period, and read what Vision found, built from the inspections, findings and farm records already saved.
  * Opening a report runs no new picture analysis, so it costs nothing.
  */
+/** Show Vision's egg counts from pictures, once the farm has compared them with its collections (owners, managers). */
+function EggCountsSwitch({ on }: { on: boolean }) {
+  const [value, setValue] = useState(on);
+  const [note, setNote] = useState("");
+  return <label className="vision-egg-switch"><input type="checkbox" checked={value} onChange={async (e) => {
+    const next = e.target.checked;
+    setNote("");
+    const r = await fetch("/api/vision/eggs", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ counts: next }) }).catch(() => null);
+    if (r?.ok) { setValue(next); setNote("Saved. New checks and reports use this."); } else setNote(r?.status === 403 ? "Only owners and managers can change this." : "Could not save.");
+  }} /> Show egg counts from pictures (switch on after comparing a few days of Vision's counts with your collections){note && <small className="muted"> {note}</small>}</label>;
+}
+
 export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras: { name: string }[]; onVisionPage?: boolean }) {
   const [pens, setPens] = useState<Option[]>([]);
   const [batches, setBatches] = useState<Option[]>([]);
@@ -102,6 +115,15 @@ export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras:
         {report.flocks.length > 0 && <div className="table-scroll"><table className="data-table"><thead><tr><th>Flock</th><th>Age</th><th>Placed</th><th>Live (records)</th><th>Deaths in period</th><th>Feed in period</th>{report.flocks.some(f => f.eggsInPeriod != null) && <th>Eggs (floor)</th>}</tr></thead>
           <tbody>{report.flocks.map(f => <tr key={f.id}><td>{f.name} ({f.kind})</td><td>{f.ageDays} days</td><td>{f.placed.toLocaleString()}</td><td>{f.liveRecorded?.toLocaleString() ?? "—"}</td><td>{f.deathsInPeriod}</td><td>{f.feedKgInPeriod} kg</td>{report.flocks.some(x => x.eggsInPeriod != null) && <td>{f.eggsInPeriod != null ? `${f.eggsInPeriod} (${f.floorEggsInPeriod})` : "—"}</td>}</tr>)}</tbody></table></div>}
       </section>
+
+      {report.eggs && <section className="card"><h3>Eggs (layers)</h3>
+        <ul>
+          <li><strong>Your records:</strong> {report.eggs.recordedEggs.toLocaleString()} eggs collected, {report.eggs.recordedFloorEggs.toLocaleString()} of them floor eggs.</li>
+          <li><strong>Vision:</strong> {report.eggs.picturesChecked ? `floor eggs seen in ${report.eggs.picturesWithFloorEggs} of ${report.eggs.picturesChecked} pictures of the layer house${report.eggs.mostFloorEggsInOnePicture != null ? `, at most about ${report.eggs.mostFloorEggsInOnePicture} in one picture` : ""}.` : "no pictures of the layer house in this period."}</li>
+        </ul>
+        <p className="muted">{report.eggs.note}</p>
+        <EggCountsSwitch on={report.eggs.countsOn} />
+      </section>}
 
       {report.changes.length > 0 && <section className="card"><h3>Compared with the period before</h3><ul>
         {report.changes.map(c => <li key={c.area}>{c.label}: {c.now} finding{c.now === 1 ? "" : "s"} (before: {c.before}){c.trend === "worse" ? ", worse" : c.trend === "better" ? ", better" : ""}</li>)}

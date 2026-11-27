@@ -3,6 +3,7 @@ import { currentFarmId } from "@/lib/operations";
 import { loadFlockLedger } from "@/lib/flock-ledger";
 import { FARM_TIME_ZONE } from "@/lib/poultry-metrics.mjs";
 import { visionPens } from "@/lib/vision-pens";
+import { eggCountsOn } from "@/lib/vision-egg-settings";
 import {
   AREAS, AREA_LABELS, STATUS_LABELS, areaStatuses, dayParts, overallStatus, rankedActions, summarise,
   type Area, type AreaStatus,
@@ -16,7 +17,7 @@ import {
 export type ReportScope = { kind: "FARM" } | { kind: "PEN"; id: string } | { kind: "BATCH"; id: string } | { kind: "CAMERA"; name: string };
 export type ReportPeriod = { from: Date; to: Date; label: string };
 
-type Assessment = { pen?: { id: string; name: string }; source?: { kind?: string; name?: string }; signals?: { category?: string; state?: string }[]; capture?: unknown };
+type Assessment = { pen?: { id: string; name: string }; source?: { kind?: string; name?: string }; signals?: { category?: string; state?: string }[]; capture?: unknown; eggs?: { floorEggs?: number | null; nestEggs?: number | null } };
 
 const hourInFarm = (d: Date) => Number(new Intl.DateTimeFormat("en-GB", { timeZone: FARM_TIME_ZONE, hour: "2-digit", hourCycle: "h23" }).format(d));
 const visibleFrom = (notes: string | null) => { const m = notes?.match(/Birds visible: about (\d+)/); return m ? Number(m[1]) : null; };
@@ -101,7 +102,7 @@ export async function buildVisionReport(scope: ReportScope, period: ReportPeriod
     select: { kind: true, state: true },
   });
 
-  const parsedInspections = inspections.map((r) => ({ signals: ((r.visionAssessment ?? {}) as Assessment).signals ?? [], visibleBirds: visibleFrom(r.notes) }));
+  const parsedInspections = inspections.map((r) => ({ signals: ((r.visionAssessment ?? {}) as Assessment).signals ?? [], visibleBirds: visibleFrom(r.notes), eggsSeen: Boolean(((r.visionAssessment ?? {}) as Assessment).eggs) }));
   const areas = areaStatuses(findings, parsedInspections);
   const overall: AreaStatus = overallStatus(areas);
   const actions = rankedActions(findings);
@@ -153,8 +154,29 @@ export async function buildVisionReport(scope: ReportScope, period: ReportPeriod
   const visibleMax = parsedInspections.reduce<number | null>((m, i) => (i.visibleBirds != null && (m == null || i.visibleBirds > m) ? i.visibleBirds : m), null);
   const liveTotal = flockLines.every((f) => f.liveRecorded != null) && flockLines.length ? flockLines.reduce((s, f) => s + (f.liveRecorded ?? 0), 0) : null;
 
-  const changes = AREAS.map((area) => {
-    const kinds = { BIRDS: ["DEAD_OR_DOWN_BIRD", "HEALTH", "BEHAVIOUR"], THERMAL: ["THERMAL"], LITTER: ["LITTER"], FEED_WATER: ["FEED_WATER"], EQUIPMENT: ["EQUIPMENT"], POPULATION: ["POPULATION"] }[area as Area];
+  // Eggs (layers): shown only when the scope has a layer flock or floor-egg findings. Vision's egg counts are shown
+  // beside the collection records only once the farm has switched them on (lib/vision-egg-settings.ts).
+  const layers = flockLines.filter((f) => f.kind === "layer");
+  const showEggs = layers.length > 0 || findings.some((f) => f.kind === "FLOOR_EGGS");
+  const areaList = (AREAS as Area[]).filter((a) => a !== "EGGS" || showEggs);
+  const countsOn = showEggs ? await eggCountsOn().catch(() => false) : false;
+  const eggPictures = inspections.map((r) => ((r.visionAssessment ?? {}) as Assessment).eggs).filter((e): e is NonNullable<Assessment["eggs"]> => Boolean(e));
+  const floorPictures = eggPictures.filter((e) => (e.floorEggs ?? 0) > 0).length;
+  const mostFloor = eggPictures.reduce<number | null>((m, e) => (Number.isInteger(e.floorEggs) && (m == null || (e.floorEggs as number) > m) ? (e.floorEggs as number) : m), null);
+  const eggs = showEggs ? {
+    recordedEggs: layers.reduce((s, f) => s + (f.eggsInPeriod ?? 0), 0),
+    recordedFloorEggs: layers.reduce((s, f) => s + (f.floorEggsInPeriod ?? 0), 0),
+    picturesChecked: eggPictures.length,
+    picturesWithFloorEggs: floorPictures,
+    mostFloorEggsInOnePicture: countsOn ? mostFloor : null,
+    countsOn,
+    note: countsOn
+      ? "Egg counts from pictures are what one camera could see, shown beside your collection records. Records are never changed by Vision."
+      : "Vision says whether floor eggs were seen and where. Its egg counts stay hidden until you have checked them and switched them on. Records are never changed by Vision.",
+  } : null;
+
+  const changes = areaList.map((area) => {
+    const kinds = { BIRDS: ["DEAD_OR_DOWN_BIRD", "HEALTH", "BEHAVIOUR"], THERMAL: ["THERMAL"], LITTER: ["LITTER"], FEED_WATER: ["FEED_WATER"], EQUIPMENT: ["EQUIPMENT"], POPULATION: ["POPULATION"], EGGS: ["FLOOR_EGGS"] }[area as Area];
     const now = findings.filter((f) => kinds.includes(f.kind) && f.state !== "DISMISSED").length;
     const then = before.filter((f) => kinds.includes(f.kind) && f.state !== "DISMISSED").length;
     return { area, label: AREA_LABELS[area as Area], now, before: then, trend: now > then ? "worse" : now < then ? "better" : "same" };
@@ -165,7 +187,7 @@ export async function buildVisionReport(scope: ReportScope, period: ReportPeriod
     "Vision sees only what the cameras and photos show; birds out of view are not assessed.",
     inspections.length < 3 ? `Only ${inspections.length} inspection${inspections.length === 1 ? "" : "s"} in this period.` : "",
     silent.length ? `No pictures in this period from: ${silent.join(", ")}.` : "",
-    ...AREAS.filter((a) => areas[a as Area].status === "INSUFFICIENT_DATA").map((a) => `${AREA_LABELS[a as Area]}: not seen in this period.`),
+    ...areaList.filter((a) => areas[a].status === "INSUFFICIENT_DATA").map((a) => `${AREA_LABELS[a]}: not seen in this period.`),
     "Confidence levels are the model's own and have not yet been measured against labelled farm pictures.",
   ].filter(Boolean);
 
@@ -173,7 +195,8 @@ export async function buildVisionReport(scope: ReportScope, period: ReportPeriod
     scope: { ...scope, label: scopeLabel }, period: { from: period.from.toISOString(), to: period.to.toISOString(), label: period.label },
     overall: { status: overall, label: STATUS_LABELS[overall] },
     summary: summarise({ scopeLabel, periodLabel: period.label, overall, actions, inspections: inspections.length, cameras: bySource.size, hoursCovered: hours.size, hoursInPeriod }),
-    areas: AREAS.map((a) => ({ area: a, label: AREA_LABELS[a as Area], status: areas[a as Area].status, statusLabel: STATUS_LABELS[areas[a as Area].status], reasons: areas[a as Area].reasons.slice(0, 5), fixed: areas[a as Area].fixed })),
+    areas: areaList.map((a) => ({ area: a, label: AREA_LABELS[a], status: areas[a].status, statusLabel: STATUS_LABELS[areas[a].status], reasons: areas[a].reasons.slice(0, 5), fixed: areas[a].fixed })),
+    eggs,
     actions,
     population: { liveRecorded: liveTotal, mostVisible: visibleMax, note: "Bird counts from pictures are estimates of what one camera can see, not the flock total. Official numbers are never changed by Vision." },
     flocks: flockLines,

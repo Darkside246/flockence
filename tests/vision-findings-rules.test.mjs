@@ -56,3 +56,15 @@ test("a review records who, when and why, and keeps the original", () => {
   assert.equal(reviewFinding({ state: "SUSPECTED" }, { state: "DELETED" }, "x", now).ok, false);
   assert.equal(reviewFinding({ state: "CONFIRMED" }, { state: "CONFIRMED" }, "x", now).ok, false);
 });
+
+test("floor eggs: a finding that says where, with the count only once egg counts are switched on", () => {
+  const analysis = { eggs: { floorEggs: 4, floorEggAreas: ["under the slats by the door"] } };
+  const [off] = findingsFromAnalysis(analysis);
+  assert.equal(off.kind, "FLOOR_EGGS");
+  assert.equal(off.severity, "MEDIUM");
+  assert.equal(off.title, "Floor eggs seen");
+  assert.match(off.detail, /under the slats by the door.*Egg records are not changed/);
+  assert.equal(findingsFromAnalysis(analysis, { eggCounts: true })[0].title, "About 4 floor eggs seen");
+  assert.equal(findingsFromAnalysis({ eggs: { floorEggs: 0, nestEggs: 30 } }).length, 0, "no floor eggs, no finding");
+  assert.equal(findingsFromAnalysis({ eggs: { floorEggs: null, floorEggAreas: ["corner"] } })[0].kind, "FLOOR_EGGS", "seen but not countable");
+});
