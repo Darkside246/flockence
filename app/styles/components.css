@@ -214,7 +214,9 @@
 .flocks-table :is(th[scope="row"], td) > span { display: block; color: var(--ds-text-2); font-size: var(--text-xs); line-height: 1.35; }
 .flocks-table :is(th[scope="row"], td) > strong { display: block; }
 .flocks-table td > strong { font-weight: var(--weight-semibold); }
-.flocks-actions .row-actions { justify-content: flex-end; flex-wrap: nowrap; gap: 6px; }
+.flocks-actions { width: 1%; }
+.flocks-actions .row-actions { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 4px; }
+.flocks-actions .button { white-space: nowrap; }
 .flocks-actions .button { min-height: var(--control-h-sm); padding: 0 var(--space-3); font-size: var(--text-xs); }
 .flocks-mortality { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr) minmax(0, .8fr) minmax(0, 1fr) auto; align-items: end; }
 .flocks-new { position: sticky; top: var(--space-4); max-height: calc(100dvh - 2 * var(--space-4)); overflow-y: auto; }
@@ -241,5 +243,6 @@
   .flocks-table :is(th[scope="row"], td) { padding: 0; border: 0; }
   .flocks-table th[scope="row"], .flocks-table .flocks-actions { grid-column: 1 / -1; }
   .flocks-table td.num { text-align: left; }
-  .flocks-actions .row-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .flocks-actions { width: auto; }
+  .flocks-actions .row-actions { flex-direction: row; justify-content: flex-start; flex-wrap: wrap; }
 }
