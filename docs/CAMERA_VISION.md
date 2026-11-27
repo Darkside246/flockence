@@ -238,3 +238,15 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
   pages stay Premium.
 - The Farm Vision page (now in the menu, under Control) shows the reports for every plan and how many photo checks are
   left this month. The daily email links there (`/vision#reports`).
+
+## Pen layout advice (Vision Intelligence plan section 5, 2026-11-27)
+
+- The Farm Vision page has a **Pen layout** section for each pen: floor area and stocking density (from the pen's saved
+  size, the flock's live birds and its latest live weight), feeders, drinkers and heaters recorded against what the
+  cameras saw, and ranked changes, each naming its guidance (Ross, Cobb, or the cameras over the last 7 days).
+- Vision now reports, for pen pictures, how much of the pen is in view, the feeders, drinkers, heaters and fans it can
+  count, where birds crowd and which areas they avoid (`layout` in the answer and in the saved assessment).
+- Equipment counts from the cameras are used only from pictures that show (most of) the pen; one crowded picture is not
+  treated as a layout problem (it must repeat). Vision never measures the pen from pictures and never changes the
+  records; the size comes from the Pens page or farm setup.
+- Code: `lib/pen-layout-rules.mjs`, `lib/pen-layout.ts`, `app/api/vision/layout`, `components/pen-layout.tsx`.
