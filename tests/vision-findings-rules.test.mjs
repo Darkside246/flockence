@@ -68,3 +68,15 @@ test("floor eggs: a finding that says where, with the count only once egg counts
   assert.equal(findingsFromAnalysis({ eggs: { floorEggs: 0, nestEggs: 30 } }).length, 0, "no floor eggs, no finding");
   assert.equal(findingsFromAnalysis({ eggs: { floorEggs: null, floorEggAreas: ["corner"] } })[0].kind, "FLOOR_EGGS", "seen but not countable");
 });
+
+test("animals in the house: one biosecurity finding; wild birds rank high", () => {
+  const [rats] = findingsFromAnalysis({ animals: [{ kind: "RODENT", where: "along the back wall" }] });
+  assert.equal(rats.kind, "PESTS");
+  assert.equal(rats.severity, "MEDIUM");
+  assert.equal(rats.title, "Seen in the house: rats or mice");
+  assert.match(rats.detail, /rats or mice along the back wall/);
+  const [birds] = findingsFromAnalysis({ animals: [{ kind: "WILD_BIRD", where: "on the feeder line" }, { kind: "CAT" }] });
+  assert.equal(birds.severity, "HIGH");
+  assert.equal(birds.title, "Seen in the house: wild birds, a cat");
+  assert.equal(findingsFromAnalysis({ animals: [] }).length, 0);
+});

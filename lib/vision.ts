@@ -47,6 +47,8 @@ Return ONLY valid JSON with this exact shape:
   "questions": [],
   "notVisible": ["parts of the pen or checks that are out of view, for example the drinker line"],
   "stillBirds": [{"where": "where in the picture", "why": "lying flat on its side in the same place as in the earlier picture", "confidence": "LOW|MEDIUM|HIGH"}],
+  "animals": [{"kind": "RODENT|WILD_BIRD|DOG|CAT|OTHER", "where": "", "confidence": "LOW|MEDIUM|HIGH"}],
+  "people": {"inView": 0, "activity": "FEEDING|WATERING|CLEANING|COLLECTING_EGGS|CHECKING_BIRDS|MAINTENANCE|OTHER|NONE", "boots": "SEEN|NOT_SEEN|UNCLEAR", "coveralls": "SEEN|NOT_SEEN|UNCLEAR"},
   "eggs": {"nestEggs": null, "floorEggs": null, "floorEggAreas": ["where on the floor, for example under the slats by the door"], "nestBoxes": "OPEN|CLOSED|NOT_VISIBLE"},
   "layout": {"view": "WHOLE_PEN|MOST_OF_PEN|PART_OF_PEN", "feeders": null, "drinkers": null, "heaters": null, "fans": null, "crowding": [{"at": "FEEDER|DRINKER|HEATER|WALL|CORNER|OTHER", "note": ""}], "emptyAreas": ["where birds avoid, for example the corner by the door"]},
   "escalate": false,
@@ -61,6 +63,10 @@ birdCount.visible is your best count of the birds you can actually see (in the c
 questions: when you are not sure about something the farmer could quickly confirm (for example whether a still bird has moved since, or whether a drinker line was just refilled), ask it as a short question, at most 3. Otherwise return an empty list.
 
 stillBirds: a bird that may be dead or unable to move. This means a bird lying on its side or back, legs out or head down, apart from the others, or one in exactly the same place and position in every picture (and in the earlier picture, when one is given) while other birds moved. List each one with where it is and why, and ask the farmer to check it in questions. Return an empty list when there is none. Healthy birds also rest, so only list a bird when its position or stillness stands out.
+
+animals: any animal that is not the flock and is inside or at the house: rats or mice, wild birds, dogs, cats or others, with where it is. Return an empty list when there is none. Do not guess from shadows.
+
+people: never describe or identify a person. Do not mention faces, names, age, gender, skin, hair or clothing colour, and do not compare a person across pictures. Only say how many people are in view, what work is being done, and whether boots and coveralls (protective clothing) can be seen. Use inView 0 and activity NONE when nobody is in view.
 
 eggs: only when the farm context says the flock is laying hens, or eggs are visible; otherwise null. Count the eggs you can actually see in nest boxes and, separately, on the floor or litter (floor eggs), using null when you cannot count them; say where the floor eggs are. Do not guess eggs you cannot see.
 

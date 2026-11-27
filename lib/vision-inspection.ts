@@ -12,6 +12,7 @@ import { callVisionModel, visionConfigured, visionEscalateModel, type VisionUsag
 import { recordVisionUsage } from "@/lib/vision-usage";
 import { recordFindings } from "@/lib/vision-findings";
 import { alertOnFindings } from "@/lib/vision-alerts";
+import { peopleSettings } from "@/lib/vision-people";
 import { inspectionContext } from "@/lib/vision-context";
 
 /**
@@ -159,10 +160,13 @@ export async function runVisionInspection(request: InspectionRequest): Promise<I
       parsed.medicalDisclaimer || "Image findings are observations only. They do not confirm disease or cause of death.",
     ].filter(Boolean).join("\n\n");
 
+    // People in view are kept only when the farm switched the people timeline on (lib/vision-people.ts).
+    const keepPeople = (await peopleSettings().catch(() => ({ timeline: false }))).timeline;
     const saved = await prisma.$transaction(async (tx) => {
       const media = await tx.visionMedia.create({ data: { farmId: currentFarmId(), storageKey: fileName, mimeType, byteSize: bytes.byteLength } });
       const imageUrl = `/api/vision/media/${media.id}`;
       const visionAssessment = createVisionAssessment(parsed, {
+        keepPeople,
         model: modelUsed, inspectionCategory: category, evidenceId: media.id,
         ...(pen ? { pen } : {}),
         ...(request.requestId ? { requestId: request.requestId } : {}),
