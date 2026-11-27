@@ -1,0 +1,15 @@
+export type Area = "BIRDS" | "THERMAL" | "LITTER" | "FEED_WATER" | "EQUIPMENT" | "POPULATION";
+export type AreaStatus = "URGENT" | "ATTENTION" | "MONITOR" | "GOOD" | "INSUFFICIENT_DATA";
+export type AreaResult = { status: AreaStatus; reasons: string[]; seen: boolean; fixed: number };
+export type ReportFinding = { kind: string; severity: string; state: string; title: string; occurrences?: number; lastSeenAt?: string | Date };
+export type ReportInspection = { signals?: { category?: string; state?: string }[]; visibleBirds?: number | null };
+export type RankedAction = { kind: string; severity: string; finding: string; action: string };
+export const AREAS: Area[];
+export const AREA_LABELS: Record<Area, string>;
+export const STATUS_LABELS: Record<AreaStatus, string>;
+export const ACTIONS: Record<string, string>;
+export function areaStatuses(findings: ReportFinding[], inspections: ReportInspection[]): Record<Area, AreaResult>;
+export function overallStatus(areas: Record<Area, AreaResult>): AreaStatus;
+export function rankedActions(findings: ReportFinding[]): RankedAction[];
+export function dayParts(hours: number[]): Record<"night" | "morning" | "midday" | "afternoon" | "evening", number>;
+export function summarise(input: { scopeLabel: string; periodLabel: string; overall: AreaStatus; actions: RankedAction[]; inspections: number; cameras: number; hoursCovered: number; hoursInPeriod: number }): string;
