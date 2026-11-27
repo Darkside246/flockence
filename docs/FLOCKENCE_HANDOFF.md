@@ -111,7 +111,7 @@ The last operator-confirmed application release is `33322ad`. Establish the runn
 | Private Wyze Bridge discovery | [PR #25](https://github.com/Darkside246/flockence/pull/25) | Pair a real bridge using a selected camera and check revocation and tenant boundaries. |
 | Offline treatment entry and withdrawal controls | [PR #26](https://github.com/Darkside246/flockence/pull/26) | Verify replay and withdrawal holds with production-shaped records. |
 | One-lot offline sale submission | [PR #27](https://github.com/Darkside246/flockence/pull/27) | Test reconnect confirmation and stock conflicts. Multi-lot sales still need coverage. |
-| On-demand live video samples | See the history of this document and [camera-vision runbook](./CAMERA_VISION.md) | Verify real Blink and network feeds, concurrent Live View, and a saved comparison. Update app and worker together. |
+| On-demand live video samples | [PR #28](https://github.com/Darkside246/flockence/pull/28), [camera-vision runbook](./CAMERA_VISION.md) | Verify real Blink and network feeds, concurrent Live View, and a saved comparison. Update app and worker together. |
 
 [Earlier GitHub CI evidence](https://github.com/Darkside246/flockence/actions/runs/45926287374) applies to the revision shown on that run. Check CI for the revision being deployed.
 
