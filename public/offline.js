@@ -75,14 +75,37 @@ async function render(active) {
   find("save").disabled = find("record-kind").value === "expense" ? !allowExpenses : !flocks.length;
   const entries = find("entries");
   entries.replaceChildren();
-  for (const { entry } of rows) {
+  for (const { id, entry } of rows) {
     const li = document.createElement("li");
     const detail = entry.kind === "expense" ? "Expense · " + (entry.expense.amountMinor / 100).toFixed(2) + " " + (entry.expense.currency || "")
+      : entry.kind === "inspection" ? "Flock inspection" + (entry.inspection.photo ? " · Photo attached" : "")
       : entry.kind === "eggs" ? entry.collection.totalEggs + " eggs · Egg collection"
       : entry.kind === "feed" ? entry.feedKg + " kg · Feed consumption"
       : entry.quantity + " birds · " + (entry.kind === "weight" ? "Live weight, " + entry.avgWeightKg + " kg average" : "Mortality");
     li.textContent = entry.flock + " · " + entry.date + " · " + detail + " · "
       + (entry.review ? "Needs review — " + entry.review : "Waiting to sync");
+    if (entry.review) {
+      const retryEntry = document.createElement("button");
+      retryEntry.type = "button";
+      retryEntry.textContent = "Retry this entry";
+      retryEntry.addEventListener("click", async () => {
+        if (current !== active || syncing || !navigator.onLine) {
+          show("Reconnect and wait for the current sync before retrying.");
+          return;
+        }
+        retryEntry.disabled = true;
+        try {
+          const draft = { ...entry };
+          delete draft.review;
+          await storage("outbox", "put", { id, value: await seal(active.key, id, draft) }, id);
+          void sync();
+        } catch {
+          show("Could not update this draft. Its saved copy remains on this device.");
+          retryEntry.disabled = false;
+        }
+      });
+      li.append(" ", retryEntry);
+    }
     entries.append(li);
   }
   if (!rows.length) {
@@ -144,8 +167,9 @@ async function sync() {
       const eggs = entry.kind === "eggs";
       const feed = entry.kind === "feed";
       const expense = entry.kind === "expense";
-      const endpoint = expense ? "/api/expenses" : feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
-      const values = expense ? { category: entry.expense.category, description: entry.expense.description, amountMinor: entry.expense.amountMinor, currency: entry.expense.currency }
+      const inspection = entry.kind === "inspection";
+      const endpoint = inspection ? "/api/offline/inspections" : expense ? "/api/expenses" : feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
+      const values = inspection ? entry.inspection : expense ? { category: entry.expense.category, description: entry.expense.description, amountMinor: entry.expense.amountMinor, currency: entry.expense.currency }
         : feed ? { feedKg: entry.feedKg } : eggs ? entry.collection : weight ? { quantity: entry.quantity, avgWeightKg: entry.avgWeightKg }
         : { quantity: entry.quantity, reason: entry.reason, notes: entry.notes };
       const response = await fetch(endpoint, {
@@ -243,6 +267,7 @@ unlockForm.addEventListener("submit", async (event) => {
 });
 
 function updateRecordFields() {
+  const inspection = find("record-kind").value === "inspection";
   const weight = find("record-kind").value === "weight";
   const eggs = find("record-kind").value === "eggs";
   const feed = find("record-kind").value === "feed";
@@ -250,12 +275,14 @@ function updateRecordFields() {
   find("flock-label").hidden = expense;
   find("flock").hidden = expense;
   find("flock").disabled = expense;
+  find("inspection-fields").hidden = !inspection;
+  find("inspection-fields").disabled = !inspection;
   find("expense-fields").hidden = !expense;
   find("expense-fields").disabled = !expense;
   find("quantity-label").textContent = weight ? "Birds weighed" : "Birds lost";
-  find("mortality-fields").hidden = weight || eggs || feed || expense;
-  find("bird-fields").hidden = eggs || feed || expense;
-  find("quantity").disabled = eggs || feed || expense;
+  find("mortality-fields").hidden = weight || eggs || feed || expense || inspection;
+  find("bird-fields").hidden = eggs || feed || expense || inspection;
+  find("quantity").disabled = eggs || feed || expense || inspection;
   find("feed-fields").hidden = !feed;
   find("feed-weight").disabled = !feed;
   find("feed-weight").required = feed;
@@ -264,6 +291,30 @@ function updateRecordFields() {
   find("weight-fields").hidden = !weight;
   find("average-weight").disabled = !weight;
   find("average-weight").required = weight;
+}
+
+async function inspectionPhoto(file) {
+  if (!file || file.size === 0) return null;
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 12 * 1024 * 1024) {
+    throw new Error("Choose a JPEG, PNG or WebP photo no larger than 12 MB.");
+  }
+  const bitmap = await createImageBitmap(file);
+  try {
+    const ratio = Math.min(1, 960 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * ratio));
+    canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("Could not prepare this photo.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.78, 0.58, 0.4]) {
+      const jpeg = canvas.toDataURL("image/jpeg", quality).split(",")[1];
+      if (jpeg && (jpeg.length / 4) * 3 <= 256 * 1024) return jpeg;
+    }
+    throw new Error("This photo is too large after resizing. Choose another photo.");
+  } finally {
+    bitmap.close();
+  }
 }
 
 find("record-kind").addEventListener("change", () => {
@@ -317,10 +368,27 @@ form.addEventListener("submit", async (event) => {
   working = true;
   find("save").disabled = true;
   try {
+    let inspection;
+    if (kind === "inspection") {
+      const numberOrNull = key => data.get(key) === "" ? null : Number(data.get(key));
+      inspection = {
+        notes: String(data.get("inspectionNotes") || "").trim(),
+        temperatureC: numberOrNull("temperatureC"), humidityPercent: numberOrNull("humidityPercent"),
+        beddingIssue: data.has("beddingIssue"), ventilationIssue: data.has("ventilationIssue"),
+        waterChange: data.has("waterChange"), feedChange: data.has("feedChange"),
+        photo: await inspectionPhoto(data.get("inspectionPhoto")),
+      };
+      if (!inspection.notes && inspection.temperatureC === null && inspection.humidityPercent === null
+        && !inspection.beddingIssue && !inspection.ventilationIssue && !inspection.waterChange && !inspection.feedChange && !inspection.photo) {
+        show("Enter an observation, reading or photo.");
+        return;
+      }
+    }
+    if (current !== active) return;
     const id = crypto.randomUUID();
     const entry = {
       kind, flock: flock?.name ?? "Farm-wide", batchId: flock?.id, date, quantity,
-      ...(kind === "expense" ? { expense } : kind === "feed" ? { feedKg } : kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
+      ...(kind === "inspection" ? { inspection } : kind === "expense" ? { expense } : kind === "feed" ? { feedKg } : kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
       createdAt: Date.now(),
     };
     await storage("outbox", "add", { id, value: await seal(active.key, id, entry) }, id);
@@ -332,8 +400,8 @@ form.addEventListener("submit", async (event) => {
     show("Saved on this device. Waiting to sync.");
     await render(active);
     void sync();
-  } catch {
-    if (current === active) show("Could not save this entry on the device. Please try again.");
+  } catch (error) {
+    if (current === active) show(error instanceof Error ? error.message : "Could not save this entry on the device. Please try again.");
   } finally {
     working = false;
     if (current === active) find("save").disabled = false;

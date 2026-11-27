@@ -83,3 +83,14 @@ description and amount. The server rechecks the active role and original
 farm/account. Retrying the same receipt returns the original expense.
 Separate legitimate purchases remain separate. The offline form does not
 offer flock allocation or changes to an existing expense.
+
+### Flock inspections and photos
+
+The offline workspace can capture independent flock inspection notes, readings and
+condition flags, with an optional resized JPEG. It encrypts the draft and photo
+before storing them in the browser. Reconnect sync writes them without changing
+a daily check. Replays return the original receipt. Inspection photos stay
+farm-scoped in PostgreSQL, are served as downloads, and are never submitted
+to Farm Vision. Each farm can retain 100 photos, up to 256 KB each. An Owner
+can remove a photo without deleting the written inspection. A farm that
+reaches the limit keeps the unsynced draft for review.

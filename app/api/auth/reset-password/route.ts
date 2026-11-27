@@ -2,10 +2,7 @@ import { accountClientIp, accountFormOriginResponse, readAccountForm } from "@/l
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { prisma } from "@/lib/prisma";
-import { currentFarmId, ensureFarm } from "@/lib/operations";
-import { consumePasswordReset, hashPassword, invalidateUserSessions, savePasswordHash, validatePassword } from "@/lib/auth";
-import { runAsFarm } from "@/lib/farm-scope";
+import { resetAccountPassword, validatePassword } from "@/lib/auth";
 
 export async function POST(request: Request) {
   // Oriya-only server: accounts come only from Oriya ("Sign in with Oriya"); no local passwords.
@@ -36,19 +33,7 @@ export async function POST(request: Request) {
     const check = validatePassword(password);
     if (!check.valid) return NextResponse.json({ error: check.errors.join(" ") }, { status: 400 });
     if (password.length > 128) return NextResponse.json({ error: "Password is too long." }, { status: 400 });
-    const reset = await consumePasswordReset(token);
-    if (!reset) return NextResponse.json({ error: "This reset link is invalid or has expired." }, { status: 400 });
-    // The reset link's own farm only.
-    const passwordHash = await hashPassword(password);
-    const done = await runAsFarm(reset.farmId, async () => {
-      await ensureFarm();
-      const user = await prisma.user.findFirst({ where: { id: reset.userId, farmId: currentFarmId() }, select: { id: true } });
-      if (!user) return false;
-      await savePasswordHash(user.id, passwordHash);
-      await prisma.setting.delete({ where: { id: reset.settingId } }).catch(() => undefined);
-      await invalidateUserSessions(user.id);
-      return true;
-    });
+    const done = await resetAccountPassword(token, password);
     if (!done) return NextResponse.json({ error: "This reset link is invalid or has expired." }, { status: 400 });
     return NextResponse.json({ ok: true });
   } catch {

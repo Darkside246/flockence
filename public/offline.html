@@ -28,7 +28,7 @@
         <p id="last-sync"></p>
         <form id="entry">
           <label for="record-kind">Record type</label>
-          <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option><option value="feed">Feed consumption</option><option id="expense-option" value="expense" disabled hidden>Farm expense</option></select>
+          <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option><option value="feed">Feed consumption</option><option value="inspection">Flock inspection</option><option id="expense-option" value="expense" disabled hidden>Farm expense</option></select>
           <label id="flock-label" for="flock">Flock</label>
           <select name="batchId" id="flock" required></select>
           <label for="date">Date</label>
@@ -49,6 +49,22 @@
             <input id="expense-description" name="description" maxlength="300" required>
             <label for="expense-amount">Amount <span id="expense-currency"></span></label>
             <input id="expense-amount" name="amount" type="text" inputmode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" maxlength="12" required>
+          </fieldset>
+          <fieldset id="inspection-fields" hidden disabled>
+            <legend>Flock inspection</legend>
+            <label for="inspection-notes">Observation notes</label>
+            <textarea id="inspection-notes" name="inspectionNotes" maxlength="2000" rows="3"></textarea>
+            <label for="inspection-temperature">Temperature (°C, optional)</label>
+            <input id="inspection-temperature" name="temperatureC" type="number" min="-40" max="80" step="0.1" inputmode="decimal">
+            <label for="inspection-humidity">Relative humidity (%, optional)</label>
+            <input id="inspection-humidity" name="humidityPercent" type="number" min="0" max="100" step="0.1" inputmode="decimal">
+            <label><input type="checkbox" name="beddingIssue"> Bedding needs attention</label>
+            <label><input type="checkbox" name="ventilationIssue"> Ventilation needs attention</label>
+            <label><input type="checkbox" name="waterChange"> Change in water use</label>
+            <label><input type="checkbox" name="feedChange"> Change in feed use</label>
+            <label for="inspection-photo">Private inspection photo (optional)</label>
+            <input id="inspection-photo" name="inspectionPhoto" type="file" accept="image/jpeg,image/png,image/webp" capture="environment">
+            <small>Photos sync with this inspection and are visible to signed-in members of your farm.</small>
           </fieldset>
           <div id="feed-fields" hidden>
             <label for="feed-weight">Feed consumed (kg)</label>
@@ -78,6 +94,7 @@
           <button id="save" type="submit">Save on this device</button>
         </form>
         <h2>Pending entries</h2>
+        <p><a href="/inspections">View synced flock inspections when online</a></p>
         <ul id="entries"></ul>
         <div class="actions">
           <button id="sync" type="button">Sync now</button>
