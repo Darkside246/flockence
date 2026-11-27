@@ -50,6 +50,39 @@ matter most.
    The general model would keep describing the pen. ChickenVerse may be used for this only with a commercial licence.
 4. **Keep a record:** each dataset's licence, version and where it is used, in this file.
 
+## Bird-count test on ChickenVerse
+
+`scripts/chickenverse-count-test.mjs` measures how well Farm Vision counts birds. It takes pictures from the
+ChickenDet **Test** split (250 pictures, 12,620 boxed birds), sends each through the same model and pen-inspection
+prompt the farm uses, and compares Vision's `birdCount.visible` with the number of birds the researchers boxed.
+
+- It reads only what it needs from the official 4 GB `ChickenDet.zip` on Zenodo: the zip's index, the 10 MB Test
+  annotations (both kept in `~/.cache/flockence-chickenverse` after the first run) and the sampled pictures. Nothing is
+  saved to the farm's history, and no picture is kept.
+- The sample is repeatable (`--seed`) and spread over crowding levels (0, 1-10, 11-30, 31-60, 61-100, over 100 birds).
+- Each picture is one paid vision call. It stops at `--max-cost-usd` (default $1.00). With Claude Haiku 5.5 on
+  OpenRouter expect very roughly half a cent per picture.
+- Results go to a new folder: `report.json` (overall, by crowding level, by the model's own confidence) and
+  `pictures.csv` (one row per picture: boxed birds, Vision's count, its note on what limited the count, cost).
+
+On the server, from the live release folder (so it uses the server's vision settings and key, read from the release's `.env`; use
+`.env.production` or `.env.local` in the command instead if that is where the key is). The release must
+include this script, so deploy first. The dry run lists the chosen pictures and makes no paid calls:
+
+```sh
+cd "$(systemctl show -p WorkingDirectory --value flockence)"
+sudo -u flockence -H node --env-file=.env --experimental-strip-types scripts/chickenverse-count-test.mjs --pictures 5 --dry-run
+sudo -u flockence -H node --env-file=.env --experimental-strip-types scripts/chickenverse-count-test.mjs --pictures 40 --max-cost-usd 1 --out /tmp/cv-count-1
+```
+
+To compare models, run again with `--model` (for example `--model anthropic/claude-sonnet-5.5`) and the same seed.
+The figures to read: **median miss** (birds), **mean error %**, the share **within 10% / 20%**, and **bias**
+(negative means Vision misses birds, usual in crowded pens). ChickenDet is from US broiler houses; the farm's own
+pictures still need their own test.
+
+ChickenVerse is CC BY-NC-SA 4.0. The owner approved this test while the commercial licence is arranged
+(2026-11-27). The test only measures; it does not train anything.
+
 ## Not done yet
 
 - No dataset has been downloaded into Flockence's production systems, and no model has been trained.
