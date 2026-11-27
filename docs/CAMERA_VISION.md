@@ -140,11 +140,12 @@ quality only: every provider gets the same prompt and pictures, and its answer i
 
 | Setting | Meaning |
 | --- | --- |
-| `ANTHROPIC_API_KEY` | Uses Claude (the default when this key is set). |
+| `ANTHROPIC_API_KEY` | Uses Claude directly (the default when this key is set). |
+| `OPENROUTER_API_KEY` | Uses OpenRouter: one key and one bill for many companies' models. The default model is `anthropic/claude-haiku-5.5`; any OpenRouter model id with image input works in `VISION_MODEL`, for example `anthropic/claude-sonnet-5.5`. OpenRouter reports what each request cost, and that charged amount is what Flockence records. Out of credits shows as "The OpenRouter account is out of credits". |
 | `OPENAI_API_KEY` | Uses OpenAI, when no Claude key is set or `VISION_PROVIDER=openai`. |
-| `VISION_PROVIDER` | `anthropic` or `openai`, to choose explicitly. |
-| `VISION_MODEL` | The routine model. Empty means `claude-haiku-5-5` (or `gpt-5.6-luna`). A model name from the other company is ignored. |
-| `VISION_EFFORT` | Claude only: `low` (default), `medium` or `high`. Routine farm pictures need little reasoning. |
+| `VISION_PROVIDER` | `anthropic`, `openrouter` or `openai`, to choose explicitly. Otherwise the first key set is used, in that order. |
+| `VISION_MODEL` | The routine model. Empty means `claude-haiku-5-5` (Anthropic), `anthropic/claude-haiku-5.5` (OpenRouter) or `gpt-5.6-luna` (OpenAI). A name in the wrong form for the chosen provider is ignored. |
+| `VISION_EFFORT` | Claude and OpenRouter: `low` (default), `medium` or `high`. Routine farm pictures need little reasoning. |
 | `VISION_ESCALATE_MODEL` | Optional, same provider, for example `claude-sonnet-5-5`. Only pictures the routine model rated high, urgent or "escalate" are looked at again by this model, and its answer is kept. Off unless set. |
 | `VISION_PRICES` | Optional JSON `{"model": [input $, output $ per million tokens]}`, for a model not in the built-in list or a changed price. |
 

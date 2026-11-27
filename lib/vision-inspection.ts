@@ -44,7 +44,7 @@ export function visionStorageDir() {
 const extensions: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
 
 export async function runVisionInspection(request: InspectionRequest): Promise<InspectionResult> {
-  if (!visionConfigured()) return { ok: false, status: 503, error: "Farm Vision is not configured. Add ANTHROPIC_API_KEY (or OPENAI_API_KEY) to the server environment." };
+  if (!visionConfigured()) return { ok: false, status: 503, error: "Farm Vision is not configured. Add OPENROUTER_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY to the server environment." };
   const { category, notes, camera, video = false, upload, automatic = false } = request;
   let pen = request.pen;
   const mimeType = upload?.mimeType ?? "image/jpeg";

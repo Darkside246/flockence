@@ -455,3 +455,55 @@ test("vision provider: the chosen model and its cost, and each farm's monthly us
     }
   }
 });
+
+test("vision provider: OpenRouter is chosen by its key, sends the pictures, and records what it charged", async () => {
+  const { visionProvider, visionModel, visionConfigured, callVisionModel, costMicros } = await import("../lib/vision-provider.ts");
+  const saved = { p: process.env.VISION_PROVIDER, m: process.env.VISION_MODEL, a: process.env.ANTHROPIC_API_KEY, r: process.env.OPENROUTER_API_KEY, o: process.env.OPENAI_API_KEY, e: process.env.VISION_EFFORT };
+  const realFetch = globalThis.fetch;
+  try {
+    delete process.env.VISION_PROVIDER; delete process.env.VISION_MODEL; delete process.env.ANTHROPIC_API_KEY; delete process.env.VISION_EFFORT;
+    process.env.OPENROUTER_API_KEY = "sk-or-test-only";
+    process.env.OPENAI_API_KEY = "test-only";
+    assert.equal(visionProvider(), "openrouter", "OpenRouter comes before OpenAI");
+    assert.equal(visionModel(), "anthropic/claude-haiku-5.5");
+    assert.equal(visionConfigured(), true);
+    process.env.VISION_MODEL = "gpt-5.6-luna";
+    assert.equal(visionModel(), "anthropic/claude-haiku-5.5", "a model name without a company is ignored on OpenRouter");
+    process.env.VISION_MODEL = "google/some-vision-model";
+    assert.equal(visionModel(), "google/some-vision-model");
+    delete process.env.VISION_MODEL;
+    assert.equal(costMicros("anthropic/claude-haiku-5.5", 2500, 1500), 1000, "priced like claude-haiku-5-5 when OpenRouter gives no cost");
+
+    let sent = null;
+    globalThis.fetch = async (url, init) => {
+      sent = { url: String(url), headers: init.headers, body: JSON.parse(init.body) };
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { role: "assistant", content: "{\"summary\":\"Birds spread evenly.\"}" } }],
+        usage: { prompt_tokens: 2400, completion_tokens: 900, cost: 0.00071 },
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    };
+    const reply = await callVisionModel({ instructions: "rules", prompt: "look", images: [{ mimeType: "image/jpeg", base64: "AAAA" }, { mimeType: "image/jpeg", base64: "BBBB" }] });
+    assert.equal(reply.ok, true);
+    assert.equal(reply.text, "{\"summary\":\"Birds spread evenly.\"}");
+    assert.equal(reply.usage.costMicros, 710, "the cost OpenRouter reports is what is recorded");
+    assert.equal(reply.usage.provider, "openrouter");
+    assert.equal(sent.url, "https://openrouter.ai/api/v1/chat/completions");
+    assert.equal(sent.headers.Authorization, "Bearer sk-or-test-only");
+    assert.equal(sent.body.model, "anthropic/claude-haiku-5.5");
+    assert.deepEqual(sent.body.reasoning, { effort: "low" });
+    assert.equal(sent.body.messages[0].role, "system");
+    const parts = sent.body.messages[1].content;
+    assert.deepEqual(parts.slice(0, 2).map((p) => p.image_url.url), ["data:image/jpeg;base64,AAAA", "data:image/jpeg;base64,BBBB"]);
+    assert.deepEqual(parts[2], { type: "text", text: "look" });
+
+    globalThis.fetch = async () => new Response(JSON.stringify({ error: { code: 402, message: "Insufficient credits" } }), { status: 402 });
+    const broke = await callVisionModel({ instructions: "rules", prompt: "look", images: [] });
+    assert.equal(broke.ok, false);
+    assert.match(broke.error, /out of credits/);
+  } finally {
+    globalThis.fetch = realFetch;
+    for (const [k, v] of [["VISION_PROVIDER", saved.p], ["VISION_MODEL", saved.m], ["ANTHROPIC_API_KEY", saved.a], ["OPENROUTER_API_KEY", saved.r], ["OPENAI_API_KEY", saved.o], ["VISION_EFFORT", saved.e]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});
