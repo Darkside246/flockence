@@ -58,18 +58,27 @@ async function render(active) {
   find("last-sync").textContent = active.profile.lastSync
     ? "Last synced " + new Date(active.profile.lastSync).toLocaleString()
     : "No farm records have synced from this device yet.";
+  const allowExpenses = active.profile.canRecordExpenses === true;
+  find("expense-option").hidden = !allowExpenses;
+  find("expense-option").disabled = !allowExpenses;
+  find("expense-currency").textContent = active.profile.currency || "";
+  if (!allowExpenses && find("record-kind").value === "expense") {
+    find("record-kind").value = "mortality";
+    updateRecordFields();
+  }
   const select = find("flock");
   const selected = select.value;
   const prompt = new Option("Select a flock", "");
   const flocks = active.profile.flocks.filter(row => find("record-kind").value !== "eggs" || row.layer);
   select.replaceChildren(prompt, ...flocks.map(row => new Option(row.name, row.id)));
   if (flocks.some(row => row.id === selected)) select.value = selected;
-  find("save").disabled = !flocks.length;
+  find("save").disabled = find("record-kind").value === "expense" ? !allowExpenses : !flocks.length;
   const entries = find("entries");
   entries.replaceChildren();
   for (const { entry } of rows) {
     const li = document.createElement("li");
-    const detail = entry.kind === "eggs" ? entry.collection.totalEggs + " eggs · Egg collection"
+    const detail = entry.kind === "expense" ? "Expense · " + (entry.expense.amountMinor / 100).toFixed(2) + " " + (entry.expense.currency || "")
+      : entry.kind === "eggs" ? entry.collection.totalEggs + " eggs · Egg collection"
       : entry.kind === "feed" ? entry.feedKg + " kg · Feed consumption"
       : entry.quantity + " birds · " + (entry.kind === "weight" ? "Live weight, " + entry.avgWeightKg + " kg average" : "Mortality");
     li.textContent = entry.flock + " · " + entry.date + " · " + detail + " · "
@@ -126,17 +135,24 @@ async function sync() {
     for (const { id, entry } of await list(active)) {
       if (current !== active) return;
       if (entry.review) continue;
+      if (entry.kind === "expense" && !syncedProfile.canRecordExpenses) {
+        entry.review = "Your current role cannot sync expenses. The draft remains saved.";
+        await storage("outbox", "put", { id, value: await seal(active.key, id, entry) }, id);
+        continue;
+      }
       const weight = entry.kind === "weight";
       const eggs = entry.kind === "eggs";
       const feed = entry.kind === "feed";
-      const endpoint = feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
-      const values = feed ? { feedKg: entry.feedKg } : eggs ? entry.collection : weight ? { quantity: entry.quantity, avgWeightKg: entry.avgWeightKg }
+      const expense = entry.kind === "expense";
+      const endpoint = expense ? "/api/expenses" : feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
+      const values = expense ? { category: entry.expense.category, description: entry.expense.description, amountMinor: entry.expense.amountMinor, currency: entry.expense.currency }
+        : feed ? { feedKg: entry.feedKg } : eggs ? entry.collection : weight ? { quantity: entry.quantity, avgWeightKg: entry.avgWeightKg }
         : { quantity: entry.quantity, reason: entry.reason, notes: entry.notes };
       const response = await fetch(endpoint, {
         method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(12000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          batchId: entry.batchId, date: entry.date, ...values,
+          ...(expense ? {} : { batchId: entry.batchId }), date: entry.date, ...values,
           offline: { id, ...active.profile.scope },
         }),
       });
@@ -230,10 +246,16 @@ function updateRecordFields() {
   const weight = find("record-kind").value === "weight";
   const eggs = find("record-kind").value === "eggs";
   const feed = find("record-kind").value === "feed";
+  const expense = find("record-kind").value === "expense";
+  find("flock-label").hidden = expense;
+  find("flock").hidden = expense;
+  find("flock").disabled = expense;
+  find("expense-fields").hidden = !expense;
+  find("expense-fields").disabled = !expense;
   find("quantity-label").textContent = weight ? "Birds weighed" : "Birds lost";
-  find("mortality-fields").hidden = weight || eggs || feed;
-  find("bird-fields").hidden = eggs || feed;
-  find("quantity").disabled = eggs || feed;
+  find("mortality-fields").hidden = weight || eggs || feed || expense;
+  find("bird-fields").hidden = eggs || feed || expense;
+  find("quantity").disabled = eggs || feed || expense;
   find("feed-fields").hidden = !feed;
   find("feed-weight").disabled = !feed;
   find("feed-weight").required = feed;
@@ -257,7 +279,22 @@ form.addEventListener("submit", async (event) => {
   const quantity = Number(data.get("quantity"));
   const date = String(data.get("date") ?? "");
   const kind = String(data.get("kind"));
-  if (!flock || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  if ((!flock && kind !== "expense") || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  let expense;
+  if (kind === "expense") {
+    if (!active.profile.canRecordExpenses) return;
+    const raw = String(data.get("amount") || "").trim();
+    if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) return;
+    const [whole, cents = ""] = raw.split(".");
+    const amountMinor = Number(whole) * 100 + Number(cents.padEnd(2, "0"));
+    const category = String(data.get("category") || "").trim();
+    const description = String(data.get("description") || "").trim();
+    if (!Number.isSafeInteger(amountMinor) || amountMinor < 1 || amountMinor > 2147483647 || !category || !description) {
+      show("Enter a valid expense category, description and amount.");
+      return;
+    }
+    expense = { category, description, amountMinor, currency: active.profile.currency };
+  }
   if ((kind === "mortality" || kind === "weight") && (!Number.isSafeInteger(quantity) || quantity < 1)) return;
   const feedKg = Number(data.get("feedKg"));
   if (kind === "feed" && (!Number.isFinite(feedKg) || feedKg < 0 || feedKg > 999999999)) return;
@@ -282,8 +319,8 @@ form.addEventListener("submit", async (event) => {
   try {
     const id = crypto.randomUUID();
     const entry = {
-      kind, flock: flock.name, batchId: flock.id, date, quantity,
-      ...(kind === "feed" ? { feedKg } : kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
+      kind, flock: flock?.name ?? "Farm-wide", batchId: flock?.id, date, quantity,
+      ...(kind === "expense" ? { expense } : kind === "feed" ? { feedKg } : kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
       createdAt: Date.now(),
     };
     await storage("outbox", "add", { id, value: await seal(active.key, id, entry) }, id);
