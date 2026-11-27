@@ -98,6 +98,24 @@ export function queueAvailable() {
 
 export async function queueCheck(check: QueuedCheck) {
   await queueOp("readwrite", (s) => s.put(check));
+  await askForBackgroundSend();
+}
+
+/**
+ * Ask the browser to send the queue as soon as there is a connection, even with Flockence closed (Background Sync,
+ * handled in public/sw.js). Android and Chrome support it; elsewhere the queue is sent when the app is next opened.
+ * Returns whether background sending is available.
+ */
+export async function askForBackgroundSend(): Promise<boolean> {
+  try {
+    if (!("serviceWorker" in navigator)) return false;
+    const registration = await navigator.serviceWorker.ready as ServiceWorkerRegistration & { sync?: { register(tag: string): Promise<void> } };
+    if (!registration.sync) return false;
+    await registration.sync.register("vision-queue");
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** This user's queued checks on this farm, oldest first. Checks older than a week are dropped. */

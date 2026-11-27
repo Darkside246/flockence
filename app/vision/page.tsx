@@ -121,7 +121,14 @@ export default function VisionPage() {
     flushQueue().catch(() => undefined);
     const online = () => { flushQueue().catch(() => undefined); };
     window.addEventListener("online", online);
-    return () => window.removeEventListener("online", online);
+    // The service worker sends saved photos in the background (public/sw.js) and says when it has.
+    const fromWorker = (event: MessageEvent) => {
+      if (event.data?.type !== "vision-queue-sent") return;
+      queuedChecks(session.id, session.farmId).then((left) => setQueued(left.length)).catch(() => undefined);
+      if (event.data.sent) { setMessage(`${event.data.sent} saved photo${event.data.sent === 1 ? " was" : "s were"} sent and ${event.data.sent === 1 ? "is" : "are"} being checked.`); loadHistory().catch(() => undefined); }
+    };
+    navigator.serviceWorker?.addEventListener("message", fromWorker);
+    return () => { window.removeEventListener("online", online); navigator.serviceWorker?.removeEventListener("message", fromWorker); };
   }, [session?.id]);
 
   async function pickFile(event: ChangeEvent<HTMLInputElement>) {
@@ -195,7 +202,7 @@ export default function VisionPage() {
       if (penId) fields.penId = penId;
       await queueCheck({ id, userId: session.id, farmId: session.farmId, createdAt: Date.now(), fields, image: file, imageName: file.name });
       setQueued((n) => n + 1);
-      setMessage("No signal. The photo is saved on this phone and will be checked when you are back online.");
+      setMessage("No signal. The photo is saved on this phone and will be sent when the signal is back, even if you close Flockence (on iPhone, when you next open it).");
       return true;
     };
     try {

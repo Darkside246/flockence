@@ -199,7 +199,9 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
 - **No signal.** A photo (not a live camera check) taken with no signal is kept on the phone in IndexedDB
   (`flockence-vision-queue`, per user and farm, dropped after 7 days) and sent with the same id when the phone is back
   online or the Farm Vision page is opened. Shown as "N photos saved on this phone" with a Send now button.
-- The queue is sent while the Flockence app is open; sending with the app closed (background sync) is not built yet.
+- Saved photos are also sent with Flockence closed, as soon as the signal returns: the service worker handles a
+  Background Sync (`public/sw.js`, `public/vision-sync.js`) on Android and Chrome. iPhones do not support it, so there
+  they go when Flockence is next opened. A photo is only sent while the person who took it is signed in.
 
 ## Daily email report (Vision Intelligence phase 1c, 2026-11-27)
 
