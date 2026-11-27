@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     canRecordSales ? prisma.inventoryItem.findMany({
       where: { product: { farmId: access.user.farmId }, batchId: { not: null }, status: "AVAILABLE", quantity: { gt: 0 } },
       orderBy: [{ updatedAt: "desc" }, { id: "asc" }], take: 100,
-      select: { id: true, lotCode: true, quantity: true, sellingPriceMinor: true, product: { select: { name: true, unit: true } } },
+      select: { id: true, batchId: true, lotCode: true, quantity: true, sellingPriceMinor: true, product: { select: { name: true, unit: true } } },
     }) : Promise.resolve([]),
   ]);
   return NextResponse.json({

@@ -17,6 +17,7 @@ const offlineSale = z.strictObject({
   amountPaidMinor: z.number().int().min(0).max(2147483647),
   items: z.tuple([z.strictObject({
     inventoryItemId: z.string().min(1).max(128),
+    batchId: z.string().min(1).max(128),
     quantity: z.number().gt(0).max(999999999).refine(value => Number(value.toFixed(3)) === value),
     unitPriceMinor: z.number().int().min(0).max(2147483647),
   })]),
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
       if (!Number.isFinite(item.quantity) || item.quantity <= 0 || !Number.isSafeInteger(item.unitPriceMinor) || item.unitPriceMinor < 0 || (item.weightKg !== null && (!Number.isFinite(item.weightKg) || item.weightKg < 0))) {
         return NextResponse.json({ error: "Sale quantities must be positive, prices cannot be negative, and weights must be valid." }, { status: 400 });
       }
-      if (item.batchId) {
+      if (item.batchId && !draft) {
         const blockers = await getWithdrawalBlockers(String(item.batchId), saleDate);
         if (blockers.length) return NextResponse.json({ error: "SALE_BLOCKED_WITHDRAWAL", blockers }, { status: 409 });
       }
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
         });
         if (!inventory || (draft ? !inventory.batchId : Number(inventory.quantity) < item.quantity)) return NextResponse.json({ error: "Not enough inventory available for one of the sale items." }, { status: 409 });
         if (item.batchId && item.batchId !== inventory.batchId) {
-          return NextResponse.json({ error: "The selected flock does not match the inventory lot." }, { status: 409 });
+          return NextResponse.json({ error: "The source flock changed. Review this sale online." }, { status: 409 });
         }
         item.batchId = inventory.batchId;
         if (draft) item.description = inventory.product.name;

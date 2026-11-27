@@ -373,13 +373,14 @@ try {
   assert.equal((await fetch(photoUrl, { headers: headerFor(0) })).status, 404);
 
   const saleDraft = { date: workspace.today, currency: workspace.currency, amountPaidMinor: 600, customerName: "",
-    items: [{ inventoryItemId: saleLot.id, quantity: 2, unitPriceMinor: 300 }],
+    items: [{ inventoryItemId: saleLot.id, batchId: saleLot.batchId, quantity: 2, unitPriceMinor: 300 }],
     offline: { ...workspace.scope, id: randomUUID() } };
   const submitDraftSale = (account, data) => fetch(origin + "/api/sales", {
     method: "POST", headers: headerFor(account), body: JSON.stringify(data),
   });
   assert.equal((await submitDraftSale(1, saleDraft)).status, 403);
   assert.equal((await submitDraftSale(0, { ...saleDraft, currency: "XXX" })).status, 409);
+  assert.equal((await submitDraftSale(0, { ...saleDraft, items: [{ ...saleDraft.items[0], batchId: laying.id }] })).status, 409);
   const sales = await Promise.all([submitDraftSale(0, saleDraft), submitDraftSale(0, saleDraft)]);
   assert.ok(sales.every(response => response.status === 200 || response.status === 201));
   const [saleA, saleB] = await Promise.all(sales.map(response => response.json()));
@@ -589,7 +590,7 @@ try {
     return prisma.inventoryItem.create({ data: { batchId: laying.id, productId: product.id, quantity: 3 } });
   });
   const held = await submitDraftSale(0, { ...saleDraft, offline: { ...saleDraft.offline, id: randomUUID() },
-    items: [{ ...saleDraft.items[0], inventoryItemId: heldLot.id }] });
+    items: [{ ...saleDraft.items[0], inventoryItemId: heldLot.id, batchId: heldLot.batchId }] });
   assert.equal(held.status, 409);
   assert.match((await held.json()).error, /withdrawal/i);
   console.log("Camera HTTP checks, offline records and withdrawal holds passed.");

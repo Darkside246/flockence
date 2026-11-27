@@ -206,7 +206,7 @@ async function sync() {
       const sale = entry.kind === "sale";
       const endpoint = sale ? "/api/sales" : treatment ? "/api/health/treatments" : inspection ? "/api/offline/inspections" : expense ? "/api/expenses" : feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
       const values = sale ? {
-        items: [{ inventoryItemId: entry.sale.lotId, quantity: entry.sale.quantity, unitPriceMinor: entry.sale.unitPriceMinor }],
+        items: [{ inventoryItemId: entry.sale.lotId, batchId: entry.sale.batchId, quantity: entry.sale.quantity, unitPriceMinor: entry.sale.unitPriceMinor }],
         currency: entry.sale.currency, amountPaidMinor: entry.sale.amountPaidMinor, customerName: entry.sale.customerName,
       } : treatment ? entry.treatment : inspection ? entry.inspection : expense ? { category: entry.expense.category, description: entry.expense.description, amountMinor: entry.expense.amountMinor, currency: entry.expense.currency }
         : feed ? { feedKg: entry.feedKg } : eggs ? entry.collection : weight ? { quantity: entry.quantity, avgWeightKg: entry.avgWeightKg }
@@ -402,7 +402,7 @@ form.addEventListener("submit", async (event) => {
       show("Check the stock lot, sale amount and amount received.");
       return;
     }
-    sale = { lotId: lot.id, label: lot.product.name, currency: active.profile.currency, quantity, unitPriceMinor,
+    sale = { lotId: lot.id, batchId: lot.batchId, label: lot.product.name, currency: active.profile.currency, quantity, unitPriceMinor,
       amountPaidMinor, customerName: String(data.get("saleCustomer") || "").trim() };
   }
   let expense;
