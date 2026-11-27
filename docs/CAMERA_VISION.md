@@ -328,3 +328,28 @@ Every Vision check now gets two more sections: **Your records against your guide
 house temperature and humidity, ammonia, stocking density, floor space per bird and litter) and **What your guides say
 for this age**. The Farm Vision page shows them under "What Vision already knows", and the model judges the birds'
 behaviour against the right target for their age.
+
+## Bird counter (Vision Intelligence phase 2, 2026-11-27): built, switched off
+
+- A separate detector service (`services/detector`, FastAPI + an ultralytics YOLO model) finds each bird in a picture
+  and returns boxes. It runs on its own machine (ideally with a graphics card), so counting scales apart from the web
+  app. Train it with `scripts/train-bird-detector.py` on PIO (CC BY 4.0) and the farm's own labelled pictures;
+  ChickenVerse only with `--chickenverse-commercial-licence`. The report lists each dataset's credit.
+- **Off until set up.** It runs only when the server has `VISION_DETECTOR=on`, `DETECTOR_URL` (https, or http on this
+  machine) and `DETECTOR_TOKEN` (32+ characters), and the owner has switched it on for the farm (Cameras → Vision →
+  Bird counter).
+- When on, each check sends its picture(s) to the counter first: the exact count becomes the inspection's bird count
+  (marked "Counted by the bird counter"), and birds that stayed in the same place across video or recording frames
+  while others moved are named to the model to look at closely. The result is saved with the inspection (`detector`).
+- At most 4 requests at once and 12 seconds each; if the counter is busy, slow, down or answers badly, the check goes
+  on exactly as before.
+
+To switch it on later, on the detector machine:
+
+```sh
+pip install -r services/detector/requirements.txt
+python3 scripts/train-bird-detector.py --out runs/birds --dataset PIO=/data/pio/annotations.json:/data/pio/images
+DETECTOR_TOKEN=<secret> DETECTOR_WEIGHTS=runs/birds/train/weights/best.pt uvicorn app:app --app-dir services/detector --host 127.0.0.1 --port 8090
+```
+
+then on the Flockence server add `VISION_DETECTOR=on`, `DETECTOR_URL` and the same `DETECTOR_TOKEN` to the settings.

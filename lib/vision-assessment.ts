@@ -94,6 +94,11 @@ export const visionAssessmentSchema = z.object({
   eggs: eggsSchema.optional().catch(undefined),
   animals: animalsSchema.optional().catch(undefined),
   people: peopleSchema.optional().catch(undefined),
+  /** The bird counter's result, when the farm has it switched on (lib/bird-detector.ts). */
+  detector: z.object({
+    model: z.string().max(80), count: z.number().int().min(0), counts: z.array(z.number().int().min(0)).max(3),
+    still: z.array(z.object({ where: z.string().max(40), box: z.array(z.number()).length(4) })).max(50),
+  }).optional().catch(undefined),
   /** The phone's upload id, so a retried upload is recognised (lib/vision-upload-requests.ts). */
   requestId: z.string().regex(/^[A-Za-z0-9-]{16,64}$/).optional(),
 });
@@ -106,6 +111,7 @@ export function createVisionAssessment(result: VisionResult, input: {
   model: string; source: VisionAssessment["source"]; inspectionCategory: string; evidenceId: string; pen?: VisionAssessment["pen"]; capture?: VisionAssessment["capture"]; requestId?: string;
   /** Keep people in view (the farm's people timeline is on). When false, nothing about people is saved. */
   keepPeople?: boolean;
+  detector?: VisionAssessment["detector"];
 }): VisionAssessment {
   const { keepPeople, ...saved } = input;
   const signals = assessmentCategories.map((categoryName) => {

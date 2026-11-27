@@ -1,0 +1,4 @@
+# The bird counter's machine (ideally with an NVIDIA graphics card). Not needed by the web app.
+fastapi==0.115.12
+uvicorn==0.34.2
+ultralytics==8.3.120

@@ -954,3 +954,33 @@ test("reference library in the Vision context: a 3-day-old flock at 27 °C is fl
   assert.ok(guide.lines.some((l) => /32–33 °C for day 3 on the Caribbean brooding schedule/.test(l)));
   assert.match(c.text, /Your records against your guides: Check: 27 °C/);
 });
+
+test("bird counter: off unless the server and the farm switch it on; then it counts, and a bad answer is ignored", async () => {
+  const { countBirds, detectorConfigured, setDetectorForFarm } = await import("../lib/bird-detector.ts");
+  const frames = [Buffer.from([255, 216, 255, 1]), Buffer.from([255, 216, 255, 2])];
+  let calls = 0;
+  const fake = async (url, init) => { calls += 1; return new Response(JSON.stringify({ model: "birds-v1", frames: [{ boxes: [[0.1, 0.8, 0.15, 0.85, 0.9], [0.5, 0.5, 0.55, 0.55, 0.9]] }, { boxes: [[0.1, 0.8, 0.15, 0.85, 0.9], [0.6, 0.4, 0.65, 0.45, 0.9]] }] }), { status: 200 }); };
+  const saved = { ...process.env };
+  try {
+    delete process.env.VISION_DETECTOR;
+    assert.equal(detectorConfigured(), false);
+    assert.equal(await runAsFarm(A, () => countBirds(frames, fake)), null, "off by default");
+    Object.assign(process.env, { VISION_DETECTOR: "on", DETECTOR_URL: "http://127.0.0.1:8090", DETECTOR_TOKEN: "t".repeat(40) });
+    assert.equal(detectorConfigured(), true);
+    assert.equal(await runAsFarm(A, () => countBirds(frames, fake)), null, "the farm has not switched it on");
+    assert.equal(calls, 0);
+    await runAsFarm(A, () => setDetectorForFarm(true));
+    const counted = await runAsFarm(A, () => countBirds(frames, fake));
+    assert.equal(counted.count, 2);
+    assert.equal(counted.still.length, 1);
+    assert.equal(counted.still[0].where, "lower left");
+    assert.equal(await runAsFarm(B, () => countBirds(frames, fake)), null, "farm B's switch is its own");
+    assert.equal(await runAsFarm(A, () => countBirds(frames, async () => new Response("{}", { status: 200 }))), null, "a bad answer is ignored");
+    assert.equal(await runAsFarm(A, () => countBirds(frames, async () => { throw new Error("down"); })), null, "a down detector is ignored");
+    process.env.DETECTOR_URL = "http://evil.example";
+    assert.equal(detectorConfigured(), false, "plain http only on this machine");
+  } finally {
+    for (const k of ["VISION_DETECTOR", "DETECTOR_URL", "DETECTOR_TOKEN"]) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; }
+    await runAsFarm(A, () => setDetectorForFarm(false));
+  }
+});
