@@ -38,20 +38,19 @@ test("reads a zip's index and finds each file's data, stored or deflated", () =>
   assert.ok(x.compressed < 500);
 });
 
-test("counts boxed birds per picture and keeps crowd regions apart", () => {
+test("counts every boxed bird per picture, whatever its crowd flag", () => {
   const rows = groundTruth({
     images: [{ id: 1, file_name: "a.jpg" }, { id: 2, file_name: "sub/b.jpg" }],
     annotations: [{ image_id: 1 }, { image_id: 1 }, { image_id: 2, iscrowd: 1 }, { image_id: 9 }],
   });
-  assert.deepEqual(rows, [{ id: 1, file: "a.jpg", birds: 2, crowd: 0 }, { id: 2, file: "b.jpg", birds: 0, crowd: 1 }]);
+  assert.deepEqual(rows, [{ id: 1, file: "a.jpg", birds: 2, crowd: 0 }, { id: 2, file: "b.jpg", birds: 1, crowd: 1 }]);
 });
 
-test("the sample is repeatable, skips crowd pictures and covers every crowding level", () => {
+test("the sample is repeatable and covers every crowding level", () => {
   const rows = Array.from({ length: 200 }, (_, i) => ({ id: i, file: `f${i}.jpg`, birds: i % 120, crowd: i === 5 ? 1 : 0 }));
   const a = samplePictures(rows, 12, 7), b = samplePictures(rows, 12, 7);
   assert.deepEqual(a, b);
   assert.equal(a.length, 12);
-  assert.ok(!a.some((r) => r.id === 5));
   assert.equal(new Set(a.map((r) => bucketOf(r.birds))).size, 6);
   assert.notDeepEqual(samplePictures(rows, 12, 8), a);
 });

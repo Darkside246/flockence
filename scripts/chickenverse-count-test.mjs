@@ -57,12 +57,18 @@ async function zipReader(file) {
   }
   return {
     size: SIZE, close: async () => {},
+    // Large reads go in 1 MB pieces, each retried on its own, because long transfers from Zenodo can be cut off.
     async read(at, len) {
+      const parts = [];
+      for (let p = 0; p < len; p += 1 << 20) parts.push(await this.piece(at + p, Math.min(1 << 20, len - p)));
+      return Buffer.concat(parts);
+    },
+    async piece(at, len) {
       for (let attempt = 1; ; attempt++) {
         const res = await fetch(URL_, { headers: { Range: `bytes=${at}-${at + len - 1}`, "User-Agent": "flockence-dataset-test/1" }, signal: AbortSignal.timeout(60_000 + Math.ceil(len / 5)) }).catch((e) => ({ ok: false, status: 0, error: e }));
         if (res.status === 206) { const b = await res.arrayBuffer().then((x) => Buffer.from(x), () => null); if (b?.length === len) return b; }
         else if (res.status === 200) throw new Error("Zenodo ignored the byte range; use --zip with a downloaded copy.");
-        if (attempt >= 4) throw new Error(`Could not read ChickenDet.zip from Zenodo (status ${res.status}).`);
+        if (attempt >= 6) throw new Error(`Could not read ChickenDet.zip from Zenodo (status ${res.status}).`);
         await new Promise((r) => setTimeout(r, 2000 * attempt * (res.status === 429 ? 10 : 1)));
       }
     },
