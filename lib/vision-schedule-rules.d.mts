@@ -1,5 +1,5 @@
 export type ScheduleCamera = { everyHours: number; mode: "video" | "still"; category: "PEN" | "FLOCK" | "FEED" | "WATER" | "EQUIPMENT" | "OTHER" };
-export type Schedule = { enabled: boolean; cameras: Record<string, ScheduleCamera>; dailyCap: number; keepDays: number; quietStart: string; quietEnd: string };
+export type Schedule = { enabled: boolean; cameras: Record<string, ScheduleCamera>; dailyCap: number; keepDays: number; quietStart: string; quietEnd: string; recordings?: boolean };
 export type CameraState = {
   lastRunAt?: string; lastResult?: "ok" | "failed"; lastMessage?: string; lastObservationId?: string | null;
   lastSeverity?: string | null; failures?: number; needsAttention?: boolean;

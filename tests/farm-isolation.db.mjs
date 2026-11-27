@@ -830,3 +830,36 @@ test("offline snapshot: each flock's records and today's daily check, open findi
   assert.ok(!b.flocks.some((x) => x.id === batch.id), "farm B's phone never gets farm A's flocks");
   assert.ok(!b.findings.some((x) => x.title === `Glance wet litter ${stamp}`));
 });
+
+test("recording checks: one clip per part of the day, filed at its filming time, within the budget, own farm's state", async () => {
+  const { runRecordingChecks, loadRecordingStatus } = await import("../lib/vision-recordings.ts");
+  const { saveCameraPen } = await import("../lib/vision-camera-pens.ts");
+  const stamp = Date.now();
+  const owner = await runAsFarm(A, () => prisma.user.create({ data: { name: "Rec owner", email: `rec-${stamp}@a.test`, role: "OWNER" } }));
+  const pen = await runAsFarm(A, () => prisma.setting.create({ data: { key: `PENCFG::u::rec-${stamp}`, value: JSON.stringify({ name: `Rec Pen ${stamp}`, active: true }) } }));
+  const camera = { name: `Rec cam ${stamp}`, source: "blink", deviceKey: "k" };
+  await runAsFarm(A, () => saveCameraPen(camera, pen.id, owner.id));
+  const now = new Date();
+  const at = (hoursAgo) => new Date(now.getTime() - hoursAgo * 3_600_000).toISOString();
+  const clips = [1, 6, 11, 16].map((h, i) => ({ id: `blink:c${i}-${stamp}`, camera: camera.name, createdAt: at(h), source: "blink", media: `/api/v1/c${i}` }));
+  const inspected = [];
+  const deps = {
+    visionCameras: async () => [camera],
+    recentCameraClips: async () => clips,
+    recordedClipFrames: async () => [Buffer.from([255, 216, 255, 1]), Buffer.from([255, 216, 255, 2]), Buffer.from([255, 216, 255, 3])],
+    runVisionInspection: async (req) => { inspected.push(req); return { ok: true, analysis: { summary: "ok" }, observation: { id: "o" } }; },
+  };
+  const first = await runAsFarm(A, () => runRecordingChecks([camera.name], 1, now, deps));
+  assert.equal(first.used, 1, "never more than the remaining daily budget");
+  assert.equal(inspected.length, 1);
+  assert.equal(inspected[0].recording.frames.length, 3);
+  assert.equal(inspected[0].recording.clipAt.toISOString(), clips[3].createdAt, "the oldest part of the day first, filed at filming time");
+  assert.equal(inspected[0].automatic, true);
+
+  const second = await runAsFarm(A, () => runRecordingChecks([camera.name], 10, now, deps));
+  assert.equal(second.used, 2, "at most 2 a round");
+  const status = await runAsFarm(A, () => loadRecordingStatus());
+  assert.equal(Object.keys(status.done).length, 3);
+  assert.ok(Array.isArray(status.missing[camera.name]));
+  assert.equal(await runAsFarm(B, () => loadRecordingStatus()), null, "farm B has its own (empty) recording state");
+});

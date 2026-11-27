@@ -2,6 +2,7 @@ import { unlink } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, runAsFarm, runUnscoped } from "@/lib/farm-scope";
+import { runRecordingChecks } from "@/lib/vision-recordings";
 import { accountPreferences } from "@/lib/account-preferences";
 import { assignedCameraPen } from "@/lib/vision-camera-pens";
 import { visionCameras, visionCamerasEnabled, visionLiveEnabled } from "@/lib/vision-camera";
@@ -149,6 +150,12 @@ export async function runFarmRound(saved: Schedule, updatedBy: string | null, no
         ran.push(entry.name);
       }
     }
+    // Saved recordings across the day: fill in the parts of the last 24 hours not yet checked, within the daily limit.
+    const recorded = schedule.recordings && state.runsToday < schedule.dailyCap
+      ? await runRecordingChecks(Object.keys(schedule.cameras), schedule.dailyCap - state.runsToday, now).catch(() => ({ ran: [] as string[], used: 0 }))
+      : { ran: [] as string[], used: 0 };
+    state.runsToday += recorded.used;
+    ran.push(...recorded.ran);
     const pruned = await pruneAutomaticPictures(schedule.keepDays, now).catch(() => 0);
     return { farmId, ran, pruned };
   } finally {

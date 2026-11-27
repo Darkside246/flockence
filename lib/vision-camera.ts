@@ -53,6 +53,34 @@ export async function captureVisionCamera(camera: VisionCamera) {
   return { camera, bytes, capturedAt: new Date() };
 }
 
+/** Saved clips from the last 24 hours for one camera (Blink cloud, the server's recordings and the archive). */
+export async function recentCameraClips(cameraName: string) {
+  const response = await blinkFetch("/clips?period=1&camera=" + encodeURIComponent(cameraName), {}, 20_000);
+  const raw = response.ok ? await boundedBody(response, 512 * 1024) : null;
+  if (!raw) return [];
+  const data = JSON.parse(raw.toString("utf8"));
+  if (!Array.isArray(data)) return [];
+  return data.flatMap((c) => c && typeof c.id === "string" && c.camera === cameraName && typeof c.createdAt === "string" && typeof c.media === "string"
+    && ["blink", "rtsp", "archive"].includes(c.source) ? [{ id: `${c.source}:${c.id}`.slice(0, 200), camera: c.camera as string, createdAt: c.createdAt as string, source: c.source as string, media: c.media as string }] : []);
+}
+
+/** Three frames (start, middle, end) from a saved clip, taken by the camera service (services/blink/clip_frames.py). */
+export async function recordedClipFrames(clip: { source: string; media: string }) {
+  const response = await blinkFetch("/clips/frames", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ source: clip.source, media: clip.media }) }, 90_000);
+  const raw = response.ok ? await boundedBody(response, 2200 * 1024) : null;
+  if (!raw) return null;
+  const data = JSON.parse(raw.toString("utf8"));
+  if (!Array.isArray(data?.frames) || !data.frames.length || data.frames.length > 3) return null;
+  const frames: Buffer[] = [];
+  for (const frame of data.frames) {
+    if (typeof frame !== "string" || !/^[A-Za-z0-9+/]+={0,2}$/.test(frame)) return null;
+    const bytes = Buffer.from(frame, "base64");
+    if (bytes.length < 5 || bytes.length > 512 * 1024 || bytes[0] !== 255 || bytes[1] !== 216 || bytes[2] !== 255) return null;
+    frames.push(bytes);
+  }
+  return frames;
+}
+
 export async function captureVisionVideoSample(camera: VisionCamera) {
   const path = "/cameras/" + encodeURIComponent(camera.name) + "/inspection-sample";
   const response = await blinkFetch(path, { method: "POST" }, 58_000);

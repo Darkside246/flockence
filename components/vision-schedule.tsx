@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 type Camera = { name: string; source: "blink" | "rtsp"; liveSampling?: boolean; pen?: { id: string; name: string } | null };
 type CameraPlan = { everyHours: number; mode: "video" | "still"; category: string };
-type Schedule = { enabled: boolean; cameras: Record<string, CameraPlan>; dailyCap: number; keepDays: number; quietStart: string; quietEnd: string };
+type Schedule = { enabled: boolean; cameras: Record<string, CameraPlan>; dailyCap: number; keepDays: number; quietStart: string; quietEnd: string; recordings?: boolean };
 type CameraState = {
   lastRunAt?: string; lastResult?: "ok" | "failed"; lastMessage?: string; failures?: number; needsAttention?: boolean;
   birdsVisible?: number | null; questions?: string[]; lastSeverity?: string | null;
@@ -18,6 +18,7 @@ type Data = {
   schedule: Schedule; perDay: number; options: { intervals: number[] };
   state: { runsToday: number; lastRoundAt: string | null; cameras: Record<string, CameraState> };
   ready: { vision: boolean; cameras: boolean; liveVideo: boolean; timer: boolean };
+  recordings?: { missing?: Record<string, string[]>; checkedAt?: string } | null;
 };
 
 const when = (iso?: string | null) => iso ? new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "";
@@ -116,6 +117,12 @@ export function VisionSchedule({ cameras }: { cameras: Camera[] }) {
         </span>}
       </li>;
     })}</ul>
+
+    <label className="vision-auto-recordings"><input type="checkbox" checked={Boolean(draft.recordings)} onChange={e => setDraft({ ...draft, recordings: e.target.checked })} />
+      {" "}Also check saved recordings across the day (night, morning, midday, afternoon, evening), within the same daily limit</label>
+    {draft.recordings && data.recordings?.missing && Object.entries(data.recordings.missing).some(([, parts]) => parts.length > 0) && <p className="muted">
+      No recording in the last 24 hours for: {Object.entries(data.recordings.missing).filter(([, parts]) => parts.length).map(([cam, parts]) => `${cam} (${parts.join(", ")})`).join("; ")}. Those parts of the day could not be checked.
+    </p>}
 
     <details className="vision-auto-more"><summary>More options</summary>
       <div className="grid2">

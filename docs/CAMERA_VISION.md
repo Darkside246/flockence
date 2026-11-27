@@ -268,3 +268,18 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
   Markdown with bold headings and bullet points. The pen list has a `formatted` version too.
 - Code: `lib/vision-context.ts`, `lib/vision-context-rules.mjs`, `lib/oriya-pen-report-format.mjs`,
   `app/api/vision/context`, `components/vision-known.tsx`.
+
+## Recording checks across the day (Vision Intelligence phase 3, 2026-11-27)
+
+- On the automatic schedule, **Also check saved recordings across the day**. Each round then fills in the parts of the
+  farm's last 24 hours (night 00–05, morning 05–11, midday 11–15, afternoon 15–19, evening 19–24) not yet checked: one
+  saved clip per camera per part, the one nearest the middle of that part, oldest part first, at most 2 per round,
+  within the same daily limit as the live checks.
+- The camera service takes three frames from the clip, near its start, middle and end (`POST /clips/frames`,
+  `services/blink/clip_frames.py`). It only reads Blink cloud clip paths or files inside its own recordings and archive
+  folders.
+- The inspection is filed at the time the clip was **filmed** (capture mode `RECORDING` with `clipAt`), so reports and
+  the pen timeline place it in the right part of the day. It is not forwarded to Oriya (it is not live).
+- Parts of the day with no recording are listed on the schedule card. An unreadable clip is skipped, not retried
+  forever. Clip times are the camera's or Blink's; a camera clock that is wrong shifts which part a clip falls in.
+- Code: `lib/vision-recording-rules.mjs`, `lib/vision-recordings.ts`, `services/blink/clip_frames.py`.
