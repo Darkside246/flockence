@@ -1,13 +1,21 @@
 # Flockence engineering handoff
 
-_Last checked November 26, 2026._
+_Last checked November 27, 2026._
 
 This handoff records the production release, what was verified, and where to resume. Use GitHub for source and the Spaceship VPS for deployment and staging. Production is [flockence.com](https://flockence.com). The Flockence repository is `Darkside246/flockence` and the deployment source is `main`. Keep work in Flockence. Changes to the Oriya repository, its deployment, and its Operator configuration are outside the current instructions. Use its existing contracts for compatibility checks.
 
 ## Production state
 
-- **Live application revision** `33322ad1c8548d9ec5f4cca2788a13c926125b94`. The prior live release was `5f8dac0`.
-- **Deployment evidence** The operator reported `ALTER TABLE` and `COMMIT`, then HTTP 200 from `/login` after one transient HTTP 502 during the restart. The script checked the running service process's working directory before printing the live revision.
+- **Live application revision** `a30b4ab57332b3d94fae17136775bcdbe7e1d31a`, deployed November 27, 2026. It runs from `/opt/flockence-release-a30b4ab/app`. The prior live release was `33322ad` in `/opt/flockence-release-33322ad.ZErkKC/app`; keep that directory until the new release has been checked, because the undo uses it.
+- **a30b4ab deployment** The operator ran `ops/release/switch-release.sh` ([guide](DEPLOY_RELEASE.md)).
+  - `--check` reported the live release `33322ad` and the database `flockence_staging` on 127.0.0.1:5432. Despite its name, this is the production database. It found 0 of 4 new tables, farm row security off, settings in `.env`, and Farm Vision storage at `/var/lib/flockence/vision` outside the release.
+  - The build succeeded. A verified backup was written to `/var/backups/flockence-before-a30b4ab-20261127T045339Z.dump` (136 KB).
+  - The four additive SQL files applied without error.
+  - The service restarted on the new release. The first readiness probe ran before the port opened, a later probe passed, and the running checkout was `a30b4ab`.
+  - https://flockence.com/login answered 200. From outside, `/api/auth/oriya/status` (new in this release) answered `{"available":false}`.
+  - Signed-in checks of the new screens are still to be done. Undo the app switch with `sudo rm /etc/systemd/system/flockence.service.d/zz-release.conf && sudo systemctl daemon-reload && sudo systemctl restart flockence.service`; the database additions stay.
+- **33322ad deployment (previous)**
+  The operator reported `ALTER TABLE` and `COMMIT`, then HTTP 200 from `/login` after one transient HTTP 502 during the restart. The script checked the running service process's working directory before printing the live revision.
 - **Database rehearsal** A copy of the active local PostgreSQL database was restored into a temporary database. The supplied SQL added `public."HealthObservation"."visionAssessment"` and the check returned `jsonb:YES`. The temporary database was dropped afterward. This rehearsal validated the additive column. Full isolation rehearsal with the actual VPS authentication, restricted roles, and production-shaped data is still pending.
 - **Backup** The deploy created a root-private custom PostgreSQL archive under `/var/backups/flockence-before-33322ad.*` and verified its table of contents. Store backup locations, keys, and access information in the VPS operations records.
 - **Access** The shell available to the agent reached the VPS SSH service but was rejected with `Permission denied (publickey)`. The operator executed the rehearsal and switch from their VPS session. Regain authorized SSH access before attempting direct changes.
@@ -70,8 +78,8 @@ Record the exact GitHub commit, the exact live app revision, CI links and the sc
 
 ## Ported farm-record work (branch `port/local-work-2026-11`, November 26, 2026)
 
-Farm-record features first built on a local branch (November 6–7), ported onto main at 8b9cfb9 as nine commits. Not
-merged or deployed yet. CI runs once the pull request is opened.
+Farm-record features first built on a local branch (November 6–7), ported onto main at 8b9cfb9 as nine commits. Merged
+as [PR #30](https://github.com/Darkside246/flockence/pull/30), with the recordings thumbnails ([PR #31](https://github.com/Darkside246/flockence/pull/31)) and the release script ([PR #32](https://github.com/Darkside246/flockence/pull/32)). Deployed in `a30b4ab` on November 27, 2026 (see Production state).
 
 | Area | What it adds | Database (additive, `ops/postgres/`) |
 | --- | --- | --- |
@@ -88,7 +96,7 @@ merged or deployed yet. CI runs once the pull request is opened.
   2. The four SQL files above, in that order.
   3. Re-run the farm row-security script if its policies are active.
   4. Deploy the app.
-- **Checked locally:** typecheck and the 116 unit tests. Not yet run: the CI database and browser suites, the production build, and any check on flockence.com.
+- **Checked:** CI passed on PR #30, and on main at `bf7fefc` and `a30b4ab` (database, farm isolation, restricted roles, typecheck, production build, browser suites). Deployed November 27, 2026; signed-in checks on flockence.com still to do.
 - **Not ported, because main covers it:**
   - pen orientation and profile fields (main's multi-pen housing)
   - the farm profile form (`/farm-setup`)
