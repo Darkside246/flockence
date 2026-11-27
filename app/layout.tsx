@@ -22,7 +22,14 @@ import { DEFAULT_THEME, themeIds } from "@/lib/theme-registry";
 export const metadata: Metadata = {
   title: "Flockence | Intelligent Poultry Management",
   description: "Intelligent poultry management for broiler and layer operations. Powered by Oriya.",
-  manifest: "/manifest.webmanifest"
+  manifest: "/manifest.webmanifest",
+  // Home-screen icons and full-screen launch on phones (public/icons, drawn by scripts/make-icons.mjs).
+  icons: {
+    icon: [{ url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" }, { url: "/icons/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+  appleWebApp: { capable: true, title: "Flockence", statusBarStyle: "default" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
