@@ -88,6 +88,7 @@ jobs:
           python3 tests/vision-video-sample.py
           bash -n ops/systemd/enable-local-stack.sh
           bash -n services/blink/install-vps.sh
+          bash -n ops/release/switch-release.sh
           node --experimental-strip-types --test tests/mail.mjs
           node --experimental-strip-types --test tests/vision-assessment.mjs
 
