@@ -263,8 +263,16 @@ try {
     status: "ACTIVE", productionType: "LAYER", layerStage: "LAYING", species: "CHICKEN",
   } }));
   assert.equal((await list(0, ids[1])).status, 403);
+  const saleLot = await runAsFarm(ids[0], async () => {
+    const batch = await prisma.batch.create({ data: {
+      name: "Sale fixture flock", startDate: new Date("2020-01-01"), initialChicks: 20, chickCostMinor: 0, status: "ACTIVE",
+    } });
+    const product = await prisma.product.create({ data: { name: "Prepared poultry fixture", unit: "each" } });
+    return prisma.inventoryItem.create({ data: { batchId: batch.id, productId: product.id, quantity: 5, sellingPriceMinor: 300 } });
+  });
   const workspace = await fetch(origin + "/api/offline/workspace", { headers: headerFor(0) }).then((response) => response.json());
   assert.equal(workspace.flocks[0].id, flock.id);
+  assert.ok(workspace.saleLots.some(lot => lot.id === saleLot.id));
   const mortality = { batchId: flock.id, date: workspace.today, quantity: 2, offline: { ...workspace.scope, id: randomUUID() } };
   const submit = (index, data) => fetch(origin + "/api/mortality", {
     method: "POST", headers: headerFor(index), body: JSON.stringify(data),
@@ -364,6 +372,23 @@ try {
   assert.equal((await submitInspection(0, draft)).status, 201);
   assert.equal((await fetch(photoUrl, { headers: headerFor(0) })).status, 404);
 
+  const saleDraft = { date: workspace.today, currency: workspace.currency, amountPaidMinor: 600, customerName: "",
+    items: [{ inventoryItemId: saleLot.id, quantity: 2, unitPriceMinor: 300 }],
+    offline: { ...workspace.scope, id: randomUUID() } };
+  const submitDraftSale = (account, data) => fetch(origin + "/api/sales", {
+    method: "POST", headers: headerFor(account), body: JSON.stringify(data),
+  });
+  assert.equal((await submitDraftSale(1, saleDraft)).status, 403);
+  assert.equal((await submitDraftSale(0, { ...saleDraft, currency: "XXX" })).status, 409);
+  const sales = await Promise.all([submitDraftSale(0, saleDraft), submitDraftSale(0, saleDraft)]);
+  assert.ok(sales.every(response => response.status === 200 || response.status === 201));
+  const [saleA, saleB] = await Promise.all(sales.map(response => response.json()));
+  assert.equal(saleA.id, saleB.id);
+  assert.equal((await submitDraftSale(0, { ...saleDraft, customerName: "Changed" })).status, 409);
+  assert.equal((await submitDraftSale(0, { ...saleDraft, offline: { ...saleDraft.offline, id: randomUUID() },
+    items: [{ ...saleDraft.items[0], quantity: 99 }] })).status, 409);
+  assert.equal(Number((await runAsFarm(ids[0], () => prisma.inventoryItem.findUnique({ where: { id: saleLot.id } }))).quantity), 3);
+
   if (process.env.FLOCKENCE_BROWSER_MODULE) {
     const { chromium } = createRequire(import.meta.url)(process.env.FLOCKENCE_BROWSER_MODULE);
     const browser = await chromium.launch();
@@ -427,6 +452,12 @@ try {
       await page.locator("#treatment-notes").fill("Observed administration fixture");
       await page.locator("#save").click();
       await page.getByText(/Treatment.*Test treatment fixture.*Waiting to sync/).waitFor();
+      await page.selectOption("#record-kind", "sale");
+      await page.selectOption("#sale-lot", saleLot.id);
+      await page.locator("#sale-quantity").fill("1");
+      await page.locator("#sale-paid").fill("3.00");
+      await page.locator("#save").click();
+      await page.getByText(/Sale draft.*Awaiting online confirmation/).waitFor();
       await page.reload();
       await page.locator("#passphrase").fill("test-device-research-only-123");
       await page.locator("#unlock-button").click();
@@ -438,7 +469,13 @@ try {
       await page.getByText(/Flock inspection.*Photo attached.*Waiting to sync/).waitFor();
       await page.getByText(/Treatment.*Test treatment fixture.*Waiting to sync/).waitFor();
       await context.setOffline(false);
+      await page.getByText(/Sale draft.*Awaiting online confirmation/).waitFor();
+      await page.getByText(/Treatment.*Test treatment fixture.*Waiting to sync/).waitFor({ state: "hidden" });
+      assert.equal(Number((await runAsFarm(ids[0], () => prisma.inventoryItem.findUnique({ where: { id: saleLot.id } }))).quantity), 3);
+      page.once("dialog", dialog => dialog.accept());
+      await page.getByRole("button", { name: "Review and confirm sale" }).click();
       await page.getByText("No entries waiting to sync.").waitFor();
+      assert.equal(Number((await runAsFarm(ids[0], () => prisma.inventoryItem.findUnique({ where: { id: saleLot.id } }))).quantity), 2);
       assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
       assert.equal(await runAsFarm(ids[0], () => prisma.weightRecord.count({ where: { batchId: flock.id } })), 2);
 
@@ -547,6 +584,14 @@ try {
   });
   assert.equal(blockedSale.status, 409);
   assert.match((await blockedSale.json()).error, /withdrawal/i);
+  const heldLot = await runAsFarm(ids[0], async () => {
+    const product = await prisma.product.create({ data: { name: "Held lot fixture", unit: "each" } });
+    return prisma.inventoryItem.create({ data: { batchId: laying.id, productId: product.id, quantity: 3 } });
+  });
+  const held = await submitDraftSale(0, { ...saleDraft, offline: { ...saleDraft.offline, id: randomUUID() },
+    items: [{ ...saleDraft.items[0], inventoryItemId: heldLot.id }] });
+  assert.equal(held.status, 409);
+  assert.match((await held.json()).error, /withdrawal/i);
   console.log("Camera HTTP checks, offline records and withdrawal holds passed.");
 } finally {
   app?.kill();
