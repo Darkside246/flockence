@@ -134,3 +134,22 @@ Static scan of class names present in CSS but absent from `app/`, `components/`,
 - **Crystal** depends on `.topbar:has(> .bottom-nav)` and its own sheets; it is the most heavily customised theme and the likeliest to regress.
 - **Other open branch** (`feature/readable-reports-counting`) touches Vision files; global class changes (`.card`, `.section-head`) will also restyle its new pages.
 - **48 px → 40 px controls** on desktop: keep ≥ 44 px on touch (coarse pointer) and on mobile widths for WCAG 2.5.8 / farm gloves use.
+
+## Results after phases 3–4 (CI Theme visual review, run 46075251254)
+
+- 512 screenshots per side: 23 routes × 7 themes × desktop 1440 / tablet 820 / mobile 390, plus navigation and search.
+- Horizontal overflow: **10 cases on `main` → 0**. On `main`, `/vision` overflowed on phones in Crystal, Workhorse and Terra (others are listed in the PR's `themes-before/report.json`). The fixes, all in the shared layer:
+  - `.table-scroll` had no styles at all; it now scrolls.
+  - Labels and form controls may shrink in grid tracks.
+  - `.stats` uses auto-fit columns.
+  - Dashboard section heads wrap their buttons.
+- Page height, summed over all routes and themes: desktop −7.0%, tablet −6.1%, mobile −3.9%. This is measured with page titles now visible in every theme, which adds height. Poultry Farm examples: Flocks 1805→1372 px, Farm Vision 3311→2617, Dashboard 6410→5417, House 1220→1000. Bigger reductions need the page redesigns in Phase 5 onwards (the dashboard alone is 5,400 px).
+- The CI harness itself had drifted from the app and was fixed. It now:
+  - sends the site `Origin` with its sign-up (required by `lib/account-form-security.ts`);
+  - opens `/settings#appearance` to reach the theme picker;
+  - names the offending elements when the overflow check fails.
+
+### Pre-existing gaps found during review (unstyled on `main` too; for the page phases)
+- `/house` and `/pens` "Recommended layout": `.house-plan` / `.house-cell` have no CSS, so the letter badges run into their labels ("FFeed").
+- Farm Vision report areas: `.vision-intel-area-status` has no CSS, so the status runs into the area name ("Insufficient dataLitter").
+- The dashboard is about 5,400 px tall on desktop, about 7,300 px on tablet.
