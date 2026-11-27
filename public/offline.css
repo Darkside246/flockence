@@ -12,3 +12,14 @@ button:disabled { opacity: .6; cursor: default; }
 .actions { display: flex; flex-wrap: wrap; gap: .6rem; }
 li { margin-block: .45rem; }
 #backup { background: white; color: #173821; }
+
+/* Farm at a glance (read-only, from the last sync) */
+#glance { margin: 1rem 0 1.5rem; padding: 1rem; border: 1px solid #d0d5dd; border-radius: 12px; background: #fff; }
+#glance h3 { margin: 1rem 0 .4rem; font-size: 1rem; }
+#glance h4 { margin: .6rem 0 .2rem; font-size: .9rem; }
+#glance ul { margin: 0; padding-left: 1.2rem; }
+#glance-time { color: #475467; font-size: .9rem; }
+.glance-todo { font-weight: 700; color: #b54708; }
+.glance-done { font-weight: 700; color: #067647; }
+.glance-flock { border-top: 1px solid #eaecf0; padding: .5rem 0; }
+.glance-flock summary { font-weight: 700; cursor: pointer; }
