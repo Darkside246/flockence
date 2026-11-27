@@ -28,7 +28,7 @@
         <p id="last-sync"></p>
         <form id="entry">
           <label for="record-kind">Record type</label>
-          <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option><option value="feed">Feed consumption</option><option value="inspection">Flock inspection</option><option id="treatment-option" value="treatment" hidden disabled>Treatment record</option><option id="expense-option" value="expense" disabled hidden>Farm expense</option></select>
+          <select name="kind" id="record-kind"><option value="mortality">Mortality</option><option value="weight">Live bird weight</option><option value="eggs">Egg collection</option><option value="feed">Feed consumption</option><option value="inspection">Flock inspection</option><option id="treatment-option" value="treatment" hidden disabled>Treatment record</option><option id="sale-option" value="sale" hidden disabled>Sale draft</option><option id="expense-option" value="expense" disabled hidden>Farm expense</option></select>
           <label id="flock-label" for="flock">Flock</label>
           <select name="batchId" id="flock" required></select>
           <label id="entry-date-label" for="date">Date</label>
@@ -49,6 +49,15 @@
             <input id="expense-description" name="description" maxlength="300" required>
             <label for="expense-amount">Amount <span id="expense-currency"></span></label>
             <input id="expense-amount" name="amount" type="text" inputmode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" maxlength="12" required>
+          </fieldset>
+          <fieldset id="sale-fields" hidden disabled>
+            <legend>Sale draft</legend>
+            <p>Choose a stock lot from your last connection. Confirm the sale online before handing over stock.</p>
+            <label for="sale-lot">Stock lot</label><select id="sale-lot" name="saleLot" required></select>
+            <label for="sale-quantity">Quantity</label><input id="sale-quantity" name="saleQuantity" type="number" min="0.001" max="999999999" step="0.001" inputmode="decimal" required>
+            <label for="sale-price">Price per unit <span id="sale-currency"></span></label><input id="sale-price" name="salePrice" maxlength="12" inputmode="decimal" required>
+            <label for="sale-paid">Amount received</label><input id="sale-paid" name="salePaid" value="0" maxlength="12" inputmode="decimal" required>
+            <label for="sale-customer">Customer name (optional)</label><input id="sale-customer" name="saleCustomer" maxlength="120">
           </fieldset>
           <fieldset id="treatment-fields" hidden disabled>
             <legend>Treatment record</legend>

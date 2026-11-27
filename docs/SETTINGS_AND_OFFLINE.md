@@ -103,5 +103,15 @@ known, add the actual end and recorded withdrawal clearance dates. The
 app does not calculate a clearance date from treatment notes. A missing
 clearance leaves the treatment active and triggers the existing sale and
 layer-egg hold rules after the record reaches the server. Until the
-receipt arrives, the draft is only on the device. Offline sales remain
-outside this release.
+receipt arrives, the draft is only on the device. 
+
+### Sale drafts
+
+Owners and Supervisors can prepare a one-lot sale in the encrypted
+workspace from a cached traceable inventory lot. When back online,
+review the price and quantity, finish syncing any treatment drafts on
+that device, then explicitly confirm the sale. Stock stays untouched
+until confirmation. The server rechecks the current role, farm, currency,
+lot status, available stock, use-by date and treatment withdrawals.
+The sale, inventory deduction, ledger and retry receipt commit together.
+Conflicts stay in the queue for review.

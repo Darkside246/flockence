@@ -59,13 +59,16 @@ async function render(active) {
     ? "Last synced " + new Date(active.profile.lastSync).toLocaleString()
     : "No farm records have synced from this device yet.";
   const allowExpenses = active.profile.canRecordExpenses === true;
+  const allowSales = active.profile.canRecordSales === true;
+  find("sale-option").hidden = !allowSales;
+  find("sale-option").disabled = !allowSales;
   const allowTreatments = active.profile.canRecordTreatments === true;
   find("treatment-option").hidden = !allowTreatments;
   find("treatment-option").disabled = !allowTreatments;
   find("expense-option").hidden = !allowExpenses;
   find("expense-option").disabled = !allowExpenses;
   find("expense-currency").textContent = active.profile.currency || "";
-  if ((!allowExpenses && find("record-kind").value === "expense") || (!allowTreatments && find("record-kind").value === "treatment")) {
+  if ((!allowSales && find("record-kind").value === "sale") || (!allowExpenses && find("record-kind").value === "expense") || (!allowTreatments && find("record-kind").value === "treatment")) {
     find("record-kind").value = "mortality";
     updateRecordFields();
   }
@@ -75,32 +78,52 @@ async function render(active) {
   const flocks = active.profile.flocks.filter(row => find("record-kind").value !== "eggs" || row.layer);
   select.replaceChildren(prompt, ...flocks.map(row => new Option(row.name, row.id)));
   if (flocks.some(row => row.id === selected)) select.value = selected;
-  find("save").disabled = find("record-kind").value === "expense" ? !allowExpenses : !flocks.length;
+  const sale = find("sale-lot");
+  const selectedLot = sale.value;
+  const lots = allowSales ? active.profile.saleLots ?? [] : [];
+  sale.replaceChildren(new Option("Select a stock lot", ""), ...lots.map(lot => new Option(
+    lot.product.name + (lot.lotCode ? " · " + lot.lotCode : "") + " · " + lot.quantity + " " + lot.product.unit, lot.id,
+  )));
+  if (lots.some(lot => lot.id === selectedLot)) sale.value = selectedLot;
+  find("sale-currency").textContent = active.profile.currency || "";
+  const kind = find("record-kind").value;
+  find("save").disabled = kind === "expense" ? !allowExpenses : kind === "sale" ? !lots.length : !flocks.length;
   const entries = find("entries");
   entries.replaceChildren();
   for (const { id, entry } of rows) {
     const li = document.createElement("li");
-    const detail = entry.kind === "expense" ? "Expense · " + (entry.expense.amountMinor / 100).toFixed(2) + " " + (entry.expense.currency || "")
+    const detail = entry.kind === "sale" ? "Sale draft · " + entry.sale.label + " · " + entry.sale.quantity
+      + " × " + (entry.sale.unitPriceMinor / 100).toFixed(2) + " " + entry.sale.currency
+      + " · Paid " + (entry.sale.amountPaidMinor / 100).toFixed(2)
+      : entry.kind === "expense" ? "Expense · " + (entry.expense.amountMinor / 100).toFixed(2) + " " + (entry.expense.currency || "")
       : entry.kind === "treatment" ? "Treatment · " + entry.treatment.productName
       : entry.kind === "inspection" ? "Flock inspection" + (entry.inspection.photo ? " · Photo attached" : "")
       : entry.kind === "eggs" ? entry.collection.totalEggs + " eggs · Egg collection"
       : entry.kind === "feed" ? entry.feedKg + " kg · Feed consumption"
       : entry.quantity + " birds · " + (entry.kind === "weight" ? "Live weight, " + entry.avgWeightKg + " kg average" : "Mortality");
     li.textContent = entry.flock + " · " + entry.date + " · " + detail + " · "
-      + (entry.review ? "Needs review — " + entry.review : "Waiting to sync");
-    if (entry.review) {
+      + (entry.review ? "Needs review — " + entry.review
+        : entry.kind === "sale" && !entry.approved ? "Awaiting online confirmation" : "Waiting to sync");
+    if (entry.review || (entry.kind === "sale" && !entry.approved)) {
       const retryEntry = document.createElement("button");
       retryEntry.type = "button";
-      retryEntry.textContent = "Retry this entry";
+      retryEntry.textContent = entry.kind === "sale" ? "Review and confirm sale" : "Retry this entry";
       retryEntry.addEventListener("click", async () => {
         if (current !== active || syncing || !navigator.onLine) {
           show("Reconnect and wait for the current sync before retrying.");
           return;
         }
+        if (entry.kind === "sale" && !window.confirm("Confirm these sale details? Flockence will check live stock and withdrawal holds.")) return;
         retryEntry.disabled = true;
         try {
+          if (entry.kind === "sale" && (await list(active)).some(row => row.entry.kind === "treatment")) {
+            show("Sync saved treatment records before confirming a sale.");
+            retryEntry.disabled = false;
+            return;
+          }
           const draft = { ...entry };
           delete draft.review;
+          if (draft.kind === "sale") draft.approved = true;
           await storage("outbox", "put", { id, value: await seal(active.key, id, draft) }, id);
           void sync();
         } catch {
@@ -161,9 +184,15 @@ async function sync() {
     let count = 0;
     for (const { id, entry } of await list(active)) {
       if (current !== active) return;
-      if (entry.review) continue;
+      if (entry.review || (entry.kind === "sale" && !entry.approved)) continue;
+      if (entry.kind === "sale" && (await list(active)).some(row => row.entry.kind === "treatment")) {
+        entry.approved = false;
+        await storage("outbox", "put", { id, value: await seal(active.key, id, entry) }, id);
+        continue;
+      }
       if ((entry.kind === "expense" && !syncedProfile.canRecordExpenses)
-        || (entry.kind === "treatment" && !syncedProfile.canRecordTreatments)) {
+        || (entry.kind === "treatment" && !syncedProfile.canRecordTreatments)
+        || (entry.kind === "sale" && !syncedProfile.canRecordSales)) {
         entry.review = "Your current role cannot sync this record. The draft remains saved.";
         await storage("outbox", "put", { id, value: await seal(active.key, id, entry) }, id);
         continue;
@@ -174,15 +203,19 @@ async function sync() {
       const expense = entry.kind === "expense";
       const inspection = entry.kind === "inspection";
       const treatment = entry.kind === "treatment";
-      const endpoint = treatment ? "/api/health/treatments" : inspection ? "/api/offline/inspections" : expense ? "/api/expenses" : feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
-      const values = treatment ? entry.treatment : inspection ? entry.inspection : expense ? { category: entry.expense.category, description: entry.expense.description, amountMinor: entry.expense.amountMinor, currency: entry.expense.currency }
+      const sale = entry.kind === "sale";
+      const endpoint = sale ? "/api/sales" : treatment ? "/api/health/treatments" : inspection ? "/api/offline/inspections" : expense ? "/api/expenses" : feed ? "/api/daily-flock-check" : eggs ? "/api/egg-collections" : weight ? "/api/weights" : "/api/mortality";
+      const values = sale ? {
+        items: [{ inventoryItemId: entry.sale.lotId, batchId: entry.sale.batchId, quantity: entry.sale.quantity, unitPriceMinor: entry.sale.unitPriceMinor }],
+        currency: entry.sale.currency, amountPaidMinor: entry.sale.amountPaidMinor, customerName: entry.sale.customerName,
+      } : treatment ? entry.treatment : inspection ? entry.inspection : expense ? { category: entry.expense.category, description: entry.expense.description, amountMinor: entry.expense.amountMinor, currency: entry.expense.currency }
         : feed ? { feedKg: entry.feedKg } : eggs ? entry.collection : weight ? { quantity: entry.quantity, avgWeightKg: entry.avgWeightKg }
         : { quantity: entry.quantity, reason: entry.reason, notes: entry.notes };
       const response = await fetch(endpoint, {
         method: "POST", credentials: "same-origin", cache: "no-store", signal: AbortSignal.timeout(12000),
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...(expense ? {} : { batchId: entry.batchId }), ...(treatment ? { startedAt: entry.date } : { date: entry.date }), ...values,
+          ...((expense || sale) ? {} : { batchId: entry.batchId }), ...(treatment ? { startedAt: entry.date } : { date: entry.date }), ...values,
           offline: { id, ...active.profile.scope },
         }),
       });
@@ -273,7 +306,10 @@ unlockForm.addEventListener("submit", async (event) => {
 });
 
 function updateRecordFields() {
+  const sale = find("record-kind").value === "sale";
   const treatment = find("record-kind").value === "treatment";
+  find("sale-fields").hidden = !sale;
+  find("sale-fields").disabled = !sale;
   const inspection = find("record-kind").value === "inspection";
   find("entry-date-label").textContent = treatment ? "Treatment start date" : "Date";
   find("treatment-fields").hidden = !treatment;
@@ -282,17 +318,17 @@ function updateRecordFields() {
   const eggs = find("record-kind").value === "eggs";
   const feed = find("record-kind").value === "feed";
   const expense = find("record-kind").value === "expense";
-  find("flock-label").hidden = expense;
-  find("flock").hidden = expense;
-  find("flock").disabled = expense;
+  find("flock-label").hidden = expense || sale;
+  find("flock").hidden = expense || sale;
+  find("flock").disabled = expense || sale;
   find("inspection-fields").hidden = !inspection;
   find("inspection-fields").disabled = !inspection;
   find("expense-fields").hidden = !expense;
   find("expense-fields").disabled = !expense;
   find("quantity-label").textContent = weight ? "Birds weighed" : "Birds lost";
-  find("mortality-fields").hidden = weight || eggs || feed || expense || inspection || treatment;
-  find("bird-fields").hidden = eggs || feed || expense || inspection || treatment;
-  find("quantity").disabled = eggs || feed || expense || inspection || treatment;
+  find("mortality-fields").hidden = weight || eggs || feed || expense || inspection || treatment || sale;
+  find("bird-fields").hidden = eggs || feed || expense || inspection || treatment || sale;
+  find("quantity").disabled = eggs || feed || expense || inspection || treatment || sale;
   find("feed-fields").hidden = !feed;
   find("feed-weight").disabled = !feed;
   find("feed-weight").required = feed;
@@ -327,6 +363,18 @@ async function inspectionPhoto(file) {
   }
 }
 
+function amountInMinor(value) {
+  const raw = String(value || "").trim();
+  if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) return NaN;
+  const [whole, cents = ""] = raw.split(".");
+  return Number(whole) * 100 + Number(cents.padEnd(2, "0"));
+}
+
+find("sale-lot").addEventListener("change", () => {
+  const lot = current?.profile.saleLots?.find(row => row.id === find("sale-lot").value);
+  find("sale-price").value = typeof lot?.sellingPriceMinor === "number" ? (lot.sellingPriceMinor / 100).toFixed(2) : "";
+});
+
 find("record-kind").addEventListener("change", () => {
   updateRecordFields();
   if (current) void render(current).catch(() => show("Could not refresh the local flock list."));
@@ -340,7 +388,23 @@ form.addEventListener("submit", async (event) => {
   const quantity = Number(data.get("quantity"));
   const date = String(data.get("date") ?? "");
   const kind = String(data.get("kind"));
-  if ((!flock && kind !== "expense") || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  if ((!flock && kind !== "expense" && kind !== "sale") || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+  let sale;
+  if (kind === "sale") {
+    if (!active.profile.canRecordSales) return;
+    const lot = active.profile.saleLots?.find(row => row.id === data.get("saleLot"));
+    const quantity = Number(data.get("saleQuantity"));
+    const unitPriceMinor = amountInMinor(data.get("salePrice"));
+    const amountPaidMinor = amountInMinor(data.get("salePaid"));
+    const total = Math.round(quantity * unitPriceMinor);
+    if (!lot || !Number.isFinite(quantity) || quantity <= 0 || !Number.isSafeInteger(unitPriceMinor) ||
+      !Number.isSafeInteger(total) || total > 2147483647 || !Number.isSafeInteger(amountPaidMinor) || amountPaidMinor > total) {
+      show("Check the stock lot, sale amount and amount received.");
+      return;
+    }
+    sale = { lotId: lot.id, batchId: lot.batchId, label: lot.product.name, currency: active.profile.currency, quantity, unitPriceMinor,
+      amountPaidMinor, customerName: String(data.get("saleCustomer") || "").trim() };
+  }
   let expense;
   if (kind === "expense") {
     if (!active.profile.canRecordExpenses) return;
@@ -410,7 +474,7 @@ form.addEventListener("submit", async (event) => {
     const id = crypto.randomUUID();
     const entry = {
       kind, flock: flock?.name ?? "Farm-wide", batchId: flock?.id, date, quantity,
-      ...(kind === "treatment" ? { treatment } : kind === "inspection" ? { inspection } : kind === "expense" ? { expense } : kind === "feed" ? { feedKg } : kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
+      ...(kind === "sale" ? { sale, approved: false } : kind === "treatment" ? { treatment } : kind === "inspection" ? { inspection } : kind === "expense" ? { expense } : kind === "feed" ? { feedKg } : kind === "eggs" ? { collection } : kind === "weight" ? { avgWeightKg } : { reason: String(data.get("reason") ?? ""), notes: String(data.get("notes") ?? "") }),
       createdAt: Date.now(),
     };
     await storage("outbox", "add", { id, value: await seal(active.key, id, entry) }, id);
@@ -419,7 +483,7 @@ form.addEventListener("submit", async (event) => {
     find("record-kind").value = kind;
     updateRecordFields();
     find("date").value = date;
-    show("Saved on this device. Waiting to sync.");
+    show(kind === "sale" ? "Sale draft saved on this device. Confirm it online." : "Saved on this device. Waiting to sync.");
     await render(active);
     void sync();
   } catch (error) {
