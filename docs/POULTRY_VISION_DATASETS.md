@@ -57,8 +57,9 @@ ChickenDet **Test** split (250 pictures, 12,620 boxed birds), sends each through
 prompt the farm uses, and compares Vision's `birdCount.visible` with the number of birds the researchers boxed.
 
 - It reads only what it needs from the official 4 GB `ChickenDet.zip` on Zenodo: the zip's index, the 10 MB Test
-  annotations (both kept in `~/.cache/flockence-chickenverse` after the first run) and the sampled pictures. Nothing is
-  saved to the farm's history, and no picture is kept.
+  annotations and the sampled pictures, all kept in `~/.cache/flockence-chickenverse` so a second run (for example
+  with another model) downloads nothing. It downloads over 6 connections at once, because Zenodo is slow on one.
+  Nothing is saved to the farm's history.
 - The sample is repeatable (`--seed`) and spread over crowding levels (0, 1-10, 11-30, 31-60, 61-100, over 100 birds).
 - Each picture is one paid vision call. It stops at `--max-cost-usd` (default $1.00). With Claude Haiku 5.5 on
   OpenRouter expect very roughly half a cent per picture.
@@ -67,7 +68,7 @@ prompt the farm uses, and compares Vision's `birdCount.visible` with the number 
 
 On the server, from the live release folder (so it uses the server's vision settings and key, read from the release's `.env`; use
 `.env.production` or `.env.local` in the command instead if that is where the key is). The release must
-include this script, so deploy first. The dry run lists the chosen pictures and makes no paid calls:
+include this script, so deploy first. The dry run lists and fetches the chosen pictures and makes no paid calls:
 
 ```sh
 cd "$(systemctl show -p WorkingDirectory --value flockence)"
