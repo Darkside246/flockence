@@ -58,7 +58,8 @@ for flag in FLOCKENCE_CAMERA_VISION FLOCKENCE_LIVE_CAMERA_VISION; do
   elif [[ $cameras_on == yes ]]; then add_setting "$flag" on; echo "    $flag: switched on."
   else echo "    $flag: not set. Camera inspections stay off until it is (run again with --cameras-on)."; fi
 done
-echo "    OPENAI_API_KEY (needed for the analysis): $(has OPENAI_API_KEY)"
+echo "    Vision key: ANTHROPIC_API_KEY $(has ANTHROPIC_API_KEY), OPENAI_API_KEY $(has OPENAI_API_KEY) (one is needed for the analysis)"
+echo "    Premium vision farms (VISION_PREMIUM_FARMS): $(has VISION_PREMIUM_FARMS)"
 echo "    Oriya link for WhatsApp messages (ORIYA_URL, ORIYA_CAMERAS): $(has ORIYA_URL), $(has ORIYA_CAMERAS)"
 
 if [[ $changed == yes ]]; then

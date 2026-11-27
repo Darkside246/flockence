@@ -409,3 +409,49 @@ test("automatic camera vision: each farm's schedule is its own, and only old aut
     if (previousDir === undefined) delete process.env.VISION_STORAGE_DIR; else process.env.VISION_STORAGE_DIR = previousDir;
   }
 });
+
+test("vision provider: the chosen model and its cost, and each farm's monthly usage counted safely", async () => {
+  const { visionProvider, visionModel, costMicros, visionConfigured } = await import("../lib/vision-provider.ts");
+  const { recordVisionUsage, monthUsage } = await import("../lib/vision-usage.ts");
+  const saved = { p: process.env.VISION_PROVIDER, m: process.env.VISION_MODEL, a: process.env.ANTHROPIC_API_KEY, o: process.env.OPENAI_API_KEY, prices: process.env.VISION_PRICES };
+  try {
+    delete process.env.VISION_PROVIDER; delete process.env.VISION_MODEL; delete process.env.OPENAI_API_KEY;
+    process.env.ANTHROPIC_API_KEY = "test-only";
+    assert.equal(visionProvider(), "anthropic");
+    assert.equal(visionModel(), "claude-haiku-5-5");
+    assert.equal(visionConfigured(), true);
+    delete process.env.ANTHROPIC_API_KEY;
+    process.env.OPENAI_API_KEY = "test-only";
+    assert.equal(visionProvider(), "openai");
+    assert.equal(visionModel(), "gpt-5.6-luna");
+    process.env.VISION_MODEL = "gpt-5.6-luna"; process.env.VISION_PROVIDER = "anthropic"; process.env.ANTHROPIC_API_KEY = "test-only";
+    assert.equal(visionModel(), "claude-haiku-5-5", "an OpenAI model name is ignored when Claude is chosen");
+    delete process.env.VISION_MODEL; delete process.env.VISION_PROVIDER; delete process.env.ANTHROPIC_API_KEY;
+    process.env.VISION_PROVIDER = "anthropic";
+    assert.equal(visionConfigured(), false, "the chosen provider's own key is required");
+    // 2,500 tokens in and 1,500 out on Claude Haiku 5.5: $0.00025 + $0.00075 = $0.001
+    assert.equal(costMicros("claude-haiku-5-5", 2500, 1500), 1000);
+    assert.equal(costMicros("some-new-model", 100, 100), null);
+    process.env.VISION_PRICES = JSON.stringify({ "some-new-model": [1, 2] });
+    assert.equal(costMicros("some-new-model", 1000, 1000), 3000);
+
+    const call = { provider: "anthropic", model: "claude-haiku-5-5", inputTokens: 2500, outputTokens: 1500, costMicros: 1000 };
+    await Promise.all([
+      runAsFarm(A, () => recordVisionUsage({ automatic: true, calls: [call], counted: true })),
+      runAsFarm(A, () => recordVisionUsage({ automatic: true, calls: [call], counted: true })),
+      runAsFarm(A, () => recordVisionUsage({ automatic: false, calls: [call, { ...call, model: "claude-sonnet-5-5", costMicros: 20000 }], counted: true })),
+      runAsFarm(A, () => recordVisionUsage({ automatic: false, calls: [call], counted: false })),
+    ]);
+    const usage = await runAsFarm(A, () => monthUsage());
+    assert.equal(usage.automatic, 2);
+    assert.equal(usage.manual, 1);
+    assert.equal(usage.rechecks, 1);
+    assert.equal(usage.costMicros, 1000 * 4 + 20000);
+    assert.equal(usage.byModel["claude-sonnet-5-5"].calls, 1);
+    assert.equal((await runAsFarm(B, () => monthUsage())).automatic, 0, "farm B's usage is its own");
+  } finally {
+    for (const [k, v] of [["VISION_PROVIDER", saved.p], ["VISION_MODEL", saved.m], ["ANTHROPIC_API_KEY", saved.a], ["OPENAI_API_KEY", saved.o], ["VISION_PRICES", saved.prices]]) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});

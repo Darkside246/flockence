@@ -20,6 +20,7 @@
     "backup:verify": "node scripts/verify-backup.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.14.0",
     "@prisma/client": "6.19.3",
     "hls.js": "^1.7.4",
     "next": "16.4.6",

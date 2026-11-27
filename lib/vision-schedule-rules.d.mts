@@ -32,3 +32,13 @@ export function recordAttempt(
   previous: CameraState | undefined, now: Date,
   outcome: { ok: true; summary?: string; observationId: string; severity?: string } | { ok: false; error: string },
 ): CameraState;
+
+export type VisionPlan = "FREE" | "STANDARD" | "PREMIUM";
+export type PlanLimits = { automatic: boolean; maxCameras: number; minIntervalHours: number; dailyCap: number; manualPerMonth: number; monthlyBudgetUsd: number };
+export const DEFAULT_PLAN_LIMITS: Record<VisionPlan, PlanLimits>;
+export const PLAN_LABELS: Record<VisionPlan, string>;
+export function visionPlan(accessState: string, farmId: string, premiumFarms?: string): VisionPlan;
+export function planLimits(plan: VisionPlan, overridesText?: string): PlanLimits;
+export function fitScheduleToPlan(schedule: Schedule, limits: PlanLimits, planLabel?: string): { ok: true; schedule: Schedule } | { ok: false; error: string };
+export function scheduleWithinPlan(schedule: Schedule | null, limits: PlanLimits): Schedule | null;
+export function overBudget(costMicros: number, limits: PlanLimits): boolean;
