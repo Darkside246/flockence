@@ -134,10 +134,10 @@ a.card:hover { border-color: var(--ds-border-strong); box-shadow: var(--elev-2);
 .action strong { display: block; margin-bottom: 2px; font-size: var(--text-sm); }
 .action span { color: var(--ds-text-2); font-size: var(--text-xs); line-height: 1.45; }
 
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; overflow: hidden; background: var(--ds-border); border: 1px solid var(--ds-border); border-radius: var(--ds-card-radius); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr)); gap: 1px; overflow: hidden; background: var(--ds-border); border: 1px solid var(--ds-border); border-radius: var(--ds-card-radius); }
 .stats > div { background: var(--ds-surface); padding: var(--space-3) var(--space-4); min-width: 0; }
 .stats span { display: block; color: var(--ds-text-2); font-size: var(--text-xs); margin-bottom: 2px; }
-.stats strong { font-size: var(--text-xl); font-weight: var(--weight-heavy); letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.stats strong { display: block; font-size: var(--text-xl); font-weight: var(--weight-heavy); letter-spacing: -.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
 .list { display: grid; gap: var(--space-2); }
 .row { display: grid; grid-template-columns: 1.7fr repeat(5, minmax(0, 1fr)); gap: var(--space-3); align-items: center; }
@@ -213,7 +213,6 @@ html[data-theme="workhorse"] :is(.metric-value, .metric-label, td, th, input, se
 @media (max-width: 760px) {
   /* 16px inputs stop phones zooming into the field. */
   input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: var(--text-lg); }
-  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .theme-matrix { grid-template-columns: 1fr; }
   .metric-value { font-size: var(--text-xl); }
