@@ -143,3 +143,11 @@ test("the monthly budget stops automatic spending", () => {
   assert.equal(overBudget(1_000_000, standard), true);
   assert.equal(overBudget(0, planLimits("FREE")), true);
 });
+
+test("Free farms get 10 photo checks a month by hand, but no cameras, automatic checks or budget for them", () => {
+  const free = planLimits("FREE");
+  assert.equal(free.manualPerMonth, 10);
+  assert.equal(free.automatic, false);
+  assert.equal(free.maxCameras, 0);
+  assert.equal(planLimits("FREE", '{"FREE":{"manualPerMonth":25}}').manualPerMonth, 25, "the owner can change it without code");
+});

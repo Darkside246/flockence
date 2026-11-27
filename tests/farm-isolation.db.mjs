@@ -736,3 +736,19 @@ test("vision alerts: one email per incident to people who chose alerts, quiet on
   const retry = await runAsFarm(A, () => alertOnFindings(other, new Date(t1.getTime() + 60_000), send));
   assert.equal(retry.emailed, 1, "the failed alert goes out on the next try");
 });
+
+test("free plan: a Free farm gets 10 photo checks a month; Premium farms keep theirs", async () => {
+  const { currentVisionPlan } = await import("../lib/vision-plan.ts");
+  await runAsFarm(B, () => prisma.setting.upsert({ where: { farmId_key: { farmId: B, key: "MEMBERSHIP_V1" } }, create: { key: "MEMBERSHIP_V1", value: "FREE" }, update: { value: "FREE" } }));
+  const free = await runAsFarm(B, () => currentVisionPlan());
+  assert.equal(free.plan, "FREE");
+  assert.equal(free.limits.manualPerMonth, 10);
+  assert.equal(free.limits.automatic, false);
+  const before = process.env.VISION_PREMIUM_FARMS;
+  process.env.VISION_PREMIUM_FARMS = B;
+  try {
+    assert.equal((await runAsFarm(B, () => currentVisionPlan())).plan, "PREMIUM");
+  } finally {
+    if (before === undefined) delete process.env.VISION_PREMIUM_FARMS; else process.env.VISION_PREMIUM_FARMS = before;
+  }
+});

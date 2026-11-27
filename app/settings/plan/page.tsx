@@ -6,9 +6,9 @@ import { Nav } from "@/components/nav";
 
 type Plan = { state: "PREMIUM" | "FREE" | "EXISTING" | "UNAVAILABLE"; subscriptionUrl?: string };
 const premium = [
-  ["Cameras", "/cameras", "Live views and recordings from connected cameras."],
-  ["Farm Vision", "/vision", "Photo and camera inspections with recorded findings."],
-  ["Smart devices", "/devices", "Connected sensors and farm devices."],
+  ["Cameras", "/cameras", "Live views and recordings from connected cameras.", ""],
+  ["Farm Vision", "/vision", "Photo and camera inspections with recorded findings.", "Free includes 10 photo checks a month, findings, reports and the daily email. Camera and automatic checks come with Premium."],
+  ["Smart devices", "/devices", "Connected sensors and farm devices.", ""],
 ];
 
 export default function PlanPage() {
@@ -34,9 +34,11 @@ export default function PlanPage() {
         {plan?.subscriptionUrl && <a className="button" href={plan.subscriptionUrl}>Manage subscription in Oriya</a>}
       </section>
       <section className="section grid2" aria-label="Premium features">
-        {premium.map(([title, href, description]) => <article className="card" key={href}>
+        {premium.map(([title, href, description, freeNote]) => <article className="card" key={href}>
           <h2>{title}</h2><p>{description}</p>
-          {active ? <Link className="button" href={href}>Open {title}</Link> : <p>Premium · {status}</p>}
+          {active ? <Link className="button" href={href}>Open {title}</Link>
+            : freeNote && plan?.state === "FREE" ? <><p>{freeNote}</p><Link className="button" href={href}>Open {title}</Link></>
+            : <p>Premium · {status}</p>}
         </article>)}
       </section>
     </main>

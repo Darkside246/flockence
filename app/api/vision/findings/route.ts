@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { accountFormOriginResponse, readAccountForm } from "@/lib/account-form-security";
 import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-user";
-import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { listFindings, reviewVisionFinding } from "@/lib/vision-findings";
 
@@ -12,8 +11,7 @@ const headers = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
   const session = await currentUserOrResponse(request);
   if (session.response) return session.response;
-  const locked = await premiumFeatureResponse();
-  if (locked) return locked;
+  // Every plan, Free included (owner, 2026-11-27): findings, reports and the timeline cost nothing to read.
   const url = new URL(request.url);
   const penId = url.searchParams.get("penId");
   const findings = await listFindings({ open: url.searchParams.get("all") !== "1", penId: penId && /^[A-Za-z0-9_-]{1,64}$/.test(penId) ? penId : undefined });

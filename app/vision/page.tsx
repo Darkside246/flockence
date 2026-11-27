@@ -5,6 +5,7 @@ import { Nav } from "@/components/nav";
 import { VisionSchedule } from "@/components/vision-schedule";
 import { VisionReport } from "@/components/vision-report";
 import { VisionFindings } from "@/components/vision-findings";
+import { VisionIntelligence } from "@/components/vision-intelligence";
 import { useSession } from "@/components/auth-gate";
 import { shrinkPhoto, sizeLabel } from "@/lib/photo-shrink";
 import { OfflineError, queueAvailable, queueCheck, queuedChecks, sendInspection, sendQueued, uploadId } from "@/lib/vision-send";
@@ -64,6 +65,8 @@ export default function VisionPage() {
   const [preparing, setPreparing] = useState(false);
   const [sizeNote, setSizeNote] = useState("");
   const [queued, setQueued] = useState(0);
+  const [usage, setUsage] = useState<{ label: string; manualPerMonth: number; left: number; cameras: boolean } | null>(null);
+  const loadUsage = () => fetch("/api/vision/usage", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).then(setUsage).catch(() => undefined);
   const [sendingQueued, setSendingQueued] = useState(false);
   const [earlier, setEarlier] = useState("");
   const [later, setLater] = useState("");
@@ -80,6 +83,7 @@ export default function VisionPage() {
   useEffect(() => {
     fetch("/api/batches", { cache: "no-store" }).then(r => r.json()).then(setBatches).catch(() => setBatches([]));
     loadHistory().catch(() => undefined);
+    loadUsage();
     fetch("/api/vision/pens", { cache: "no-store" }).then((r) => r.ok ? r.json() : [])
       .then(setPens).catch(() => setPens([]));
     fetch("/api/vision/cameras", { cache: "no-store" }).then((r) => r.ok ? r.json() : [])
@@ -202,6 +206,7 @@ export default function VisionPage() {
       setResult(data.analysis ?? null);
       setMessage(data.repeated ? "The connection dropped, but the inspection was already saved. It was not charged twice." : captureVideo ? "Live video sample analyzed and saved to the farm history." : "Photo analyzed and saved to the farm history.");
       await loadHistory();
+      loadUsage();
     } catch (error) {
       if (error instanceof OfflineError && !cameraName && await keepForLater().catch(() => false)) return;
       setMessage(error instanceof OfflineError ? "No connection. Check the signal and try again; the photo will not be charged twice."
@@ -286,6 +291,7 @@ export default function VisionPage() {
           {assignmentMessage && <span role="status">{assignmentMessage}</span>}
         </div>}
         <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy || preparing || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? (captureVideo ? "Capturing and analyzing…" : "Analyzing photo…") : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
+        {usage && <p className="muted" style={{ marginTop: 8 }}>{usage.label} plan: {usage.left} of {usage.manualPerMonth} photo checks left this month.{!usage.cameras ? " Camera and automatic checks come with Premium." : ""}</p>}
         {queued > 0 && <p className="notice" role="status" style={{ marginTop: 12 }}>
           {queued} photo{queued === 1 ? "" : "s"} saved on this phone, waiting for a signal.{" "}
           <button type="button" className="button" disabled={sendingQueued} onClick={() => { flushQueue().catch(() => undefined); }}>{sendingQueued ? "Sending…" : "Send now"}</button>
@@ -293,6 +299,9 @@ export default function VisionPage() {
       </form>
       {cameras.length > 0 && <VisionSchedule cameras={cameras} />}
       <VisionFindings pens={pens} canReview={session?.role === "OWNER" || session?.role === "MANAGER" || session?.role === "WORKER"} />
+      <section className="section" id="reports"><div className="section-head"><div><h3>Reports</h3><p>What Vision found for the whole farm, a pen, a batch{cameras.length ? " or a camera" : ""}, built from the checks already saved. Opening a report costs nothing.</p></div></div>
+        <VisionIntelligence cameras={cameras} onVisionPage />
+      </section>
 
       {result && <section className="section"><div className="section-head"><div><h3>Inspection result</h3><p>Visible findings only. Review the checks before taking action.</p></div><span className={`pill ${String(result.severity || "LOW").toLowerCase()}`}>{result.severity || "LOW"}</span></div>
         <div className="vision-result-grid">

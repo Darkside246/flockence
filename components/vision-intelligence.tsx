@@ -26,7 +26,7 @@ const tone = (status: string) => ({ URGENT: "urgent", ATTENTION: "attention", MO
  * and a period, and read what Vision found, built from the inspections, findings and farm records already saved.
  * Opening a report runs no new picture analysis, so it costs nothing.
  */
-export function VisionIntelligence({ cameras }: { cameras: { name: string }[] }) {
+export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras: { name: string }[]; onVisionPage?: boolean }) {
   const [pens, setPens] = useState<Option[]>([]);
   const [batches, setBatches] = useState<Option[]>([]);
   const [scope, setScope] = useState("farm");
@@ -61,7 +61,7 @@ export function VisionIntelligence({ cameras }: { cameras: { name: string }[] })
   return <div className="vision-intel">
     <div className="card vision-intel-controls">
       <label>Report on<select value={scope} onChange={e => { setScope(e.target.value); setTarget(""); if (e.target.value !== "batch" && period === "batch") setPeriod("7d"); }}>
-        <option value="farm">Whole farm</option><option value="pen">One pen</option><option value="batch">One batch</option><option value="camera">One camera</option>
+        <option value="farm">Whole farm</option><option value="pen">One pen</option><option value="batch">One batch</option>{cameras.length > 0 && <option value="camera">One camera</option>}
       </select></label>
       {scope !== "farm" && <label>{scope === "pen" ? "Pen" : scope === "batch" ? "Batch" : "Camera"}<select value={target} onChange={e => setTarget(e.target.value)}>
         <option value="">Choose…</option>{options.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -71,7 +71,7 @@ export function VisionIntelligence({ cameras }: { cameras: { name: string }[] })
         {scope === "batch" && <option value="batch">The whole batch</option>}<option value="custom">Choose dates</option>
       </select></label>
       {period === "custom" && <><label>From<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>To<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label></>}
-      <a className="button" href="/vision">Run a check or review findings</a>
+      {!onVisionPage && <a className="button" href="/vision">Run a check or review findings</a>}
     </div>
     <VisionAlerts />
     <VisionDailyReport />

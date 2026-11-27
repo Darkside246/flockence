@@ -9,7 +9,7 @@ type NavItem = readonly [string, string, string];
 
 const groups: { label: string; items: NavItem[] }[] = [
   { label: "Operate", items: [["Overview", "/", "home"], ["Flocks", "/batches", "flock"], ["Daily round", "/operations", "operations"], ["Egg production", "/layers", "eggs"], ["Layer performance", "/layers/performance", "performance"], ["Pack eggs", "/layers/packing", "package"], ["House", "/house", "house"], ["Pens", "/pens", "pens"], ["Health", "/health", "health"]] },
-  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Devices", "/devices", "devices"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Suppliers", "/suppliers", "users"], ["Production", "/planning", "production"]] },
+  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Farm Vision", "/vision", "vision"], ["Devices", "/devices", "devices"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Suppliers", "/suppliers", "users"], ["Production", "/planning", "production"]] },
   { label: "Understand", items: [["Performance", "/performance", "performance"], ["Reports", "/reports", "reports"]] }
 ];
 const teamGroup = { label: "Manage", items: [["Team", "/team", "users"]] as NavItem[] };
@@ -33,6 +33,7 @@ function NavIcon({name}:{name:string}) {
     production:<><path d="M3 13V7l5-4 5 4v6"/><path d="M6 13V9h4v4"/></>,
     performance:<><path d="M3 12V8M6 12V5M9 12V3M12 12V6"/><path d="M2 13h11"/></>,
     camera:<><rect x="2" y="4.5" width="8" height="7" rx="1.5"/><path d="m10 7.5 4-2v5l-4-2z"/></>,
+    vision:<><path d="M1.5 8S3.9 3.5 8 3.5 14.5 8 14.5 8 12.1 12.5 8 12.5 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2"/></>,
     reports:<><path d="M4 2.5h7l2 2V13H4z"/><path d="M8 7h3M6 9h5M6 11h4"/></>,
     settings:<><circle cx="8" cy="8" r="2.2"/><path d="m8 2 .7 1.4 1.6.4 1.2-1 1.7 1.7-1 1.2.4 1.6L14 8l-1.4.7-.4 1.6 1 1.2-1.7 1.7-1.2-1-1.6.4L8 14l-.7-1.4-1.6-.4-1.2 1-1.7-1.7 1-1.2-.4-1.6L2 8l1.4-.7.4-1.6-1-1.2L5.5 4.8l1.2 1 1.6-.4z"/></>
   };

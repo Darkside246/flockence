@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse } from "@/lib/current-user";
-import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId } from "@/lib/operations";
@@ -19,8 +18,7 @@ const idOk = (v: string | null): v is string => typeof v === "string" && /^[A-Za
 export async function GET(request: Request) {
   const session = await currentUserOrResponse(request);
   if (session.response) return session.response;
-  const locked = await premiumFeatureResponse();
-  if (locked) return locked;
+  // Every plan, Free included (owner, 2026-11-27): findings, reports and the timeline cost nothing to read.
   const limit = await checkRateLimit("vision-report:" + session.user.farmId, 60, 60_000);
   if (!limit.allowed) return NextResponse.json({ error: "Too many reports at once. Try again shortly." }, { status: 429, headers });
   const url = new URL(request.url);

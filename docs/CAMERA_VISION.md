@@ -230,3 +230,11 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
 - Oriya / WhatsApp: automatic checks of cameras shared with Oriya (`ORIYA_CAMERAS`) already go to Oriya, which sends its
   own WhatsApp alerts. Sending these Vision alerts to Oriya needs a new message type on Oriya's side (Phase 7).
 - Code: `lib/vision-alert-rules.mjs`, `lib/vision-alerts.ts`, `app/api/vision/alerts`, `components/vision-alerts.tsx`.
+
+## Free farms (2026-11-27)
+
+- Free farms get photo checks by hand (10 a month by default; `VISION_PLAN_LIMITS='{"FREE":{"manualPerMonth":N}}'`),
+  findings, reports, the pen timeline, alerts and the daily email. Camera checks, the automatic schedule and the camera
+  pages stay Premium.
+- The Farm Vision page (now in the menu, under Control) shows the reports for every plan and how many photo checks are
+  left this month. The daily email links there (`/vision#reports`).
