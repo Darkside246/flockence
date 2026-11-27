@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     }
     await ensureFarm();
     if (!visionConfigured()) {
-      return NextResponse.json({ error: "Farm Vision is not configured. Add ANTHROPIC_API_KEY (or OPENAI_API_KEY) to the server environment." }, { status: 503 });
+      return NextResponse.json({ error: "Farm Vision is not configured. Add OPENROUTER_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY to the server environment." }, { status: 503 });
     }
 
     // Each plan includes a number of hand-started inspections a month (VISION_PLAN_LIMITS).

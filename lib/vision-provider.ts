@@ -5,9 +5,11 @@ import Anthropic from "@anthropic-ai/sdk";
  * and features from different companies"). Every provider gets the same prompt and pictures and must return the same
  * JSON, which Farm Vision checks with one schema, so switching changes cost and quality, never the screens.
  *
- *   VISION_PROVIDER   anthropic | openai     (default: anthropic when ANTHROPIC_API_KEY is set, else openai)
- *   VISION_MODEL      the model for routine checks (default: claude-haiku-5-5, or gpt-5.6-luna for openai)
- *   VISION_EFFORT     low | medium | high    (Claude only; default low: routine farm pictures need little reasoning)
+ *   VISION_PROVIDER   anthropic | openrouter | openai   (default: the first of these whose key is set:
+ *                     ANTHROPIC_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY)
+ *   VISION_MODEL      the model for routine checks (default: claude-haiku-5-5; on OpenRouter anthropic/claude-haiku-5.5,
+ *                     any OpenRouter model id with vision works; on OpenAI gpt-5.6-luna)
+ *   VISION_EFFORT     low | medium | high    (Claude and OpenRouter; default low: farm pictures need little reasoning)
  *   VISION_ESCALATE_MODEL   optional, same provider: a stronger model that re-checks only pictures the first model
  *                           flagged (high, urgent or escalate). Off unless set.
  *   VISION_PRICES     optional JSON {"model": [input $ per million tokens, output $ per million tokens]} to add or
@@ -19,7 +21,7 @@ export type VisionCall = { instructions: string; prompt: string; images: VisionI
 export type VisionUsage = { provider: string; model: string; inputTokens: number; outputTokens: number; costMicros: number | null };
 export type VisionReply = { ok: true; text: string; usage: VisionUsage } | { ok: false; status: number; error: string; usage?: VisionUsage };
 
-type Provider = "anthropic" | "openai";
+type Provider = "anthropic" | "openrouter" | "openai";
 
 /** List prices, US dollars per million tokens (input, output). Correct or extend with VISION_PRICES. */
 const DEFAULT_PRICES: Record<string, [number, number]> = {
@@ -30,8 +32,9 @@ const DEFAULT_PRICES: Record<string, [number, number]> = {
 
 export function visionProvider(): Provider | null {
   const chosen = process.env.VISION_PROVIDER?.trim().toLowerCase();
-  if (chosen === "anthropic" || chosen === "openai") return chosen;
+  if (chosen === "anthropic" || chosen === "openrouter" || chosen === "openai") return chosen;
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  if (process.env.OPENROUTER_API_KEY) return "openrouter";
   if (process.env.OPENAI_API_KEY) return "openai";
   return null;
 }
@@ -40,9 +43,10 @@ export function visionModel(provider = visionProvider()): string {
   const set = process.env.VISION_MODEL?.trim();
   // A model name from the other company (for example an old VISION_MODEL="gpt-..." left in .env after switching to
   // Claude) is ignored, so a provider switch never sends a request the provider cannot answer.
-  const isClaude = (name: string) => name.startsWith("claude-");
-  if (set && (provider === "anthropic" ? isClaude(set) : !isClaude(set))) return set;
-  return provider === "openai" ? "gpt-5.6-luna" : "claude-haiku-5-5";
+  // OpenRouter ids name the company first ("anthropic/claude-haiku-5.5"); Anthropic ids start with "claude-".
+  const fits = (name: string) => provider === "openrouter" ? name.includes("/") : provider === "anthropic" ? name.startsWith("claude-") : !name.startsWith("claude-") && !name.includes("/");
+  if (set && fits(set)) return set;
+  return provider === "openai" ? "gpt-5.6-luna" : provider === "openrouter" ? "anthropic/claude-haiku-5.5" : "claude-haiku-5-5";
 }
 
 export function visionEscalateModel(): string | null {
@@ -52,7 +56,10 @@ export function visionEscalateModel(): string | null {
 /** Is the chosen provider's key present? (Said as a fact; the key itself is never shown.) */
 export function visionConfigured() {
   const provider = visionProvider();
-  return provider === "anthropic" ? Boolean(process.env.ANTHROPIC_API_KEY) : provider === "openai" ? Boolean(process.env.OPENAI_API_KEY) : false;
+  if (provider === "anthropic") return Boolean(process.env.ANTHROPIC_API_KEY);
+  if (provider === "openrouter") return Boolean(process.env.OPENROUTER_API_KEY);
+  if (provider === "openai") return Boolean(process.env.OPENAI_API_KEY);
+  return false;
 }
 
 export function priceFor(model: string): [number, number] | null {
@@ -60,7 +67,9 @@ export function priceFor(model: string): [number, number] | null {
   try { extra = JSON.parse(process.env.VISION_PRICES ?? "{}"); } catch { /* ignore a bad value */ }
   const custom = extra[model];
   if (Array.isArray(custom) && custom.length === 2 && custom.every((n) => typeof n === "number" && n >= 0)) return custom as [number, number];
-  return DEFAULT_PRICES[model] ?? null;
+  // An OpenRouter Claude id ("anthropic/claude-haiku-5.5") is priced like the Anthropic one ("claude-haiku-5-5").
+  const plain = model.startsWith("anthropic/") ? model.slice("anthropic/".length).replaceAll(".", "-") : model;
+  return DEFAULT_PRICES[plain] ?? null;
 }
 
 /** Cost in millionths of a dollar, or null when the price is unknown. */
@@ -126,12 +135,58 @@ async function callOpenAI(call: VisionCall, model: string): Promise<VisionReply>
   return { ok: true, text, usage: usageOf("openai", model, ai.usage?.input_tokens ?? 0, ai.usage?.output_tokens ?? 0) };
 }
 
+async function callOpenRouter(call: VisionCall, model: string): Promise<VisionReply> {
+  const effort = ["low", "medium", "high"].includes(process.env.VISION_EFFORT ?? "") ? process.env.VISION_EFFORT : "low";
+  let response: Response;
+  try {
+    response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      signal: AbortSignal.timeout(60_000),
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json",
+        "HTTP-Referer": process.env.APP_URL || "https://flockence.com", "X-Title": "Flockence Farm Vision",
+      },
+      body: JSON.stringify({
+        model, max_tokens: 8000, reasoning: { effort },
+        messages: [
+          { role: "system", content: call.instructions },
+          { role: "user", content: [
+            ...call.images.map((image) => ({ type: "image_url", image_url: { url: `data:${image.mimeType};base64,${image.base64}` } })),
+            { type: "text", text: call.prompt },
+          ] },
+        ],
+      }),
+    });
+  } catch {
+    return { ok: false, status: 502, error: "The vision service could not be reached." };
+  }
+  const data = await response.json().catch(() => null) as {
+    choices?: Array<{ finish_reason?: string; message?: { content?: string | Array<{ type?: string; text?: string }> | null } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number | null };
+  } | null;
+  const inputTokens = data?.usage?.prompt_tokens ?? 0, outputTokens = data?.usage?.completion_tokens ?? 0;
+  // OpenRouter reports what it charged; use that, else the price list.
+  const charged = typeof data?.usage?.cost === "number" && data.usage.cost >= 0 ? Math.round(data.usage.cost * 1_000_000) : null;
+  const usage: VisionUsage = { provider: "openrouter", model, inputTokens, outputTokens, costMicros: charged ?? costMicros(model, inputTokens, outputTokens) };
+  if (!response.ok) {
+    if (response.status === 402) return { ok: false, status: 503, error: "The OpenRouter account is out of credits. Add credits at openrouter.ai/credits.", usage };
+    if (response.status === 401) return { ok: false, status: 503, error: "The OpenRouter key was refused. Check OPENROUTER_API_KEY.", usage };
+    if (response.status === 429) return { ok: false, status: 429, error: "The vision service is busy. Try again shortly.", usage };
+    return { ok: false, status: 502, error: "The vision service could not analyze this image.", usage };
+  }
+  const choice = data?.choices?.[0];
+  const content = choice?.message?.content;
+  const text = typeof content === "string" ? content : Array.isArray(content) ? content.map((part) => part.text ?? "").join("\n") : "";
+  if (choice?.finish_reason === "length") return { ok: false, status: 502, error: "The vision answer was cut short.", usage };
+  return { ok: true, text, usage };
+}
+
 /** Ask the configured vision model. `model` overrides the routine model (used for the optional re-check). */
 export async function callVisionModel(call: VisionCall): Promise<VisionReply> {
   const provider = visionProvider();
   if (!provider || !visionConfigured()) {
-    return { ok: false, status: 503, error: "Farm Vision is not configured. Add ANTHROPIC_API_KEY (or OPENAI_API_KEY) to the server environment." };
+    return { ok: false, status: 503, error: "Farm Vision is not configured. Add OPENROUTER_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY to the server environment." };
   }
   const model = call.model ?? visionModel(provider);
-  return provider === "anthropic" ? callClaude(call, model) : callOpenAI(call, model);
+  return provider === "anthropic" ? callClaude(call, model) : provider === "openrouter" ? callOpenRouter(call, model) : callOpenAI(call, model);
 }

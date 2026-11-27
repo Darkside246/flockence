@@ -71,7 +71,7 @@ export function VisionSchedule({ cameras }: { cameras: Camera[] }) {
   }
 
   const blockers = [
-    !data.ready.vision && "The server has no vision key yet (ANTHROPIC_API_KEY, or OPENAI_API_KEY), so pictures cannot be analysed.",
+    !data.ready.vision && "The server has no vision key yet (OPENROUTER_API_KEY, ANTHROPIC_API_KEY or OPENAI_API_KEY), so pictures cannot be analysed.",
     !data.ready.cameras && "Camera inspections are switched off on the server (FLOCKENCE_CAMERA_VISION).",
     draft.enabled && data.state.lastRoundAt === null && "Waiting for the first automatic round. If nothing happens within 15 minutes, the server timer is not installed yet (ops/systemd/enable-vision-rounds.sh).",
     draft.enabled && data.state.lastRoundAt !== null && !data.ready.timer && "No automatic round in the last 30 minutes: the server timer may have stopped.",
