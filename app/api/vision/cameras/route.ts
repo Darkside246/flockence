@@ -5,7 +5,7 @@ import { visionPens } from "@/lib/vision-pens";
 import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { NextResponse } from "next/server";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
-import { validVisionCameraName, visionCameraRoles, visionCameras } from "@/lib/vision-camera";
+import { validVisionCameraName, visionCameraRoles, visionCameras, visionLiveEnabled } from "@/lib/vision-camera";
 
 export const runtime = "nodejs";
 
@@ -17,7 +17,8 @@ export async function GET(request: Request) {
   const locked = await premiumFeatureResponse();
   if (locked) return locked;
   try {
-    return NextResponse.json(await camerasWithPens(await visionCameras()), { headers });
+    const cameras = await camerasWithPens(await visionCameras());
+    return NextResponse.json(visionLiveEnabled() ? cameras.map(camera => ({ ...camera, liveSampling: true })) : cameras, { headers });
   } catch {
     return NextResponse.json({ error: "Camera list is temporarily unavailable." }, { status: 503, headers });
   }

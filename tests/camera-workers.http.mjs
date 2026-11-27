@@ -48,6 +48,9 @@ async function worker(label, token, source) {
     } else if (req.url === "/cameras/" + encodeURIComponent(label) + "/snapshot?fresh=true") {
       res.setHeader("Content-Type", "image/jpeg");
       res.end(Buffer.from([255, 216, 255, 217]));
+    } else if (req.method === "POST" && req.url === "/cameras/" + encodeURIComponent(label) + "/inspection-sample") {
+      const frame = Buffer.from([255, 216, 255, 224, 0, 4, 1, 2, 255, 217]).toString("base64");
+      res.end(JSON.stringify({ capturedAt: new Date().toISOString(), frames: [frame, frame, frame] }));
     } else if (req.method === "POST" && req.url === "/auth/login") {
       req.resume();
       res.end(JSON.stringify({ connected: false, pending2fa: true }));
@@ -86,7 +89,7 @@ try {
   app = spawn(process.execPath, ["--import", "./tests/support/mock-vision-provider.mjs", "node_modules/next/dist/bin/next", "start", "-H", "127.0.0.1", "-p", "3100"], {
     stdio: "inherit",
     env: { ...process.env, APP_URL: origin, FLOCKENCE_AUTH_CAPTCHA: "on", RECAPTCHA_SITE_KEY: "ci-only-site", RECAPTCHA_SECRET_KEY: "ci-only-secret", FLOCKENCE_PLATFORM_ADMIN_IDS: platformId, ORIYA_URL: "https://oriya.si", CHICKENVERSE_RESEARCH: "on", CHICKENVERSE_RESEARCH_FARM_ID: ids[0],
-      CHICKENVERSE_RESEARCH_REPORT: researchReport, VISION_STORAGE_DIR: visionStorage, FLOCKENCE_CAMERA_VISION: "on", OPENAI_API_KEY: "ci-only-unused", FLOCKENCE_CAMERA_WORKERS: JSON.stringify({ [ids[0]]: a, [ids[1]]: b }) },
+      CHICKENVERSE_RESEARCH_REPORT: researchReport, VISION_STORAGE_DIR: visionStorage, FLOCKENCE_CAMERA_VISION: "on", FLOCKENCE_LIVE_CAMERA_VISION: "on", OPENAI_API_KEY: "ci-only-unused", FLOCKENCE_CAMERA_WORKERS: JSON.stringify({ [ids[0]]: a, [ids[1]]: b }) },
   });
   let ready = false;
   for (let n = 0; n < 25; n++) {
@@ -152,8 +155,8 @@ try {
   const visionList = (index) => fetch(origin + "/api/vision/cameras", {
     headers: { Cookie: cookies[index], "X-Flockence-Farm": ids[1 - index] || ids[0] },
   }).then((response) => response.json());
-  assert.deepEqual(await visionList(0), [{ name: "Farm A camera", source: "blink" }]);
-  assert.deepEqual(await visionList(1), [{ name: "Farm B camera", source: "rtsp" }]);
+  assert.deepEqual(await visionList(0), [{ name: "Farm A camera", source: "blink", liveSampling: true }]);
+  assert.deepEqual(await visionList(1), [{ name: "Farm B camera", source: "rtsp", liveSampling: true }]);
   assert.deepEqual(await visionList(2), []);
   const inspect = (consent, requestOrigin, camera = "Farm B camera", penId = "") => {
     const form = new FormData();
@@ -180,8 +183,8 @@ try {
   assert.equal((await assigned.json()).pen.id, penA.id);
   const listed = await fetch(origin + "/api/vision/cameras", { headers: { Cookie: cookies[0] } });
   assert.equal((await listed.json())[0].pen.id, penA.id);
-  const prefs = (allowVisionImages, extra = {}) => fetch(origin + "/api/account/preferences", {
-    method: "PUT", headers: { Cookie: cookies[0], Origin: origin, "Content-Type": "application/json" },
+  const prefs = (allowVisionImages, extra = {}, account = 0) => fetch(origin + "/api/account/preferences", {
+    method: "PUT", headers: { Cookie: cookies[account], Origin: origin, "Content-Type": "application/json" },
     body: JSON.stringify({ name: "Test farm owner", preferences: { allowVisionImages, farmAlertEmail: true, farmReportEmail: false }, ...extra }),
   });
   assert.equal((await prefs(false, { farmId: ids[1] })).status, 400);
@@ -236,6 +239,26 @@ try {
   assert.equal((await signedRequest(ids[0], validBody)).status, 409);
   assert.equal((await signedRequest(ids[1], validBody)).status, 400);
   assert.equal((await signedRequest(ids[1], penBody(ids[1], "Other farm pen"))).status, 401);
+  const videoInspect = (camera, consent = true) => {
+    const form = new FormData();
+    form.set("camera", camera);
+    form.set("captureMode", "video-sample");
+    if (consent) form.set("shareCameraImage", "yes");
+    return fetch(origin + "/api/vision", {
+      method: "POST", headers: { Cookie: cookies[1], Origin: origin }, body: form,
+    });
+  };
+  assert.equal((await prefs(true, {}, 1)).status, 200);
+  assert.equal((await videoInspect("Farm B camera", false)).status, 400);
+  assert.equal((await videoInspect("Farm B camera")).status, 409);
+  assert.equal((await videoInspect("Farm A camera")).status, 502);
+  assert.equal((await assignCamera(1, "Farm B camera", penB.id)).status, 200);
+  const videoResult = await videoInspect("Farm B camera");
+  assert.equal(videoResult.status, 201, await videoResult.clone().text());
+  const video = await videoResult.json();
+  assert.deepEqual(video.observation.visionAssessment.capture, { mode: "VIDEO_SAMPLE", frames: 3 });
+  assert.equal(video.observation.visionAssessment.pen.id, penB.id);
+  assert.equal((await fetch(origin + video.imageUrl, { headers: { Cookie: cookies[0] } })).status, 404);
   const reportUrl = origin + "/api/vision/research";
   const research = await fetch(reportUrl, { headers: { Cookie: cookies[0] } });
   assert.equal(research.status, 200);

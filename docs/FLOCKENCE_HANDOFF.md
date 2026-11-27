@@ -66,3 +66,31 @@ The user wants the farm administrator to select a role and enter an email. The r
 ## Completion criteria for future handoffs
 
 Record the exact GitHub commit, the exact live app revision, CI links and the scope of any stage or production test. List the user-facing behavior separately from provider or VPS configuration still required. Report temporary failures and the recovery outcome. Update this handoff when deployments or priorities change.
+
+
+## GitHub work since the last verified VPS release
+
+The last operator-confirmed application release is `33322ad`. Establish the running Git SHA and worker version before choosing a release. The latest separately reported Blink check confirmed that the private worker returned HTTP 200, was signed in, had no verification code pending, and discovered six cameras. No real footage or end-to-end analysis result was supplied.
+
+| Change | GitHub evidence | Check on the VPS |
+| --- | --- | --- |
+| Account challenge and browser protections | [PR #20](https://github.com/Darkside246/flockence/pull/20), [reCAPTCHA v3 PR #22](https://github.com/Darkside246/flockence/pull/22) | Test genuine signup and sign-in, rejected challenges, and Resend delivery using the live hostname. |
+| Pen assignments and offline records | [PR #21](https://github.com/Darkside246/flockence/pull/21) | Verify permissions, stale assignments, and retries on a second device. |
+| Team invitations, expenses and privacy controls | [PR #23](https://github.com/Darkside246/flockence/pull/23) | Test email delivery, expired and reused links, cross-farm denial, and each team role. |
+| Offline inspections, private photos and local password changes | [PR #24](https://github.com/Darkside246/flockence/pull/24) | Check photo access, retries, and invalidation of prior sessions after a password change. |
+| Private Wyze Bridge discovery | [PR #25](https://github.com/Darkside246/flockence/pull/25) | Pair a real bridge using a selected camera and check revocation and tenant boundaries. |
+| Offline treatment entry and withdrawal controls | [PR #26](https://github.com/Darkside246/flockence/pull/26) | Verify replay and withdrawal holds with production-shaped records. |
+| One-lot offline sale submission | [PR #27](https://github.com/Darkside246/flockence/pull/27) | Test reconnect confirmation and stock conflicts. Multi-lot sales still need coverage. |
+| On-demand live video samples | See the history of this document and [camera-vision runbook](./CAMERA_VISION.md) | Verify real Blink and network feeds, concurrent Live View, and a saved comparison. Update app and worker together. |
+
+[Earlier GitHub CI evidence](https://github.com/Darkside246/flockence/actions/runs/45926287374) applies to the revision shown on that run. Check CI for the revision being deployed.
+
+## Review checklist for Claude
+
+Work from GitHub `main` and use the Spaceship VPS for staging. Audit the existing implementation before widening its scope. Record the revision reviewed, test evidence, defects, and remaining work in this document.
+
+1. **Farm isolation and authorization.** Follow the farm scope from authentication to the database, files, camera worker and integration endpoints. Use a fresh restored staging database and the restricted runtime role. Test owner, supervisor, farm hand and read-only permissions, cross-farm IDs, worker tokens, media URLs, and exports. Check that root operations, migrations and backups run under separate credentials.
+2. **Live capture.** Start with `app/api/vision/route.ts`, `lib/vision-camera.ts`, `services/blink/app.py` and `services/blink/video_sample.py`. Verify a changed assignment during capture is rejected, a used camera stops after timeout, an already open Live View survives, and a farm cannot sample another farm's device or read its preview. Review the reaper, logout and concurrent starts for races. Exercise malformed playlists, dropped frames and FFmpeg cleanup.
+3. **Vision evidence.** Verify the worker returns three valid ordered JPEGs and that history records the pen, camera, capture mode and timestamp with one protected preview. Check compare handling for renamed cameras, different capture modes, missing evidence and low-visibility results. Validate any future tracking and scoring against labeled real farm footage. Include missed detections, occlusions, lighting and identity switches in the evaluation.
+4. **Scheduled capture and Oriya.** Design durable, per-farm opt-in jobs with a capture budget, overlapping-run prevention, retry limits, retention and a clear way to stop the schedule. Use the existing Oriya contract for authorized summaries. Check Operator responses using a linked premium farm. Keep any source changes to Flockence.
+5. **Release acceptance.** Read the live app SHA and worker version from the VPS. Rehearse backup and restore, check startup after reboot, and run real camera, email, CAPTCHA and mobile/offline checks before recording a feature as live. Keep tokens, camera credentials, farm media and customer records out of issues and handoff notes.
