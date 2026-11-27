@@ -86,7 +86,8 @@ try {
     const page = await context.newPage();
     for (const theme of themes) {
       // A fresh page startup exercises the real first-paint bootstrap and persisted-preference path.
-      await page.goto(origin + "/settings");
+      // Settings opens on Account; the theme picker is in the Appearance section.
+      await page.goto(origin + "/settings#appearance");
       await page.locator(".theme-grid button").first().waitFor();
       const label = { poultry: "Poultry Farm", crystal: "Cyber Crystal", aero: "Aero Glass",
         heritage: "Heritage Sovereign", workhorse: "Field Workhorse", sol: "Sol Tactical", terra: "Terra Flora" }[theme];
