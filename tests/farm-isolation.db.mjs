@@ -752,3 +752,26 @@ test("free plan: a Free farm gets 10 photo checks a month; Premium farms keep th
     if (before === undefined) delete process.env.VISION_PREMIUM_FARMS; else process.env.VISION_PREMIUM_FARMS = before;
   }
 });
+
+test("pen layout: the pen's records, its flock's live birds and weight, and what Vision saw there, for its own farm only", async () => {
+  const { penLayout } = await import("../lib/pen-layout.ts");
+  const stamp = Date.now();
+  const penRow = await runAsFarm(A, () => prisma.setting.create({ data: { key: `PENCFG::u::layout-${stamp}`, value: JSON.stringify({ name: `Layout Pen ${stamp}`, lengthM: 10, widthM: 12, housingMode: "OPEN_SIDED_HOT", feederPans: 8, nipples: 80, bellDrinkers: 0, heatSources: 2, fans: 1, active: true }) } }));
+  const batch = await runAsFarm(A, () => prisma.batch.create({ data: { name: "Layout flock", startDate: new Date(Date.now() - 20 * 86_400_000), initialChicks: 1000, chickCostMinor: 0, status: "ACTIVE", placementHouse: `Layout Pen ${stamp}` } }));
+  await runAsFarm(A, () => prisma.birdCount.create({ data: { batchId: batch.id, date: new Date(Date.now() - 20 * 86_400_000), liveCount: 1000, note: "Initial count" } }));
+  await runAsFarm(A, () => prisma.weightRecord.create({ data: { batchId: batch.id, date: new Date(), scope: "SAMPLE", quantity: 20, avgWeightKg: 2.5, liveOrDressed: "LIVE" } }));
+  for (const layout of [{ view: "WHOLE_PEN", feeders: 6, heaters: 1, crowding: [{ at: "HEATER" }] }, { view: "MOST_OF_PEN", feeders: 5, heaters: 1, crowding: [{ at: "HEATER" }] }]) {
+    await runAsFarm(A, () => prisma.healthObservation.create({ data: { observedAt: new Date(), symptom: "Farm Vision inspection", category: "VISION:PEN", affectedCount: 0, notes: "x",
+      visionAssessment: { pen: { id: penRow.id, name: `Layout Pen ${stamp}` }, layout } } }));
+  }
+  const a = await runAsFarm(A, () => penLayout(penRow.id));
+  assert.equal(a.areaM2, 120);
+  assert.equal(a.live, 1000);
+  assert.equal(a.weightKg, 2.5);
+  assert.equal(a.densityKgM2, 20.8);
+  assert.equal(a.seen.widePictures, 2);
+  assert.equal(a.seen.feeders, 6);
+  assert.ok(a.recommendations.some((r) => /ceiling/.test(r.text)));
+  assert.ok(a.recommendations.some((r) => /bunched around the heat/.test(r.text)));
+  assert.equal(await runAsFarm(B, () => penLayout(penRow.id)), null, "farm B cannot read farm A's pen");
+});

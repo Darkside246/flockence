@@ -6,6 +6,7 @@ import { VisionSchedule } from "@/components/vision-schedule";
 import { VisionReport } from "@/components/vision-report";
 import { VisionFindings } from "@/components/vision-findings";
 import { VisionIntelligence } from "@/components/vision-intelligence";
+import { PenLayout } from "@/components/pen-layout";
 import { useSession } from "@/components/auth-gate";
 import { shrinkPhoto, sizeLabel } from "@/lib/photo-shrink";
 import { OfflineError, queueAvailable, queueCheck, queuedChecks, sendInspection, sendQueued, uploadId } from "@/lib/vision-send";
@@ -301,6 +302,9 @@ export default function VisionPage() {
       <VisionFindings pens={pens} canReview={session?.role === "OWNER" || session?.role === "MANAGER" || session?.role === "WORKER"} />
       <section className="section" id="reports"><div className="section-head"><div><h3>Reports</h3><p>What Vision found for the whole farm, a pen, a batch{cameras.length ? " or a camera" : ""}, built from the checks already saved. Opening a report costs nothing.</p></div></div>
         <VisionIntelligence cameras={cameras} onVisionPage />
+      </section>
+      <section className="section" id="layout"><div className="section-head"><div><h3>Pen layout</h3><p>Space, feeders, drinkers and heat for each pen: your records, what the cameras saw, and what to change.</p></div></div>
+        <PenLayout pens={pens} />
       </section>
 
       {result && <section className="section"><div className="section-head"><div><h3>Inspection result</h3><p>Visible findings only. Review the checks before taking action.</p></div><span className={`pill ${String(result.severity || "LOW").toLowerCase()}`}>{result.severity || "LOW"}</span></div>
