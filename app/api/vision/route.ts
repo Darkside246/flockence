@@ -1,3 +1,4 @@
+import { accountPreferences } from "@/lib/account-preferences";
 import { assignedCameraPen } from "@/lib/vision-camera-pens";
 import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { NextResponse } from "next/server";
@@ -39,6 +40,11 @@ export async function POST(request: Request) {
   if (locked) return locked;
   let uploadedPath: string | null = null;
   try {
+    if (!isTrustedAppOrigin(request)) return NextResponse.json({ error: "Open Farm Vision from the Flockence website." }, { status: 403 });
+    const preferences = await accountPreferences(session.user.farmId, session.user.id);
+    if (!preferences.allowVisionImages) {
+      return NextResponse.json({ error: "Your account has disabled image sharing for Farm Vision." }, { status: 403 });
+    }
     const rate = await checkRateLimit("vision:" + session.user!.id, 6, 10 * 60 * 1000);
     if (!rate.allowed) {
       return NextResponse.json({ error: "Farm Vision rate limit exceeded.", retryAfterSeconds: rate.retryAfterSeconds }, {

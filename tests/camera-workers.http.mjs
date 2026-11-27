@@ -180,6 +180,16 @@ try {
   assert.equal((await assigned.json()).pen.id, penA.id);
   const listed = await fetch(origin + "/api/vision/cameras", { headers: { Cookie: cookies[0] } });
   assert.equal((await listed.json())[0].pen.id, penA.id);
+  const prefs = (allowVisionImages, extra = {}) => fetch(origin + "/api/account/preferences", {
+    method: "PUT", headers: { Cookie: cookies[0], Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Test farm owner", preferences: { allowVisionImages, farmAlertEmail: true, farmReportEmail: false }, ...extra }),
+  });
+  assert.equal((await prefs(false, { farmId: ids[1] })).status, 400);
+  assert.equal((await prefs(false)).status, 200);
+  const declined = await inspect(true, origin, "Farm A camera");
+  assert.equal(declined.status, 403);
+  assert.match((await declined.json()).error, /disabled image sharing/);
+  assert.equal((await prefs(true)).status, 200);
   const inspection = await inspect(true, origin, "Farm A camera");
   assert.equal(inspection.status, 201);
   const saved = await inspection.json();
