@@ -138,7 +138,11 @@ try {
               const limit = document.documentElement.clientWidth + 1;
               return [...document.querySelectorAll("body *")].filter((el) => el.getBoundingClientRect().right > limit)
                 .filter((el) => ![...el.children].some((child) => child.getBoundingClientRect().right > limit))
-                .slice(0, 8).map((el) => el.tagName.toLowerCase() + (el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : "") + " right=" + Math.round(el.getBoundingClientRect().right) + " text=" + (el.textContent || "").trim().slice(0, 40));
+                .slice(0, 8).map((el) => {
+                  const name = (node) => node.tagName.toLowerCase() + (typeof node.className === "string" && node.className.trim() ? "." + node.className.trim().split(/\s+/).join(".") : "") + (node.getAttribute("type") ? "[type=" + node.getAttribute("type") + "]" : "");
+                  const path = []; for (let node = el; node && node !== document.body && path.length < 5; node = node.parentElement) path.unshift(name(node) + "(" + Math.round(node.getBoundingClientRect().width) + ")");
+                  return path.join(" > ") + " right=" + Math.round(el.getBoundingClientRect().right) + " text=" + (el.textContent || "").trim().slice(0, 40);
+                });
             });
             assert.fail("Horizontal overflow on " + device + " " + route + ": " + culprits.join(" | "));
           }
