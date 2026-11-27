@@ -67,8 +67,9 @@ export async function runFarmDailyReport(now: Date, send = sendVisionReportEmail
   if (!worthSending(report)) { await saveState({ ...today, done: true, skipped: "no pictures and nothing open" }); return { farmId, sent: 0, skipped: "no pictures and nothing open" }; }
 
   const farm = await prisma.farm.findUnique({ where: { id: farmId }, select: { name: true } });
-  let link = "/cameras?tab=vision";
-  try { link = new URL("/cameras?tab=vision", process.env.APP_URL ?? "").href; } catch { /* relative link if APP_URL is unset */ }
+  // The Farm Vision page has the reports on every plan (Free farms have no Cameras page).
+  let link = "/vision#reports";
+  try { link = new URL("/vision#reports", process.env.APP_URL ?? "").href; } catch { /* relative link if APP_URL is unset */ }
   const dateLabel = new Intl.DateTimeFormat("en-GB", { timeZone: FARM_TIME_ZONE, weekday: "short", day: "numeric", month: "short" }).format(now);
   const email = dailyEmail(report, farm?.name ?? "Your farm", dateLabel, link);
 

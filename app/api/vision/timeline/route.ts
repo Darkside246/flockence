@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { currentUserOrResponse } from "@/lib/current-user";
-import { premiumFeatureResponse } from "@/lib/farm-feature-access";
 import { penTimeline } from "@/lib/vision-findings";
 import { visionPens } from "@/lib/vision-pens";
 
@@ -11,8 +10,7 @@ const headers = { "Cache-Control": "private, no-store" };
 export async function GET(request: Request) {
   const session = await currentUserOrResponse(request);
   if (session.response) return session.response;
-  const locked = await premiumFeatureResponse();
-  if (locked) return locked;
+  // Every plan, Free included (owner, 2026-11-27): findings, reports and the timeline cost nothing to read.
   const url = new URL(request.url);
   const penId = url.searchParams.get("penId") ?? "";
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(penId) || !(await visionPens(penId))[0]) return NextResponse.json({ error: "Choose a pen." }, { status: 400, headers });

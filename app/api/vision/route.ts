@@ -75,8 +75,8 @@ async function inspectReply(request: Request, requestId: string, form?: FormData
 async function inspect(request: Request, requestId?: string, preparedForm?: FormData): Promise<Response> {
   const session = await currentUserOrRoleResponse(request);
   if (session.response) return session.response;
-  const locked = await premiumFeatureResponse();
-  if (locked) return locked;
+  // Photo checks are in every plan, Free included, within the plan's monthly number (VISION_PLAN_LIMITS).
+  // Camera checks need Premium (below).
   try {
     if (!isTrustedAppOrigin(request)) return NextResponse.json({ error: "Open Farm Vision from the Flockence website." }, { status: 403 });
     const preferences = await accountPreferences(session.user.farmId, session.user.id);
@@ -124,6 +124,8 @@ async function inspect(request: Request, requestId?: string, preparedForm?: Form
     const cameraName = form.get("camera");
     const video = form.get("captureMode") === "video-sample";
     if (cameraName !== null) {
+      const locked = await premiumFeatureResponse();
+      if (locked) return locked;
       if (!isTrustedAppOrigin(request) || !visionCameraRoles().includes(session.user.role)) {
         return NextResponse.json({ error: "Camera inspections require an authorized farm manager or owner." }, { status: 403 });
       }
