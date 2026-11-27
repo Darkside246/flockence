@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { currentFarmId } from "@/lib/operations";
+import { eggCountsOn } from "@/lib/vision-egg-settings";
 import {
   OPEN_STATES, findingsFromAnalysis, higher, incidentKey, joinsIncident, reviewFinding,
   type FindingSeverity, type NewFinding,
@@ -18,7 +19,7 @@ export async function recordFindings(input: {
   pen?: { id: string; name: string } | null; batchId: string | null; cameraName?: string | null;
   observationId: string; evidenceUrl: string | null;
 }) {
-  const found: NewFinding[] = findingsFromAnalysis(input.analysis, { expectedLive: input.expectedLive });
+  const found: NewFinding[] = findingsFromAnalysis(input.analysis, { expectedLive: input.expectedLive, eggCounts: await eggCountsOn().catch(() => false) });
   if (!found.length) return [] as RecordedFinding[];
   const farmId = currentFarmId();
   const out: RecordedFinding[] = [];

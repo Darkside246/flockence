@@ -1,8 +1,8 @@
-export type Area = "BIRDS" | "THERMAL" | "LITTER" | "FEED_WATER" | "EQUIPMENT" | "POPULATION";
+export type Area = "BIRDS" | "THERMAL" | "LITTER" | "FEED_WATER" | "EQUIPMENT" | "POPULATION" | "EGGS";
 export type AreaStatus = "URGENT" | "ATTENTION" | "MONITOR" | "GOOD" | "INSUFFICIENT_DATA";
 export type AreaResult = { status: AreaStatus; reasons: string[]; seen: boolean; fixed: number };
 export type ReportFinding = { kind: string; severity: string; state: string; title: string; occurrences?: number; lastSeenAt?: string | Date };
-export type ReportInspection = { signals?: { category?: string; state?: string }[]; visibleBirds?: number | null };
+export type ReportInspection = { signals?: { category?: string; state?: string }[]; visibleBirds?: number | null; eggsSeen?: boolean };
 export type RankedAction = { kind: string; severity: string; finding: string; action: string };
 export const AREAS: Area[];
 export const AREA_LABELS: Record<Area, string>;

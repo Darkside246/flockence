@@ -25,6 +25,13 @@ export const layoutSchema = z.object({
   emptyAreas: z.array(detail.min(1)).max(6).optional().catch([]),
 });
 
+const eggCount = z.number().int().min(0).max(10000).nullable().optional().catch(null);
+export const eggsSchema = z.object({
+  nestEggs: eggCount, floorEggs: eggCount,
+  floorEggAreas: z.array(detail.min(1)).max(6).optional().catch([]),
+  nestBoxes: z.enum(["OPEN", "CLOSED", "NOT_VISIBLE"]).optional().catch(undefined),
+});
+
 export const visionResultSchema = z.object({
   summary: detail.min(1),
   confidence: confidence.optional(),
@@ -41,6 +48,8 @@ export const visionResultSchema = z.object({
   questions: z.array(detail.min(1)).max(3).optional().catch([]),
   notVisible: z.array(detail.min(1)).max(8).optional().catch([]),
   stillBirds: z.array(z.object({ where: detail.min(1), why: detail.optional(), confidence: confidence.optional() })).max(10).optional().catch([]),
+  // Eggs seen in a layer house: nest and floor eggs (Vision Intelligence phase 4; counts shown only once validated).
+  eggs: eggsSchema.nullable().optional().catch(null),
   // Equipment and crowding seen in a pen picture, for the pen layout advice (lib/pen-layout-rules.mjs).
   layout: layoutSchema.nullable().optional().catch(null),
 });
@@ -68,6 +77,7 @@ export const visionAssessmentSchema = z.object({
   ]).optional(),
   pen: z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), name: z.string().min(1).max(120) }).optional(),
   layout: layoutSchema.optional().catch(undefined),
+  eggs: eggsSchema.optional().catch(undefined),
   /** The phone's upload id, so a retried upload is recognised (lib/vision-upload-requests.ts). */
   requestId: z.string().regex(/^[A-Za-z0-9-]{16,64}$/).optional(),
 });
@@ -98,6 +108,7 @@ export function createVisionAssessment(result: VisionResult, input: {
     version: 1, ...input, status, signals,
     confidence: result.confidence ?? null, summary: result.summary, checks: result.checks,
     ...(result.layout ? { layout: result.layout } : {}),
+    ...(result.eggs ? { eggs: result.eggs } : {}),
   };
 }
 

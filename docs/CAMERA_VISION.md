@@ -283,3 +283,15 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
 - Parts of the day with no recording are listed on the schedule card. An unreadable clip is skipped, not retried
   forever. Clip times are the camera's or Blink's; a camera clock that is wrong shifts which part a clip falls in.
 - Code: `lib/vision-recording-rules.mjs`, `lib/vision-recordings.ts`, `services/blink/clip_frames.py`.
+
+## Layers and eggs (Vision Intelligence phase 4, 2026-11-27)
+
+- For laying hens Vision's answer includes `eggs`: eggs it can count in nest boxes and on the floor, where the floor
+  eggs are, and whether nest boxes are open. Saved with the inspection.
+- Floor eggs seen become a **Floor eggs** finding (medium), grouped like other findings, with an action (collect more
+  often; check nest boxes are open, clean, dim and enough; record floor eggs in the collection).
+- Reports gain an **Eggs (layers)** area, only for scopes with a layer flock or floor-egg findings, and an Eggs section:
+  eggs and floor eggs from the collection records beside how many layer-house pictures showed floor eggs.
+- **Counts from pictures stay hidden** until an owner or manager switches on "Show egg counts from pictures" (after
+  comparing a few days of Vision's counts with the collections). Until then Vision only says floor eggs were seen, and
+  where. Egg records are never changed by Vision. Setting: `VISION_EGG_COUNTS` per farm, `app/api/vision/eggs`.

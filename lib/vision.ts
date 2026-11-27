@@ -47,6 +47,7 @@ Return ONLY valid JSON with this exact shape:
   "questions": [],
   "notVisible": ["parts of the pen or checks that are out of view, for example the drinker line"],
   "stillBirds": [{"where": "where in the picture", "why": "lying flat on its side in the same place as in the earlier picture", "confidence": "LOW|MEDIUM|HIGH"}],
+  "eggs": {"nestEggs": null, "floorEggs": null, "floorEggAreas": ["where on the floor, for example under the slats by the door"], "nestBoxes": "OPEN|CLOSED|NOT_VISIBLE"},
   "layout": {"view": "WHOLE_PEN|MOST_OF_PEN|PART_OF_PEN", "feeders": null, "drinkers": null, "heaters": null, "fans": null, "crowding": [{"at": "FEEDER|DRINKER|HEATER|WALL|CORNER|OTHER", "note": ""}], "emptyAreas": ["where birds avoid, for example the corner by the door"]},
   "escalate": false,
   "escalationReason": "",
@@ -60,6 +61,8 @@ birdCount.visible is your best count of the birds you can actually see (in the c
 questions: when you are not sure about something the farmer could quickly confirm (for example whether a still bird has moved since, or whether a drinker line was just refilled), ask it as a short question, at most 3. Otherwise return an empty list.
 
 stillBirds: a bird that may be dead or unable to move. This means a bird lying on its side or back, legs out or head down, apart from the others, or one in exactly the same place and position in every picture (and in the earlier picture, when one is given) while other birds moved. List each one with where it is and why, and ask the farmer to check it in questions. Return an empty list when there is none. Healthy birds also rest, so only list a bird when its position or stillness stands out.
+
+eggs: only when the farm context says the flock is laying hens, or eggs are visible; otherwise null. Count the eggs you can actually see in nest boxes and, separately, on the floor or litter (floor eggs), using null when you cannot count them; say where the floor eggs are. Do not guess eggs you cannot see.
 
 layout: for a pen, house or flock picture only (otherwise null). Count the equipment you can actually see: feeders (pans, tube or trough feeders), drinkers (bell drinkers, or nipple or drinker lines counted as lines), heaters or brooders, and fans; use null for any you cannot count. "view" says how much of the pen the picture shows. "crowding" lists where birds are packed together (at feeders or drinkers, under or around a heater, against a wall or in a corner). "emptyAreas" lists parts of the floor birds avoid. Do not estimate the pen's size or distances from the picture.
 
