@@ -306,6 +306,8 @@ function Recordings({ cameras }: { cameras: Camera[] }) {
 
 export default function CamerasPage() {
   const [status, setStatus] = useState<Status | null>(null), [cameras, setCameras] = useState<Camera[]>([]), [error, setError] = useState(""), [tab, setTab] = useState<Tab>("live"), [selected, setSelected] = useState("");
+  // Links such as the daily Vision email open a tab directly: /cameras?tab=vision
+  useEffect(() => { const t = new URLSearchParams(window.location.search).get("tab"); if (t === "live" || t === "stills" || t === "recordings" || t === "vision") setTab(t); }, []);
   const [provider, setProvider] = useState<Provider | null>(null);
   const [gatewayOwner, setGatewayOwner] = useState(false);
   const load = useCallback(async () => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { VisionDailyReport } from "@/components/vision-daily-report";
 
 type Report = {
   scope: { label: string }; period: { label: string };
@@ -71,6 +72,7 @@ export function VisionIntelligence({ cameras }: { cameras: { name: string }[] })
       {period === "custom" && <><label>From<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>To<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label></>}
       <a className="button" href="/vision">Run a check or review findings</a>
     </div>
+    <VisionDailyReport />
 
     {error && <p role="alert" className="notice">{error}</p>}
     {loading && <p>Building the report…</p>}

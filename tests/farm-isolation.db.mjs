@@ -650,3 +650,46 @@ test("background checks: status is running, then done for its own farm; a failed
   await runAsFarm(A, () => runOnce(failing, async () => { runs += 1; return { status: 201, body: {} }; }));
   assert.equal(runs, 1);
 });
+
+test("daily vision email: once a day to owners and managers who chose it, only their own farm, and not on an empty day", async () => {
+  const { runFarmDailyReport, saveDailySettings } = await import("../lib/vision-daily-report.ts");
+  const stamp = Date.now();
+  const owner = await runAsFarm(A, () => prisma.user.create({ data: { name: "Daily owner", email: `daily-owner-${stamp}@a.test`, role: "OWNER" } }));
+  const manager = await runAsFarm(A, () => prisma.user.create({ data: { name: "Daily manager", email: `daily-manager-${stamp}@a.test`, role: "MANAGER" } }));
+  const worker = await runAsFarm(A, () => prisma.user.create({ data: { name: "Daily worker", email: `daily-worker-${stamp}@a.test`, role: "WORKER" } }));
+  const prefs = (u, on) => runAsFarm(A, () => prisma.setting.upsert({ where: { farmId_key: { farmId: A, key: `ACCOUNT_PREFERENCES_V1::${u.id}` } }, create: { key: `ACCOUNT_PREFERENCES_V1::${u.id}`, value: JSON.stringify({ farmAlertEmail: false, farmReportEmail: on, allowVisionImages: true }) }, update: {} }));
+  await prefs(owner, true); await prefs(manager, false); await prefs(worker, true);
+  await runAsFarm(A, () => saveDailySettings({ enabled: true, hour: 0 }));
+  await runAsFarm(B, () => saveDailySettings({ enabled: true, hour: 0 }));
+  await runAsFarm(A, () => prisma.healthObservation.create({ data: {
+    observedAt: new Date(Date.now() - 3_600_000), symptom: "Farm Vision inspection", category: "VISION:PEN", affectedCount: 0, notes: "Summary: fine.",
+    visionAssessment: { source: { kind: "UPLOAD" }, signals: [{ category: "BEHAVIOR", state: "NORMAL" }] },
+  } }));
+
+  const mail = [];
+  const send = async (to, message, key) => { mail.push({ to, subject: message.subject, key }); return true; };
+  const now = new Date();
+  const first = await runAsFarm(A, () => runFarmDailyReport(now, send));
+  assert.equal(first.sent, 1);
+  assert.deepEqual(mail.map((m) => m.to), [owner.email], "only the owner chose it; the manager did not and workers never get it");
+  assert.ok(mail[0].key.startsWith(`flockence-vision-daily-${A}-`) && mail[0].key.endsWith(`-${owner.id}`) && /\d{4}-\d{2}-\d{2}/.test(mail[0].key));
+  assert.equal(await runAsFarm(A, () => runFarmDailyReport(now, send)), null, "never twice the same day");
+  assert.equal(mail.length, 1);
+
+  const bMail = [];
+  const b = await runAsFarm(B, () => runFarmDailyReport(now, async (to) => { bMail.push(to); return true; }));
+  assert.equal(bMail.length, 0, "farm B's report never goes to farm A's people");
+  assert.ok(b === null || b.sent === 0);
+
+  // A failed send is tried again on the next round, for that person only.
+  await runAsFarm(A, () => prisma.setting.deleteMany({ where: { key: "VISION_DAILY_REPORT_STATE" } }));
+  await prefs(manager, true);
+  await runAsFarm(A, () => prisma.setting.update({ where: { farmId_key: { farmId: A, key: `ACCOUNT_PREFERENCES_V1::${manager.id}` } }, data: { value: JSON.stringify({ farmAlertEmail: false, farmReportEmail: true, allowVisionImages: true }) } }));
+  const tries = [];
+  const flaky = async (to) => { tries.push(to); return to === owner.email; };
+  const partial = await runAsFarm(A, () => runFarmDailyReport(now, flaky));
+  assert.equal(partial.sent, 1); assert.equal(partial.failed, 1);
+  const retry = await runAsFarm(A, () => runFarmDailyReport(now, async (to) => { tries.push(to); return true; }));
+  assert.equal(retry.sent, 1);
+  assert.deepEqual(tries.slice(-1), [manager.email], "the retry goes only to the person who did not get it");
+});

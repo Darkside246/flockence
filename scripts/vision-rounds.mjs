@@ -32,6 +32,7 @@ try {
     console.log(`farm ${r.farmId}: ${what}`);
   }
   if (!body?.results?.length) console.log("No farm has automatic inspections switched on.");
+  for (const r of body?.dailyReports ?? []) console.log(`farm ${r.farmId}: daily report ${r.skipped ? `not sent (${r.skipped})` : `sent to ${r.sent}`}${r.failed ? `, ${r.failed} failed (will retry)` : ""}`);
 } catch (error) {
   console.error(`Could not reach Flockence at ${url}: ${error instanceof Error ? error.message : error}`);
   process.exit(1);
