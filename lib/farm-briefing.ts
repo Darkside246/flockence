@@ -3,6 +3,8 @@ import { kgToBags } from "./farm-engine.mjs";
 import { loadFlockLedger } from "./flock-ledger";
 import { feedStore } from "./feed-ledger";
 import { ageOn } from "./flock-insights";
+import { SCHEDULE_KEY, STATE_KEY, readSchedule, readState } from "./vision-schedule-rules.mjs";
+import { FARM_TIME_ZONE } from "./poultry-metrics.mjs";
 
 type Tx = Prisma.TransactionClient;
 const DAY = 86400000;
@@ -96,6 +98,34 @@ export async function farmBriefing(tx: Tx, farmId: string, today: Date, operatio
 
   const lastFeed = await tx.feedPurchase.findFirst({ where: { farmId }, orderBy: [{ date: "desc" }, { createdAt: "desc" }], include: { supplier: { select: { name: true } } } });
   if (lastFeed) items.push({ id: "last-feed", tone: "info", text: `Last feed bought: ${Number(lastFeed.quantityBags)} × ${Number(lastFeed.bagSizeKg)} kg ${lastFeed.feedType} on ${key(lastFeed.date)}${lastFeed.supplier ? ` from ${lastFeed.supplier.name}` : ""}.` });
+
+  // Automatic camera checks (Farm Vision): each camera's latest result in a sentence, problems first.
+  const visionRows = await tx.setting.findMany({ where: { farmId, key: { in: [SCHEDULE_KEY, STATE_KEY] } }, select: { key: true, value: true } });
+  const schedule = readSchedule(visionRows.find(r => r.key === SCHEDULE_KEY)?.value);
+  if (schedule?.enabled) {
+    const vision = readState(visionRows.find(r => r.key === STATE_KEY)?.value);
+    const clock = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: FARM_TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+    for (const name of Object.keys(schedule.cameras)) {
+      const cam = vision.cameras[name];
+      if (!cam?.lastRunAt) continue;
+      const ageHours = (Date.now() - Date.parse(cam.lastRunAt)) / 3_600_000;
+      if (cam.needsAttention) {
+        items.push({ id: "vision-fail-" + name, tone: "attention", text: `Automatic camera check for ${name} has failed ${cam.failures} times in a row: ${cam.lastMessage ?? "unknown reason"}`, action: { label: "Open Farm Vision", href: "/vision" } });
+        continue;
+      }
+      if (cam.lastResult !== "ok" || ageHours > 26) continue;
+      const tone = cam.escalate || cam.lastSeverity === "URGENT" ? "urgent" : cam.lastSeverity === "HIGH" || (cam.questions?.length ?? 0) > 0 || (cam.oriya?.alerts ?? 0) > 0 ? "attention" : "info";
+      const birds = cam.birdsVisible ?? cam.oriya?.birdsVisible;
+      const question = cam.questions?.[0] ? ` Question: ${cam.questions[0]}` : "";
+      const oriya = cam.oriya?.sent ? ` Sent to Oriya${cam.oriya.alerts ? ` (${cam.oriya.alerts} alert${cam.oriya.alerts === 1 ? "" : "s"}${cam.oriya.whatsapp ? ", WhatsApp sent" : ""})` : ""}.` : "";
+      items.push({
+        id: "vision-" + name, tone,
+        text: `Camera ${name} at ${clock(cam.lastRunAt)}: ${cam.lastMessage || "checked"}${birds != null ? ` About ${birds} birds in view.` : ""}${question}${oriya}`,
+        action: { label: "See the inspection", href: "/vision" },
+        basis: "Automatic Farm Vision check. Pictures show part of the house; the bird number is what the camera sees, not the flock total.",
+      });
+    }
+  }
 
   if (!flocks.length) items.push({ id: "none", tone: "info", text: "No active flocks. Start one under Flocks.", action: { label: "Start a flock", href: "/batches" } });
   const order = { urgent: 0, attention: 1, info: 2 };

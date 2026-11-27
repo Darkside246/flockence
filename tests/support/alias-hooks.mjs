@@ -7,6 +7,8 @@ import path from "node:path";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 export async function resolve(specifier, context, next) {
+  // Next ships next/server as a CommonJS file without an ESM export map entry; name the file for Node.
+  if (specifier === "next/server") return next("next/server.js", context);
   if (specifier.startsWith("@/")) {
     const base = path.join(root, specifier.slice(2));
     for (const candidate of [base, `${base}.ts`, `${base}.mjs`, path.join(base, "index.ts")]) {

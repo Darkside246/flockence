@@ -1,0 +1,16 @@
+[Unit]
+Description=Flockence automatic camera vision round
+After=flockence.service
+Requisite=flockence.service
+
+[Service]
+Type=oneshot
+User=flockence
+Group=flockence
+# Always the live release: read the app directory from flockence.service, so a release switch needs no change here.
+ExecStart=/bin/sh -c 'app=$$(systemctl show flockence.service -p WorkingDirectory --value) && cd "$$app" && exec /usr/local/bin/node scripts/vision-rounds.mjs'
+TimeoutStartSec=900
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+UMask=0077

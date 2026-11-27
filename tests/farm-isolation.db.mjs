@@ -360,3 +360,52 @@ test("changing a local password revokes sessions and outstanding reset links", a
   const reset = await Promise.all([resetAccountPassword(fresh.token, oldPassword), resetAccountPassword(fresh.token, oldPassword)]);
   assert.deepEqual(reset.sort(), [false, true]);
 });
+
+test("automatic camera vision: each farm's schedule is its own, and only old automatic pictures are removed", async () => {
+  const { loadSchedule, saveSchedule, pruneAutomaticPictures, runFarmRound } = await import("../lib/vision-schedule.ts");
+  const { mkdtemp, writeFile, readdir } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const path = await import("node:path");
+  const dir = await mkdtemp(path.join(tmpdir(), "vision-auto-"));
+  const previousDir = process.env.VISION_STORAGE_DIR;
+  process.env.VISION_STORAGE_DIR = dir;
+  try {
+    const owner = await runAsFarm(A, () => prisma.user.create({ data: { name: "A owner", email: `vision-owner-${Date.now()}@a.test`, role: "OWNER" } }));
+    const schedule = { enabled: true, cameras: { "Coop 1": { everyHours: 2, mode: "video", category: "PEN" } }, dailyCap: 24, keepDays: 30, quietStart: "", quietEnd: "" };
+    await runAsFarm(A, () => saveSchedule(schedule, owner.id));
+    assert.equal((await runAsFarm(A, () => loadSchedule())).schedule?.enabled, true);
+    assert.equal((await runAsFarm(B, () => loadSchedule())).schedule, null, "farm B sees no schedule from farm A");
+    assert.equal(await runAsFarm(A, () => prisma.auditLog.count({ where: { action: "VISION_SCHEDULE_CHANGED" } })), 1);
+
+    // Cameras switched off on this server: the round says so and holds nothing.
+    delete process.env.FLOCKENCE_CAMERA_VISION;
+    const round = await runAsFarm(A, () => runFarmRound(schedule, owner.id, new Date()));
+    assert.equal(round.skipped, "cameras-off");
+
+    // Retention: an old automatic picture goes (its written result stays), a new one and a manual one stay.
+    const old = new Date(Date.now() - 40 * 86_400_000);
+    const make = async (farm, key, createdAt) => {
+      await writeFile(path.join(dir, key), "x");
+      return runAsFarm(farm, async () => {
+        const media = await prisma.visionMedia.create({ data: { storageKey: key, mimeType: "image/jpeg", byteSize: 1, createdAt } });
+        const obs = await prisma.healthObservation.create({ data: { observedAt: createdAt, symptom: "Farm Vision automatic inspection", category: "VISION:PEN", affectedCount: 0, notes: "kept", imageUrl: `/api/vision/media/${media.id}`, visionMediaId: media.id } });
+        return { media, obs };
+      });
+    };
+    const oldAuto = await make(A, "auto-old.jpg", old);
+    const newAuto = await make(A, "auto-new.jpg", new Date());
+    const oldManual = await make(A, "manual-old.jpg", old);
+    const otherFarm = await make(B, "auto-other.jpg", old);
+    assert.equal(await runAsFarm(A, () => pruneAutomaticPictures(30, new Date())), 1);
+    assert.deepEqual((await readdir(dir)).sort(), ["auto-new.jpg", "auto-other.jpg", "manual-old.jpg"]);
+    const kept = await runAsFarm(A, () => prisma.healthObservation.findUnique({ where: { id: oldAuto.obs.id } }));
+    assert.equal(kept.notes, "kept");
+    assert.equal(kept.imageUrl, null);
+    assert.equal(kept.visionMediaId, null);
+    assert.ok(await runAsFarm(A, () => prisma.visionMedia.findUnique({ where: { id: newAuto.media.id } })));
+    assert.ok(await runAsFarm(A, () => prisma.visionMedia.findUnique({ where: { id: oldManual.media.id } })));
+    assert.ok(await runAsFarm(B, () => prisma.visionMedia.findUnique({ where: { id: otherFarm.media.id } })), "farm B's pictures are never touched by farm A's clean-up");
+  } finally {
+    if (previousDir === undefined) delete process.env.VISION_STORAGE_DIR; else process.env.VISION_STORAGE_DIR = previousDir;
+  }
+});
