@@ -258,3 +258,70 @@ test("verified email proof is single-use and creates an isolated Free farm", asy
   }
 });
 
+
+test("emailed team invitations bind farm, mailbox and role and redeem once", async (t) => {
+  const { randomUUID } = await import("node:crypto");
+  const { issueEmailTeamInvite, inspectEmailTeamInvite, redeemEmailTeamInvite,
+    activeEmailInvitations, revokeEmailInvitation } = await import("../lib/email-team-invites.ts");
+  const { sessionFromToken, getPasswordHash, verifyPassword } = await import("../lib/auth.ts");
+  for (const [key, value] of Object.entries({
+    RESEND_API_KEY: "fixture-key", RESEND_FROM: "Flockence <mail@example.test>", APP_URL: "https://flockence.example",
+  })) {
+    const prior = process.env[key];
+    process.env[key] = value;
+    t.after(() => { if (prior === undefined) delete process.env[key]; else process.env[key] = prior; });
+  }
+  let message;
+  let deliver = true;
+  const fetchMock = t.mock.method(globalThis, "fetch", async (url, request) => {
+    assert.equal(url, "https://api.resend.com/emails");
+    message = JSON.parse(request.body);
+    return new Response(null, { status: deliver ? 200 : 503 });
+  });
+  const owner = await runAsFarm(A, () => prisma.user.create({ data: {
+    farmId: A, role: "OWNER", name: "Invite fixture owner", email: randomUUID() + "@example.test",
+  } }));
+  const manager = await runAsFarm(A, () => prisma.user.create({ data: {
+    farmId: A, role: "MANAGER", name: "Invite fixture supervisor", email: randomUUID() + "@example.test",
+  } }));
+  const days = new Date(Date.now() + 86400000);
+  const email = randomUUID() + "@example.test";
+  const send = (actor, recipient, role, expires = days) =>
+    runAsFarm(A, () => issueEmailTeamInvite(actor.id, recipient, role, expires));
+  await assert.rejects(() => send(manager, email, "MANAGER"), /EMAIL_INVITE_FORBIDDEN/);
+  assert.equal(fetchMock.mock.callCount(), 0);
+  const invite = await send(owner, email, "WORKER");
+  assert.deepEqual(message.to, [email]);
+  const token = new URL(message.text.trim().split("\n").at(-1)).hash.slice("#invite=".length);
+  assert.deepEqual(await inspectEmailTeamInvite(token), { farmName: "Farm A", role: "WORKER" });
+  assert.equal(await inspectEmailTeamInvite(token.replace(A + ".", B + ".")), null);
+  assert.equal(await runAsFarm(B, () => revokeEmailInvitation(invite.id, owner.id)), false);
+  assert.deepEqual(await runAsFarm(B, () => activeEmailInvitations()), []);
+  const password = "Fixture-Invite123!";
+  const outcomes = await Promise.all([
+    redeemEmailTeamInvite(token, "Joined hand", password),
+    redeemEmailTeamInvite(token, "Joined hand", password),
+  ]);
+  const joined = outcomes.filter(Boolean);
+  assert.equal(joined.length, 1);
+  assert.equal(await inspectEmailTeamInvite(token), null);
+  const session = await sessionFromToken(joined[0].token);
+  assert.equal(session.farmId, A);
+  const user = await runAsFarm(A, () => prisma.user.findUnique({ where: { id: session.userId } }));
+  assert.equal(user.email, email);
+  assert.equal(user.role, "WORKER");
+  assert.ok(await verifyPassword(password, await runAsFarm(A, () => getPasswordHash(user.id))));
+
+  const revocable = await send(owner, randomUUID() + "@example.test", "MANAGER");
+  const revokedToken = new URL(message.text.trim().split("\n").at(-1)).hash.slice("#invite=".length);
+  await assert.rejects(() => runAsFarm(A, () => revokeEmailInvitation(revocable.id, manager.id)), /EMAIL_INVITE_FORBIDDEN/);
+  assert.ok(await runAsFarm(A, () => revokeEmailInvitation(revocable.id, owner.id)));
+  assert.equal(await redeemEmailTeamInvite(revokedToken, "Revoked member", password), null);
+
+  await send(owner, randomUUID() + "@example.test", "READ_ONLY", new Date(Date.now() - 1000));
+  const expiredToken = new URL(message.text.trim().split("\n").at(-1)).hash.slice("#invite=".length);
+  assert.equal(await redeemEmailTeamInvite(expiredToken, "Expired member", password), null);
+  deliver = false;
+  await assert.rejects(() => send(owner, randomUUID() + "@example.test", "READ_ONLY"), /EMAIL_INVITE_DELIVERY_FAILED/);
+  assert.deepEqual(await runAsFarm(A, () => activeEmailInvitations()), []);
+});

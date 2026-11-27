@@ -180,6 +180,16 @@ try {
   assert.equal((await assigned.json()).pen.id, penA.id);
   const listed = await fetch(origin + "/api/vision/cameras", { headers: { Cookie: cookies[0] } });
   assert.equal((await listed.json())[0].pen.id, penA.id);
+  const prefs = (allowVisionImages, extra = {}) => fetch(origin + "/api/account/preferences", {
+    method: "PUT", headers: { Cookie: cookies[0], Origin: origin, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Test farm owner", preferences: { allowVisionImages, farmAlertEmail: true, farmReportEmail: false }, ...extra }),
+  });
+  assert.equal((await prefs(false, { farmId: ids[1] })).status, 400);
+  assert.equal((await prefs(false)).status, 200);
+  const declined = await inspect(true, origin, "Farm A camera");
+  assert.equal(declined.status, 403);
+  assert.match((await declined.json()).error, /disabled image sharing/);
+  assert.equal((await prefs(true)).status, 200);
   const inspection = await inspect(true, origin, "Farm A camera");
   assert.equal(inspection.status, 201);
   const saved = await inspection.json();
@@ -309,6 +319,20 @@ try {
   assert.equal((await submitFeed(0, { ...feed, feedKg: 3.5 })).status, 409);
   assert.equal((await submitFeed(0, { ...feed, offline: { ...feed.offline, id: randomUUID() } })).status, 409);
 
+  const expense = { date: workspace.today, category: "Supplies", description: "Farm tools", amountMinor: 1250,
+    currency: workspace.currency, offline: { ...workspace.scope, id: randomUUID() } };
+  const submitExpense = (index, data) => fetch(origin + "/api/expenses", {
+    method: "POST", headers: headerFor(index), body: JSON.stringify(data),
+  });
+  assert.equal((await submitExpense(1, expense)).status, 403);
+  assert.equal((await submitExpense(0, { ...expense, currency: "XXX" })).status, 409);
+  const expenseReceipts = await Promise.all([submitExpense(0, expense), submitExpense(0, expense)]);
+  assert.deepEqual(expenseReceipts.map(response => response.status), [201, 201]);
+  const [expenseA, expenseB] = await Promise.all(expenseReceipts.map(response => response.json()));
+  assert.equal(expenseA.id, expenseB.id);
+  assert.equal((await submitExpense(0, { ...expense, amountMinor: 1300 })).status, 409);
+  assert.equal(await runAsFarm(ids[0], () => prisma.expense.count()), 1);
+
   if (process.env.FLOCKENCE_BROWSER_MODULE) {
     const { chromium } = createRequire(import.meta.url)(process.env.FLOCKENCE_BROWSER_MODULE);
     const browser = await chromium.launch();
@@ -346,6 +370,12 @@ try {
       await page.locator("#feed-weight").fill("2.5");
       await page.locator("#save").click();
       await page.getByText(/Feed consumption.*Waiting to sync/).waitFor();
+      await page.selectOption("#record-kind", "expense");
+      await page.locator("#expense-category").fill("Supplies");
+      await page.locator("#expense-description").fill("Cleaning brush");
+      await page.locator("#expense-amount").fill("4.50");
+      await page.locator("#save").click();
+      await page.getByText(/Expense.*4.50.*Waiting to sync/).waitFor();
       await page.reload();
       await page.locator("#passphrase").fill("test-device-research-only-123");
       await page.locator("#unlock-button").click();
@@ -353,6 +383,7 @@ try {
       await page.getByText(/Live weight.*Waiting to sync/).waitFor();
       await page.getByText(/Egg collection.*Waiting to sync/).waitFor();
       await page.getByText(/Feed consumption.*Waiting to sync/).waitFor();
+      await page.getByText(/Expense.*4.50.*Waiting to sync/).waitFor();
       await context.setOffline(false);
       await page.getByText("No entries waiting to sync.").waitFor();
       assert.equal(await runAsFarm(ids[0], () => prisma.mortalityEvent.count({ where: { batchId: flock.id } })), 2);
@@ -361,6 +392,8 @@ try {
       assert.equal(await runAsFarm(ids[0], () => prisma.eggCollection.count({ where: { batchId: laying.id } })), 2);
 
       assert.equal(await runAsFarm(ids[0], () => prisma.dailyFlockCheck.count({ where: { batchId: flock.id } })), 2);
+
+      assert.equal(await runAsFarm(ids[0], () => prisma.expense.count()), 2);
 
       let blink = "disconnected";
       await page.route("**/api/cameras/status", (route) => route.fulfill({ json: {

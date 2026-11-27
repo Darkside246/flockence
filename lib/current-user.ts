@@ -1,3 +1,4 @@
+import type { FarmRole } from "@/lib/farm-roles";
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { sessionCookieFromRequest, sessionFromToken } from "@/lib/auth";
@@ -47,7 +48,7 @@ export async function currentUserOrResponse(request: Request) {
   }
 }
 
-export type FarmAccessRole = "OWNER" | "MANAGER" | "WORKER" | "READ_ONLY";
+export type FarmAccessRole = FarmRole;
 
 /** Enforce write permissions at the API boundary, not only by hiding UI controls. */
 export async function currentUserOrRoleResponse(

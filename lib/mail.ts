@@ -44,3 +44,10 @@ export function sendFreeSignupVerificationEmail(to: string, url: string) {
     text: `Confirm this email address to create your Free Flockence farm. This single-use link expires after 30 minutes.\n\n${url}`,
   });
 }
+
+export function sendTeamInvitationEmail(to: string, url: string, farmName: string, expiresAt: Date, inviteId: string) {
+  return sendEmail(to, {
+    subject: "Join your team on Flockence",
+    text: `You were invited to join ${farmName} on Flockence. Open this single-use link to create your account. It expires on ${expiresAt.toISOString().slice(0, 10)} (UTC).\n\n${url}`,
+  }, "flockence-team-invite-" + inviteId);
+}

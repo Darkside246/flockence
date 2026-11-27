@@ -1,4 +1,4 @@
-const CACHE = "flockence-offline-v2";
+const CACHE = "flockence-offline-v3";
 const SHELL = ["/offline.html", "/offline.css", "/offline.js", "/offline-store.js"];
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

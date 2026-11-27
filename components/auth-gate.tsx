@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { ThemeProvider } from "@/components/theme-provider";
 
-const PUBLIC_PATHS = new Set(["/login", "/signup", "/signup/free", "/signup/invited", "/forgot-password", "/reset-password"]);
+const PUBLIC_PATHS = new Set(["/login", "/signup", "/signup/free", "/signup/invited", "/signup/team", "/forgot-password", "/reset-password"]);
 
 export type SessionUser = { id: string; farmId: string; freeAppearance?: boolean; name: string; email: string; role: "OWNER" | "MANAGER" | "WORKER" | "READ_ONLY" };
 const LOCAL_DEV_BYPASS = process.env.NODE_ENV === "development";

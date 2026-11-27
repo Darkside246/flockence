@@ -15,7 +15,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await currentUserOrRoleResponse(request);
+  const session = await currentUserOrRoleResponse(request, ["OWNER", "MANAGER"]);
   if (session.response) return session.response;
   try {
     await ensureFarm();

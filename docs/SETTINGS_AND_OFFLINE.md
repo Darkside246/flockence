@@ -77,3 +77,9 @@ after testing quotas and shared devices. Keep the same authenticated
 idempotent endpoints when adding a native adapter. Browser and native
 background work is best effort. Capacitor packaging, native SQLite,
 device tests and store signing are separate stages. [Next.js PWA guidance](https://nextjs.org/docs/app/guides/progressive-web-apps)
+
+Owners and Supervisors can queue farm-wide expenses with a category,
+description and amount. The server rechecks the active role and original
+farm/account. Retrying the same receipt returns the original expense.
+Separate legitimate purchases remain separate. The offline form does not
+offer flock allocation or changes to an existing expense.
