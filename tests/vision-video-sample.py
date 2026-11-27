@@ -1,7 +1,6 @@
 import asyncio
 import base64
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -21,7 +20,6 @@ class VideoSampleTest(unittest.TestCase):
             playlist.write_text("#EXTM3U\n" + "X" * 16384 + "\ncam_02.ts")
             self.assertEqual(playlist_segments(playlist), [])
 
-    @unittest.skipUnless(shutil.which("ffmpeg"), "FFmpeg is needed for the MPEG-TS fixture")
     def test_extracts_ordered_frames_from_three_segments(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
