@@ -1,0 +1,11 @@
+export type AlertReason = "NEW" | "WORSE" | "STILL_THERE";
+export type AlertFinding = { id: string; severity: string; state: string; title: string; detail?: string | null; penName?: string | null; cameraName?: string | null };
+export type AlertState = { incidents: Record<string, { at: number; severity: string; reminders: number }>; sentAt: number[] };
+export const ALERT_SEVERITIES: string[];
+export const COOLDOWN_MS: Record<string, number>;
+export const MAX_REMINDERS: number;
+export const MAX_PER_HOUR: number;
+export const KEEP_MS: number;
+export function alertReason(finding: { severity: string; state: string }, last: { at: number; severity: string; reminders?: number } | undefined, now: number): AlertReason | null;
+export function planAlerts<T extends AlertFinding>(findings: T[], state: AlertState | null | undefined, now: number): { send: (T & { reason: AlertReason })[]; held: boolean; state: AlertState };
+export function alertEmail(findings: (AlertFinding & { reason: AlertReason })[], farmName: string, whenLabel: string, link: string): { subject: string; text: string; html: string };

@@ -216,3 +216,17 @@ The Farm Vision page shows the plan, what it includes, and the month's use.
 - A day with no pictures and nothing open sends nothing.
 - Code: `lib/vision-daily-report.ts`, `lib/vision-daily-report-rules.mjs`, `app/api/vision/daily-report`,
   `components/vision-daily-report.tsx`.
+
+## Alerts (Vision Intelligence phase 1c, 2026-11-27)
+
+- After an inspection records its findings, serious ones (HIGH and CRITICAL) are emailed straight away to owners and
+  managers who ticked **Farm alerts** on their Account page. The rest wait for the daily report.
+- Grouped by incident (the 48-hour finding groups): one problem seen in many pictures is one alert. It is sent again
+  only when it gets worse (HIGH to CRITICAL), or as a reminder if it is still seen after its cooldown (CRITICAL 4 hours,
+  HIGH 12 hours), at most twice. One inspection's alerts go in one email.
+- At most 6 alert emails per farm per hour; more are held and shown in the daily report.
+- If no email could be sent, the alert is tried again by the next inspection that sees the problem.
+- Cameras → Vision shows the last alerts and who gets alert emails, so alerts are visible without email.
+- Oriya / WhatsApp: automatic checks of cameras shared with Oriya (`ORIYA_CAMERAS`) already go to Oriya, which sends its
+  own WhatsApp alerts. Sending these Vision alerts to Oriya needs a new message type on Oriya's side (Phase 7).
+- Code: `lib/vision-alert-rules.mjs`, `lib/vision-alerts.ts`, `app/api/vision/alerts`, `components/vision-alerts.tsx`.
