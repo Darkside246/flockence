@@ -117,10 +117,12 @@ export default function SettingsPage() {
     <header className="topbar"><div className="brand"><div><h1>Settings</h1><p>Manage your account and farm preferences.</p></div></div></header>
     <Nav />
     <main className="main">
-      <nav aria-label="Settings categories" className="section card quick">
-        {visibleSections.map(([key, label]) => <a key={key} className={section === key ? "button button-primary" : "button"} href={"#" + key}
+      <div className="settings-layout">
+      <nav aria-label="Settings categories" className="settings-nav">
+        {visibleSections.map(([key, label]) => <a key={key} href={"#" + key}
           onClick={() => { setSection(key); setNotice(null); }} aria-current={section === key ? "location" : undefined}>{label}</a>)}
       </nav>
+      <div className="settings-content">
 
       {section === "account" && <section className="section card">
         <h2>Account &amp; security</h2>
@@ -226,6 +228,8 @@ export default function SettingsPage() {
           loadSettings().catch(() => setNotice({ message: "Settings could not be loaded.", error: true }));
         }}>Reload settings</button>}
       </div>}
+      </div>
+      </div>
     </main>
   </div>;
 }
