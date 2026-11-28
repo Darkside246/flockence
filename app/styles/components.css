@@ -381,3 +381,9 @@
 /* Settings > Farm profile: delete this farm */
 .danger-zone { border-color: color-mix(in srgb, var(--ds-danger) 40%, var(--ds-border)); }
 .danger-zone h2 { color: var(--ds-danger); }
+
+/* Account > Two-factor sign-in */
+.two-factor .section-head { align-items: center; }
+.two-factor-key { font-size: var(--text-lg); letter-spacing: .08em; padding: 4px 8px; border-radius: var(--radius-sm); background: var(--ds-surface-2); }
+.two-factor-codes { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; padding: 0; margin: 0; list-style: none; }
+.two-factor-codes code { display: block; padding: 4px 8px; border: 1px solid var(--ds-border); border-radius: var(--radius-sm); text-align: center; }
