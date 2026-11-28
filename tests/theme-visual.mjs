@@ -12,7 +12,7 @@ const pages = [
   ["/", "dashboard"], ["/pens", "housing"], ["/batches", "flocks"],
   ["/layers", "eggs"], ["/layers/performance", "layer-performance"], ["/inventory", "inventory-feed"], ["/reports", "reports"],
   ["/settings", "appearance"], ["/farm-setup", "farm-setup"], ["/team", "team"],
-  ["/operations", "daily-round"], ["/health", "health"], ["/health/treatments", "treatments"], ["/health/tests", "diagnostics"],
+  ["/operations", "daily-round"], ["/operations#records", "daily-round-records"], ["/operations#harvest", "daily-round-harvest"], ["/operations#transport", "daily-round-transport"], ["/health", "health"], ["/health/treatments", "treatments"], ["/health/tests", "diagnostics"],
   ["/layers/packing", "packing"], ["/house", "house"], ["/finances", "finances"], ["/performance", "performance"],
   ["/planning", "planning"], ["/trace", "trace"], ["/account", "account"], ["/vision", "vision"], ["/cameras", "cameras"],
 ];
@@ -98,7 +98,8 @@ try {
 
       for (const [route, name] of pages) {
         const response = await page.goto(origin + route);
-        assert.ok(response?.ok(), route + " returned " + response?.status());
+        // A hash route (/operations#records) on the same page is an in-page change with no response.
+        assert.ok(route.includes("#") || response?.ok(), route + " returned " + response?.status());
         await page.locator("main").filter({ hasNotText: "Checking your session" }).first().waitFor({ state: "visible" });
         await page.waitForFunction((id) => document.documentElement.dataset.theme === id, theme);
         if (route === "/" && process.env.VISUAL_SEED_DASHBOARD === "true") {

@@ -59,14 +59,14 @@ export function FeedSettings() {
         <SupplierPicker value="" category="FEED" label="Add a dealer" onChange={(id, sup) => { if (id && sup && !editing.suppliers.some(x => x.supplierId === id)) setEditing({ ...editing, suppliers: [...editing.suppliers, { supplierId: id, supplier: { name: sup.name }, bagSizeKg: null, unitCostMinor: null }] }); }} />
       </div>
       <label className="check-line span-2"><input type="checkbox" checked={editing.active} onChange={e => setEditing({ ...editing, active: e.target.checked })} /> In use (switched-off feeds stay in old records but are not offered)</label>
-      <div className="row-actions span-2"><button type="submit">Save feed</button><button type="button" className="button" onClick={() => setEditing(null)}>Cancel</button></div>
+      <div className="row-actions span-2"><button type="submit" className="button button-primary">Save feed</button><button type="button" className="button" onClick={() => setEditing(null)}>Cancel</button></div>
     </form>}
     <form className="grid2" onSubmit={async e => { e.preventDefault(); if (await call("/api/feed-products", "POST", adding, `${adding.name} added.`)) setAdding({ brand: "", name: "", defaultBagKg: "" }); }}>
       <h4 className="span-2">Add a feed</h4>
       <label>Brand<input value={adding.brand} onChange={e => setAdding({ ...adding, brand: e.target.value })} maxLength={160} placeholder="e.g. Super Feeds" /></label>
       <label>Feed name<input value={adding.name} onChange={e => setAdding({ ...adding, name: e.target.value })} required maxLength={160} /></label>
       <label>Usual bag size kg<input type="number" min="0.1" step="0.1" value={adding.defaultBagKg} onChange={e => setAdding({ ...adding, defaultBagKg: e.target.value })} /></label>
-      <div className="row-actions"><button type="submit">Add feed</button></div>
+      <div className="row-actions"><button type="submit" className="button button-primary">Add feed</button></div>
     </form>
 
     <h3>Your feed measures</h3>
@@ -82,7 +82,7 @@ export function FeedSettings() {
       <label>Name<input value={measure.name} onChange={e => setMeasure({ ...measure, name: e.target.value })} required maxLength={60} placeholder="e.g. Red scoop, Feeder pan" /></label>
       <label>Kind<select value={measure.kind} onChange={e => setMeasure({ ...measure, kind: e.target.value })}><option value="SCOOP">Scoop</option><option value="PAN">Pan</option><option value="FEEDER">Feeder fill</option><option value="BUCKET">Bucket</option><option value="OTHER">Other</option></select></label>
       <label>One holds kg (if weighed)<input type="number" min="0.01" step="0.01" value={measure.kgPerUnit} onChange={e => setMeasure({ ...measure, kgPerUnit: e.target.value })} /></label>
-      <div className="row-actions"><button type="submit">Add measure</button></div>
+      <div className="row-actions"><button type="submit" className="button button-primary">Add measure</button></div>
     </form>
   </div>;
 }

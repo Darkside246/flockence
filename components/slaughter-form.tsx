@@ -94,6 +94,6 @@ export function SlaughterForm({ batches, onSaved }: { batches: Batch[]; onSaved?
     <label>Chilling completed<input type="datetime-local" value={chilling} onChange={e => setChilling(e.target.value)} /></label>
     <label>Notes<input value={notes} onChange={e => setNotes(e.target.value)} maxLength={400} /></label>
     {msg && <p className="notice" role="status">{msg}</p>}
-    <button type="submit" disabled={busy}>{busy ? "Saving…" : "Record slaughter"}</button>
+    <button type="submit" className="button button-primary" disabled={busy}>{busy ? "Saving…" : "Record slaughter"}</button>
   </form>;
 }

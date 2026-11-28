@@ -78,7 +78,7 @@ export function FeedUsed({ batches }: { batches: Batch[] }) {
     <label>How many<input type="number" min="0" step="any" value={amount} onChange={e => setAmount(e.target.value)} required={!busy} />{preview && <span className="muted">{preview}</span>}</label>
     <label>Date<input type="date" value={date} max={today()} onChange={e => setDate(e.target.value)} required /></label>
     {msg && <p className="notice" role="status">{msg}</p>}
-    <button type="submit" disabled={busy || !batchId}>{busy ? "Saving…" : "Save feed used"}</button>
+    <button type="submit" className="button button-primary" disabled={busy || !batchId}>{busy ? "Saving…" : "Save feed used"}</button>
     {summary && summary.totalKg > 0 && <p className="muted">
       This flock has used {summary.bags != null ? `${summary.bags} bags (${summary.totalKg} kg)` : `${summary.totalKg} kg`}{summary.costMinor ? `, costing ${(summary.costMinor / 100).toFixed(2)}` : ""}
       {summary.perBirdPlacedKg != null ? ` · ${summary.perBirdPlacedKg} kg per bird placed` : ""}{summary.kgPerBirdDay != null ? ` · ${Math.round(summary.kgPerBirdDay * 1000)} g per bird per day` : ""}.
