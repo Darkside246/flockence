@@ -9,6 +9,7 @@ import { VisionIntelligence } from "@/components/vision-intelligence";
 import { PenLayout } from "@/components/pen-layout";
 import { VisionKnown } from "@/components/vision-known";
 import { useSession } from "@/components/auth-gate";
+import { formatBytes } from "@/lib/storage-quota-rules.mjs";
 import { shrinkPhoto, sizeLabel } from "@/lib/photo-shrink";
 import { OfflineError, queueAvailable, queueCheck, queuedChecks, sendInspection, sendQueued, uploadId } from "@/lib/vision-send";
 
@@ -67,7 +68,7 @@ export default function VisionPage() {
   const [preparing, setPreparing] = useState(false);
   const [sizeNote, setSizeNote] = useState("");
   const [queued, setQueued] = useState(0);
-  const [usage, setUsage] = useState<{ label: string; manualPerMonth: number; left: number; cameras: boolean } | null>(null);
+  const [usage, setUsage] = useState<{ label: string; manualPerMonth: number; left: number; cameras: boolean; storage?: { used: number; limit: number; percent: number; level: "ok" | "warn" | "full" } } | null>(null);
   const loadUsage = () => fetch("/api/vision/usage", { cache: "no-store" }).then((r) => r.ok ? r.json() : null).then(setUsage).catch(() => undefined);
   const [sendingQueued, setSendingQueued] = useState(false);
   const [earlier, setEarlier] = useState("");
@@ -303,7 +304,8 @@ export default function VisionPage() {
           {assignmentMessage && <span role="status">{assignmentMessage}</span>}
         </div>}
         <div className="vision-submit"><button className="button button-primary" type="submit" disabled={busy || preparing || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? (captureVideo ? "Capturing and analyzing…" : "Analyzing photo…") : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
-        {usage && <p className="muted vision-usage">{usage.label} plan: {usage.left} of {usage.manualPerMonth} photo checks left this month.{!usage.cameras ? " Camera and automatic checks come with Premium." : ""}</p>}
+        {usage && <p className="muted vision-usage">{usage.label} plan: {usage.left} of {usage.manualPerMonth} photo checks left this month.{!usage.cameras ? " Camera and automatic checks come with Premium." : ""}{usage.storage ? ` Picture storage: ${formatBytes(usage.storage.used)} of ${formatBytes(usage.storage.limit)}.` : ""}</p>}
+        {usage?.storage && usage.storage.level !== "ok" && <p className="notice" role="status">{usage.storage.level === "full" ? "Picture storage is full." : `Picture storage is ${usage.storage.percent}% full.`} Pictures older than 90 days are removed first when it fills up. <a href="/settings/plan">See plans</a></p>}
         {queued > 0 && <p className="notice" role="status">
           {queued} photo{queued === 1 ? "" : "s"} saved on this phone, waiting for a signal.{" "}
           <button type="button" className="button" disabled={sendingQueued} onClick={() => { flushQueue().catch(() => undefined); }}>{sendingQueued ? "Sending…" : "Send now"}</button>

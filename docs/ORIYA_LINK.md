@@ -166,3 +166,17 @@ avoid in both pictures; when the heat index is 79+, to look for a dense ring of 
 disperse (low or hot water), and for spread or drooping wings and birds packed against walls or fans; send the
 temperature difference between thermometers (hot corner). Buffington and Tao-Xin indexes are not needed (within 0.03 of
 NRC in the farm's data). Optional: a smart fan relay switched by the heat index.
+
+## Plans and billing (Oriya handles payment)
+
+Oriya takes payment for Flockence plans. Flockence asks Oriya for a linked farm's plan at
+`POST /api/public/flockence/entitlement` (signed, `purpose: "flockence.entitlement.v1"`) and accepts:
+
+```json
+{ "premium": true, "plan": "STANDARD" }
+```
+
+`plan` is one of `FREE`, `STANDARD`, `PREMIUM`. It is optional: an Oriya that only sends `premium` still works
+(`true` = Premium, `false` = Free). Standard and Premium unlock the paid features; Farm Vision limits and picture
+storage follow the plan (Free 1 GB, Standard 10 GB, Premium 50 GB; `STORAGE_PLAN_LIMITS_GB` overrides). The Plan page
+links to Oriya to upgrade or manage the subscription. Plans are enforced only with `FLOCKENCE_ENFORCE_PREMIUM=on`.
