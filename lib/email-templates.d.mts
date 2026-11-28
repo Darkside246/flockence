@@ -1,4 +1,4 @@
-export type EmailCategoryId = "signup_verification" | "welcome" | "password_reset" | "team_invitation" | "vision_daily_report" | "vision_alert";
+export type EmailCategoryId = "signup_verification" | "welcome" | "password_reset" | "team_invitation" | "vision_daily_report" | "farm_alert" | "vision_alert";
 export type EmailTemplateField = "subject" | "intro" | "footer";
 export type EmailTemplateText = Partial<Record<EmailTemplateField, string>>;
 export type EmailMessage = { subject: string; text?: string; html?: string };

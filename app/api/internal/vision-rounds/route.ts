@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { runVisionRounds } from "@/lib/vision-schedule";
 import { runDailyReports } from "@/lib/vision-daily-report";
 import { runPeopleRetention } from "@/lib/vision-people";
+import { runAllFarmAlerts } from "@/lib/farm-alerts";
 
 export const runtime = "nodejs";
 export const maxDuration = 900;
@@ -21,7 +22,9 @@ export async function POST(request: Request) {
   if (!timingSafeEqual(digest(given), digest(expected))) return NextResponse.json({ error: "Not allowed." }, { status: 401, headers });
   const results = await runVisionRounds();
   const dailyReports = await runDailyReports().catch((error) => [{ farmId: "*", sent: 0, skipped: `error: ${error instanceof Error ? error.name : "unknown"}` }]);
+  // Farm alerts from the farm's own records (missed checks, low feed, withdrawals...), for people who ticked Farm alerts.
+  const farmAlerts = await runAllFarmAlerts().catch((error) => [{ farmId: "*", sent: 0, skipped: `error: ${error instanceof Error ? error.name : "unknown"}` }]);
   // People data past each farm's keep period (or all of it, when the timeline is off) is removed.
   const peopleRemoved = await runPeopleRetention().catch(() => 0);
-  return NextResponse.json({ farms: results.length, results, dailyReports, peopleRemoved }, { headers });
+  return NextResponse.json({ farms: results.length, results, dailyReports, farmAlerts, peopleRemoved }, { headers });
 }

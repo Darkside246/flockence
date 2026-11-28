@@ -50,9 +50,9 @@ export function AccountPreferencesForm({ initialName, initialPreferences }: {
       <label>Display name<input value={name} onChange={event => setName(event.target.value)} minLength={2} maxLength={120} required /></label>
       <label><input type="checkbox" checked={preferences.allowVisionImages} onChange={event => change("allowVisionImages", event.target.checked)} /> Allow me to send images for Farm Vision analysis</label>
       <h4>Email preferences</h4>
-      <p className="muted">Your choices are saved. Automatic farm alerts and report delivery are pending.</p>
-      <label><input type="checkbox" checked={preferences.farmAlertEmail} onChange={event => change("farmAlertEmail", event.target.checked)} /> Farm alerts</label>
-      <label><input type="checkbox" checked={preferences.farmReportEmail} onChange={event => change("farmReportEmail", event.target.checked)} /> Farm reports</label>
+      <p className="muted">Sent to owners and supervisors of this farm, from the farm&apos;s own records. The wording of each email is set under Settings &gt; Email.</p>
+      <label><input type="checkbox" checked={preferences.farmAlertEmail} onChange={event => change("farmAlertEmail", event.target.checked)} /> Farm alerts: urgent Farm Vision findings straight away, and record alerts (a missed daily check after 15:00, low feed, withdrawal periods, overdue health reviews) at most every two hours, quiet from 21:00 to 06:00 unless urgent</label>
+      <label><input type="checkbox" checked={preferences.farmReportEmail} onChange={event => change("farmReportEmail", event.target.checked)} /> Farm reports: the daily Farm Vision report at the time set on the Farm Vision page</label>
       <button type="submit" className="button button-primary" disabled={saving}>{saving ? "Saving…" : "Save preferences"}</button>
       {notice && <p role={error ? "alert" : "status"}>{notice}</p>}
     </form>

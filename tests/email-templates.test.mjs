@@ -9,7 +9,7 @@ const reset = { subject: "Flockence password reset", html: '<p><a href="https://
 const verify = { subject: "Verify your email for Flockence", text: "Confirm this email.\n\nhttps://flockence.com/signup/free?token=xyz" };
 
 test("one template per kind of email the app already sends", () => {
-  assert.deepEqual(emailCategoryIds, ["signup_verification", "welcome", "password_reset", "team_invitation", "vision_daily_report", "vision_alert"]);
+  assert.deepEqual(emailCategoryIds, ["signup_verification", "welcome", "password_reset", "team_invitation", "vision_daily_report", "farm_alert", "vision_alert"]);
   assert.deepEqual(emailCategories.filter((c) => c.group === "account").map((c) => c.id), ["signup_verification", "welcome", "password_reset"]);
   const mail = readFileSync(new URL("../lib/mail.ts", import.meta.url), "utf8");
   for (const id of emailCategoryIds) assert.match(mail, new RegExp(`templated\\("${id}"`), id + " is not applied in lib/mail.ts");

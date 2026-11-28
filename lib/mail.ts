@@ -91,6 +91,11 @@ export async function sendVisionReportEmail(to: string, message: { subject: stri
   return sendEmail(to, await templated("vision_daily_report", message, farmId), key);
 }
 
+/** Farm alerts from the farm's own records (lib/farm-alerts.ts). */
+export async function sendFarmAlertEmail(to: string, message: { subject: string; text: string; html: string }, key: string, farmId?: string) {
+  return sendEmail(to, await templated("farm_alert", message, farmId), key);
+}
+
 /** A Farm Vision alert (lib/vision-alerts.ts). */
 export async function sendVisionAlertEmail(to: string, message: { subject: string; text: string; html: string }, key: string, farmId?: string) {
   return sendEmail(to, await templated("vision_alert", message, farmId), key);

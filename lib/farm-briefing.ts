@@ -5,6 +5,7 @@ import { feedStore } from "./feed-ledger";
 import { ageOn } from "./flock-insights";
 import { SCHEDULE_KEY, STATE_KEY, readSchedule, readState } from "./vision-schedule-rules.mjs";
 import { FARM_TIME_ZONE } from "./poultry-metrics.mjs";
+import { prisma } from "./prisma";
 
 type Tx = Prisma.TransactionClient;
 const DAY = 86400000;
@@ -139,4 +140,18 @@ export async function farmBriefing(tx: Tx, farmId: string, today: Date, operatio
   if (!flocks.length) items.push({ id: "none", tone: "info", text: "No active flocks. Start one under Flocks.", action: { label: "Start a flock", href: "/batches" } });
   const order = { urgent: 0, attention: 1, info: 2 };
   return items.sort((a, b) => order[a.tone] - order[b.tone]);
+}
+
+/**
+ * Today's briefing for the current farm (request or runAsFarm scope), as the dashboard shows it. Shared by the
+ * dashboard route and the farm alert emails (lib/farm-alerts.ts) so both always say the same thing.
+ */
+export async function farmBriefingToday(farmId: string, today: Date) {
+  return prisma.$transaction(async (tx) => {
+    // Broiler-only farms see no egg lines and layer-only farms no slaughter-age lines, judged from the active flocks.
+    const active = await tx.batch.findMany({ where: { farmId, status: "ACTIVE" }, select: { productionType: true, species: true } });
+    const layers = active.filter(b => b.productionType === "LAYER" || String(b.species).toUpperCase() === "LAYER").length;
+    const op = active.length && !layers ? "broilers" : active.length && layers === active.length ? "layers" : null;
+    return farmBriefing(tx, farmId, today, op);
+  });
 }
