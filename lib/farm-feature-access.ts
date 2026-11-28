@@ -5,9 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { oriyaBaseUrl, platformSecret } from "@/lib/oriya-farm-link";
 import { signOriyaBody } from "@/lib/oriya-link.mjs";
 
-type State = "FREE" | "PREMIUM" | "EXISTING" | "UNAVAILABLE";
+type State = "FREE" | "STANDARD" | "PREMIUM" | "EXISTING" | "UNAVAILABLE";
 const cache = new Map<string, { state: Promise<State>; expires: number }>();
-const resultSchema = z.object({ premium: z.boolean() });
+// Oriya takes payment and answers with the farm's plan (owner, 28 Nov 2026). Older Oriya versions send only "premium".
+const resultSchema = z.object({ premium: z.boolean(), plan: z.enum(["FREE", "STANDARD", "PREMIUM"]).optional() });
 
 async function linkedPlan(farmId: string, businessId: string): Promise<State> {
   const base = oriyaBaseUrl();
@@ -24,7 +25,7 @@ async function linkedPlan(farmId: string, businessId: string): Promise<State> {
     });
     if (!response.ok) return "UNAVAILABLE";
     const parsed = resultSchema.safeParse(await response.json());
-    return parsed.success ? (parsed.data.premium ? "PREMIUM" : "FREE") : "UNAVAILABLE";
+    return parsed.success ? (parsed.data.plan ?? (parsed.data.premium ? "PREMIUM" : "FREE")) : "UNAVAILABLE";
   } catch {
     return "UNAVAILABLE";
   }
@@ -57,7 +58,7 @@ export async function farmFeatureAccess() {
 export async function premiumFeatureResponse() {
   const { state } = await farmFeatureAccess().catch(() => ({ state: "UNAVAILABLE" as const }));
   const headers = { "Cache-Control": "private, no-store" };
-  if (state === "PREMIUM" || state === "EXISTING") return null;
+  if (state === "PREMIUM" || state === "STANDARD" || state === "EXISTING") return null;
   if (state === "FREE") return NextResponse.json({ error: "This feature requires Flockence Premium.", code: "UPGRADE_REQUIRED" }, { status: 403, headers });
   return NextResponse.json({ error: "The farm plan could not be verified. Try again shortly." }, { status: 503, headers });
 }

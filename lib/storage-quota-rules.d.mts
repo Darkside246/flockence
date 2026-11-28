@@ -1,0 +1,11 @@
+export type StoragePlan = "FREE" | "STANDARD" | "PREMIUM";
+export type StorageStatus = { used: number; limit: number; percent: number; level: "ok" | "warn" | "full" };
+export const GB: number;
+export const DEFAULT_STORAGE_GB: Record<StoragePlan, number>;
+export const PRUNE_MIN_AGE_DAYS: number;
+export const WARN_AT: number;
+export const PRUNE_TARGET: number;
+export function storageLimitBytes(plan: string, overridesText?: string): number;
+export function storageStatus(usedBytes: number, limitBytes: number): StorageStatus;
+export function bytesToFree(usedBytes: number, extraBytes: number, limitBytes: number): number;
+export function formatBytes(bytes: number): string;
