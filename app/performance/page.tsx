@@ -55,7 +55,7 @@ export default function PerformancePage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Performance</h1><p>Actual flock performance from the records already entered in Flockence. Broilers and layers use different performance logic. Missing measurements stay visible instead of becoming invented estimates.</p></div><div className="ds-actions"><a className="button" href="/operations">Daily round</a><a className="button button-primary" href="/reports">Reports</a></div></div></header>
     <Nav/>
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
 
       {error && <section className="section card" role="alert"><strong>Performance data unavailable</strong><p>{error}</p></section>}
 

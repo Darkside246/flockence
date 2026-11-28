@@ -77,7 +77,7 @@ export default function Home(){
   // a dense two-column grid. Each section still follows the owner's dashboard choices (show()).
   return <div className="shell">
     <Nav/>
-    <main className="main dash">
+    <main id="main" tabIndex={-1} className="main dash">
       {show("hero") && <DashboardHero chips={heroChips} actions={quick} />}
       <p className="guide-note" data-guide-only>Guided view: the essentials and what needs your attention today. Change your view level any time under Appearance.</p>
 

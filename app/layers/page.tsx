@@ -356,7 +356,7 @@ export default function LayersPage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Egg production</h1><p>Daily collection, grading and traceable egg stock. Record each flock once; reconciled grades become traceable inventory automatically.</p></div><div className="ds-actions"><a className="button" href="/batches">Manage flocks</a><a className="button button-primary" href="/inventory">View egg inventory</a></div></div></header>
     <Nav/>
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
 
       {error && <section className="section card" role="alert"><strong>Could not complete that action</strong><p>{error}</p></section>}
       {message && <section className="section card" role="status"><strong>{message}</strong><p>Product cost basis is not automatically estimated. Configure prices and complete layer feed/overhead allocation before using margin reports.</p></section>}

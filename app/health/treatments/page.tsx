@@ -75,7 +75,7 @@ export default function TreatmentsPage() {
         </div>
       </header>
       <Nav />
-      <main className="main">
+      <main id="main" tabIndex={-1} className="main">
         <section className="hero">
           <div className="hero-kicker">Flock care</div>
           <h2>New treatment record.</h2>

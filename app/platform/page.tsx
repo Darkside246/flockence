@@ -15,7 +15,7 @@ export default async function PlatformPage() {
   const status = platformStatus();
   const rows = await platformFarmOverview();
   const totals = platformTotals(rows);
-  return <main className="main">
+  return <main id="main" tabIndex={-1} className="main">
     <section className="section card">
       <h1>Platform console</h1>
       <p>Every farm on this Flockence. Counts only; farm records stay with each farm. Visible to platform administrators only.</p>

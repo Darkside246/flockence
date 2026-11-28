@@ -47,7 +47,7 @@ export default function TeamSignupPage() {
     }
   }
 
-  return <main className="auth-shell"><section className="auth-card">
+  return <main id="main" tabIndex={-1} className="auth-shell"><section className="auth-card">
     <div className="auth-heading"><h1>{invite ? "Join " + invite.farmName : "Join your Flockence team"}</h1>
       <p>{invite ? "Your farm role is " + farmRoleLabels[invite.role] + "." : error ? "" : "Checking your invitation…"}</p>
     </div>

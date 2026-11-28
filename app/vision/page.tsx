@@ -247,7 +247,7 @@ export default function VisionPage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Farm Vision</h1><p>See the flock. Find what needs checking. Photograph the pen, birds, feed, water or equipment for visible conditions and practical checks; it does not confirm disease.</p></div><span className="badge">AI VISION</span></div></header>
     <Nav />
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
       <form className="card vision-check" onSubmit={analyze}>
         <div className="vision-check-main">
         <div className="section-head"><div><h3>1. What are you photographing?</h3><p>Choose the closest match so the inspection knows what to focus on.</p></div></div>

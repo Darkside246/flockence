@@ -109,7 +109,7 @@ export default function FarmSetupPage() {
 
   return <div className="shell">
     <Nav />
-    <main className="main farm-setup">
+    <main id="main" tabIndex={-1} className="main farm-setup">
       <header className="setup-banner">
         <div><Link href="/settings">Back to Settings</Link><h1>Set up your farm</h1>
           <p>Choose how you raise poultry and how you prefer to measure.</p></div>

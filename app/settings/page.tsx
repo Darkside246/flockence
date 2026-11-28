@@ -119,7 +119,7 @@ export default function SettingsPage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Settings</h1><p>Manage your account and farm preferences.</p></div></div></header>
     <Nav />
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
       <div className="settings-layout">
       <nav aria-label="Settings categories" className="settings-nav">
         {visibleSections.map(([key, label]) => <a key={key} href={"#" + key}
