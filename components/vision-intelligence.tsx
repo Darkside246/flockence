@@ -52,6 +52,9 @@ export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras:
   const [report, setReport] = useState<Report | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // The report first; alert, email, people and counter settings in their own tabs (2026 redesign: the settings sat
+  // between the report controls and the report and pushed it far down the page). All stay mounted.
+  const [tab, setTab] = useState<"report" | "alerts" | "people" | "counter">("report");
 
   useEffect(() => {
     fetch("/api/vision/pens", { cache: "no-store" }).then(r => r.ok ? r.json() : []).then(d => setPens(Array.isArray(d) ? d : d?.pens ?? [])).catch(() => {});
@@ -74,7 +77,13 @@ export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras:
 
   const options = scope === "pen" ? pens : scope === "batch" ? batches : scope === "camera" ? cameras.map(c => ({ id: c.name, name: c.name })) : [];
 
+  const tabs = [["report", "Report"], ["alerts", "Alerts and daily email"], ["people", "People"], ["counter", "Bird counter"]] as const;
   return <div className="vision-intel">
+    <div className="ds-tabs" role="tablist" aria-label="Farm Vision reports and settings">{tabs.map(([id, label]) => <button key={id} type="button" role="tab" className="ds-tab" aria-selected={tab === id} aria-controls={"vision-intel-" + id} onClick={() => setTab(id)}>{label}</button>)}</div>
+    <div role="tabpanel" id="vision-intel-alerts" hidden={tab !== "alerts"} className="vision-intel-panel"><VisionAlerts /><VisionDailyReport /></div>
+    <div role="tabpanel" id="vision-intel-people" hidden={tab !== "people"} className="vision-intel-panel"><VisionPeople /></div>
+    <div role="tabpanel" id="vision-intel-counter" hidden={tab !== "counter"} className="vision-intel-panel"><VisionDetector /></div>
+    <div role="tabpanel" id="vision-intel-report" hidden={tab !== "report"} className="vision-intel-panel">
     <div className="card vision-intel-controls">
       <label>Report on<select value={scope} onChange={e => { setScope(e.target.value); setTarget(""); if (e.target.value !== "batch" && period === "batch") setPeriod("7d"); }}>
         <option value="farm">Whole farm</option><option value="pen">One pen</option><option value="batch">One batch</option>{cameras.length > 0 && <option value="camera">One camera</option>}
@@ -89,10 +98,6 @@ export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras:
       {period === "custom" && <><label>From<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>To<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label></>}
       {!onVisionPage && <a className="button" href="/vision">Run a check or review findings</a>}
     </div>
-    <VisionAlerts />
-    <VisionDailyReport />
-    <VisionPeople />
-    <VisionDetector />
 
     {error && <p role="alert" className="notice">{error}</p>}
     {loading && <p>Building the report…</p>}
@@ -152,5 +157,6 @@ export function VisionIntelligence({ cameras, onVisionPage = false }: { cameras:
 
       <section className="card"><h3>Limits of this report</h3><ul>{report.limitations.map((l, i) => <li key={i}>{l}</li>)}</ul></section>
     </>}
+    </div>
   </div>;
 }

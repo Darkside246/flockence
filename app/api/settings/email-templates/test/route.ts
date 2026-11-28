@@ -4,11 +4,20 @@ import { SETTINGS_ROLES } from "@/lib/farm-roles";
 import { currentUserOrRoleResponse } from "@/lib/current-user";
 import { isTrustedAppOrigin } from "@/lib/request-origin";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { sendEmail } from "@/lib/mail";
+import { sendEmailWithResult } from "@/lib/mail";
 import { editableCategories, loadEmailTemplate } from "@/lib/email-template-store";
 import { applyEmailTemplate, isEmailCategory, sampleMessage, type EmailCategoryId } from "@/lib/email-templates.mjs";
 
 const headers = { "Cache-Control": "private, no-store" };
+/** A plain next step for the reasons Resend gives most often. */
+function hintFor(status: number | null, reason: string | null) {
+  const text = (reason ?? "").toLowerCase();
+  if (status === 401 || text.includes("api key")) return " The administrator should replace RESEND_API_KEY in the server environment with a key that starts with re_, then restart.";
+  if (text.includes("domain") || text.includes("verify")) return " Check that the sending domain shows Verified in Resend and that RESEND_FROM uses that domain.";
+  if (status === 429) return " Too many emails at once; try again in a minute.";
+  return "";
+}
+
 const schema = z.object({ category: z.string().refine(isEmailCategory) });
 
 /**
@@ -38,8 +47,8 @@ export async function POST(request: Request) {
   const applied = applyEmailTemplate(category, sample, template, { farm });
   const message = { ...applied, subject: "[Test] " + applied.subject };
   try {
-    const sent = await sendEmail(user.email, message);
-    if (!sent) return NextResponse.json({ sent: false, error: "Resend did not accept the email. Check the sending domain and RESEND_FROM address." }, { status: 502, headers });
+    const sent = await sendEmailWithResult(user.email, message);
+    if (!sent.ok) return NextResponse.json({ sent: false, error: "Resend did not accept the email: " + (sent.reason ?? "no reason given") + hintFor(sent.status, sent.reason) }, { status: 502, headers });
     return NextResponse.json({ sent: true, to: user.email }, { headers });
   } catch {
     return NextResponse.json({ sent: false, error: "The email service did not answer. Try again in a minute." }, { status: 502, headers });

@@ -1,4 +1,5 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { ensureStorageRoom } from "@/lib/storage-quota";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
@@ -100,6 +101,9 @@ export async function runVisionInspection(request: InspectionRequest): Promise<I
     const batchContext = context.text;
     const bytes = capture?.bytes ?? upload?.bytes ?? null;
     if (!bytes) return { ok: false, status: 502, error: "The camera could not deliver a usable image." };
+    // The farm's storage limit (lib/storage-quota-rules.mjs), checked before the paid vision call.
+    const room = await ensureStorageRoom(bytes.byteLength, visionStorageDir());
+    if (!room.ok) return { ok: false, status: 409, error: room.error };
     const current = (liveCapture?.samples ?? [bytes]).map(frame => ({ mimeType, base64: frame.toString("base64") }));
     const earlier = capture ? await earlierCameraPicture(capture.camera.name, capture.capturedAt).catch(() => null) : null;
     const images = earlier ? [{ mimeType: earlier.mimeType, base64: earlier.base64 }, ...current] : current;
