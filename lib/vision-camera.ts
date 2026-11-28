@@ -2,17 +2,18 @@ import { blinkConfigured, blinkFetch } from "@/lib/blink-sidecar";
 import { cameraViewRoles } from "@/lib/camera-guard";
 import type { FarmAccessRole } from "@/lib/current-user";
 import { boundedBody } from "@/lib/camera-gateway-http";
+import { wyzeCloudEnabled, wyzeCloudSnapshot, wyzeVisionCameras } from "@/lib/wyze-cloud";
 
 export const maxVisionImageBytes = 8 * 1024 * 1024;
 
-export type VisionCamera = { name: string; source: "blink" | "rtsp"; deviceKey: string };
+export type VisionCamera = { name: string; source: "blink" | "rtsp" | "wyze"; deviceKey: string };
 
 export function visionCameraRoles(): FarmAccessRole[] {
   return cameraViewRoles().filter((role) => role === "OWNER" || role === "MANAGER");
 }
 
 export function visionCamerasEnabled() {
-  return process.env.FLOCKENCE_CAMERA_VISION === "on" && blinkConfigured();
+  return process.env.FLOCKENCE_CAMERA_VISION === "on" && (blinkConfigured() || wyzeCloudEnabled());
 }
 
 export function visionLiveEnabled() {
@@ -26,6 +27,13 @@ export function validVisionCameraName(name: unknown): name is string {
 
 export async function visionCameras(): Promise<VisionCamera[]> {
   if (!visionCamerasEnabled()) return [];
+  const blink = blinkConfigured() ? await blinkVisionCameras() : [];
+  // Wyze cameras signed in through the farm's Wyze account (lib/wyze-cloud.ts). A Wyze outage never hides the others.
+  const wyze = await wyzeVisionCameras(blink.map((c) => c.name)).catch(() => []);
+  return [...blink, ...wyze];
+}
+
+async function blinkVisionCameras(): Promise<VisionCamera[]> {
   const response = await blinkFetch("/cameras", {}, 5000);
   const raw = response.ok ? await boundedBody(response, 128 * 1024) : null;
   if (!raw) throw new Error("Camera list is unavailable.");
@@ -45,6 +53,10 @@ export async function visionCameraByName(name: string) {
 }
 
 export async function captureVisionCamera(camera: VisionCamera) {
+  if (camera.source === "wyze") {
+    const shot = await wyzeCloudSnapshot(camera.deviceKey, maxVisionImageBytes);
+    return shot ? { camera, bytes: shot.bytes, capturedAt: shot.takenAt ?? new Date() } : null;
+  }
   const path = "/cameras/" + encodeURIComponent(camera.name) + "/snapshot?fresh=true";
   const response = await blinkFetch(path, {}, 20_000);
   if (!response.ok || response.headers.get("content-type")?.split(";")[0] !== "image/jpeg") return null;
@@ -55,6 +67,7 @@ export async function captureVisionCamera(camera: VisionCamera) {
 
 /** Saved clips from the last 24 hours for one camera (Blink cloud, the server's recordings and the archive). */
 export async function recentCameraClips(cameraName: string) {
+  if (!blinkConfigured()) return [];
   const response = await blinkFetch("/clips?period=1&camera=" + encodeURIComponent(cameraName), {}, 20_000);
   const raw = response.ok ? await boundedBody(response, 512 * 1024) : null;
   if (!raw) return [];
@@ -82,6 +95,8 @@ export async function recordedClipFrames(clip: { source: string; media: string }
 }
 
 export async function captureVisionVideoSample(camera: VisionCamera) {
+  // Wyze cloud pictures are single stills; a video sample needs the camera service.
+  if (camera.source === "wyze" || !blinkConfigured()) return null;
   const path = "/cameras/" + encodeURIComponent(camera.name) + "/inspection-sample";
   const response = await blinkFetch(path, { method: "POST" }, 58_000);
   const raw = response.ok ? await boundedBody(response, 1100 * 1024) : null;

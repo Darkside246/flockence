@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@/components/auth-gate";
 
-type Camera = { name: string; source: "blink" | "rtsp"; liveSampling?: boolean; pen?: { id: string; name: string } | null };
+type Camera = { name: string; source: "blink" | "rtsp" | "wyze"; liveSampling?: boolean; pen?: { id: string; name: string } | null };
 type CameraPlan = { everyHours: number; mode: "video" | "still"; category: string };
 type Schedule = { enabled: boolean; cameras: Record<string, CameraPlan>; dailyCap: number; keepDays: number; quietStart: string; quietEnd: string; recordings?: boolean };
 type CameraState = {
