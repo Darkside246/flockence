@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Nav } from "@/components/nav";
 import { useSession } from "@/components/auth-gate";
+import { TeamPenAccess } from "@/components/team-pen-access";
 
 import { canInviteRole, farmRoleLabels as roleLabels, type FarmRole as UserRole, type InviteRole } from "@/lib/farm-roles";
 
@@ -142,6 +143,8 @@ export default function TeamPage() {
         </div>}
       </section>
 
+      <TeamPenAccess members={members}/>
+
       <section className="section card">
         <div className="section-head"><div><div className="hero-kicker">Invite securely</div><h3>Invite a team member</h3><p>Send a single-use link. The recipient enters their name and sets a password to join this farm.</p></div></div>
         <form className="form grid2" onSubmit={createInvite}>
@@ -168,7 +171,7 @@ export default function TeamPage() {
         <div className="grid2">
           <div><strong>Owner</strong><p className="muted">Full farm access, including team roles, settings, financial configuration, stock setup and operational records.</p></div>
           <div><strong>Supervisor</strong><p className="muted">Manage most farm setup and operations. Can invite Farm Hands and Read Only users. Owner and Supervisor role changes require an Owner.</p></div>
-          <div><strong>Farm Hand</strong><p className="muted">Record daily flock checks, mortality, weights, feed usage, egg collections and routine operational events.</p></div>
+          <div><strong>Farm Hand</strong><p className="muted">Record daily flock checks, mortality, weights, feed usage, egg collections and routine operational events. Can be limited to the pens they work in.</p></div>
           <div><strong>Read Only</strong><p className="muted">Review records and reports without submitting changes.</p></div>
         </div>
       </section>

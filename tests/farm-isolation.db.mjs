@@ -1028,3 +1028,37 @@ test("farm deletion: a due request removes the farm and everything in it, and no
   }
   assert.ok(await runAsFarm(A, () => prisma.batch.findUnique({ where: { id: keepA.id } })), "another farm's records stay");
 });
+
+test("pen access: a Farm Hand limited to some pens records only for flocks placed in them", async () => {
+  const { penRecordDenied, savePenAssignment, penAssignment } = await import("../lib/pen-access.ts");
+  const hand = { id: "pen-hand", role: "WORKER" };
+  await runAsFarm(A, async () => {
+    await prisma.user.deleteMany({ where: { id: hand.id } });
+    await prisma.user.create({ data: { id: hand.id, name: "Pen hand", email: "pen-hand@example.test", role: "WORKER" } });
+    const north = await prisma.setting.create({ data: { key: "PEN::pen-hand::north", value: JSON.stringify({ name: "North pen" }) } });
+    const south = await prisma.setting.create({ data: { key: "PEN::pen-hand::south", value: JSON.stringify({ name: "South pen" }) } });
+    const inNorth = await prisma.batch.create({ data: { ...batchData("North flock"), placementHouse: "North pen" } });
+    const inSouth = await prisma.batch.create({ data: { ...batchData("South flock"), placementHouse: "South pen" } });
+    const unplaced = await prisma.batch.create({ data: batchData("Unplaced flock") });
+
+    // No assignment: every pen, as before.
+    assert.equal(await penRecordDenied(hand, { batchId: inSouth.id }), null);
+    assert.deepEqual(await savePenAssignment(hand.id, [north.id, "not-a-pen"]), [north.id]);
+    assert.deepEqual(await penAssignment(hand.id), [north.id]);
+    assert.equal(await penRecordDenied(hand, { batchId: inNorth.id }), null);
+    assert.equal((await penRecordDenied(hand, { batchId: inSouth.id }))?.status, 403);
+    assert.equal((await penRecordDenied(hand, { batchId: unplaced.id }))?.status, 403);
+    assert.equal((await penRecordDenied(hand, {}))?.status, 403);
+    assert.equal(await penRecordDenied(hand, {}, true), null);
+    assert.equal((await penRecordDenied(hand, { penId: south.id }))?.status, 403);
+    // Supervisors and owners are never limited.
+    assert.equal(await penRecordDenied({ id: hand.id, role: "MANAGER" }, { batchId: inSouth.id }), null);
+    // Clearing the assignment gives every pen back.
+    assert.deepEqual(await savePenAssignment(hand.id, []), []);
+    assert.equal(await penAssignment(hand.id), null);
+    assert.equal(await penRecordDenied(hand, { batchId: inSouth.id }), null);
+  });
+  // Another farm never sees this farm's assignment.
+  await runAsFarm(A, () => savePenAssignment(hand.id, []));
+  assert.equal(await runAsFarm(B, () => penAssignment(hand.id)), null);
+});
