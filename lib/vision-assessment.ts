@@ -70,7 +70,7 @@ export const visionResultSchema = z.object({
 
 const source = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("UPLOAD") }),
-  z.object({ kind: z.literal("CAMERA"), name: z.string().min(1).max(128), provider: z.enum(["blink", "rtsp"]) }),
+  z.object({ kind: z.literal("CAMERA"), name: z.string().min(1).max(128), provider: z.enum(["blink", "rtsp", "wyze"]) }),
 ]);
 
 export const visionAssessmentSchema = z.object({

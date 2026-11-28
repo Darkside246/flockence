@@ -35,7 +35,7 @@ type ResearchReport = {
   behavior?: { clips: number; accuracy: number; macroF1: number };
 };
 const score = (ratio: number) => (ratio * 100).toFixed(1) + "%";
-type VisionCamera = { name: string; source: "blink" | "rtsp"; liveSampling?: boolean; pen?: { id: string; name: string } | null };
+type VisionCamera = { name: string; source: "blink" | "rtsp" | "wyze"; liveSampling?: boolean; pen?: { id: string; name: string } | null };
 type Batch = { id: string; name: string };
 type VisionResult = { summary?: string; confidence?: string; severity?: string; observations?: { title?: string; detail?: string; confidence?: string }[]; concerns?: { title?: string; whyItMatters?: string }[]; checks?: string[]; escalate?: boolean; escalationReason?: string; medicalDisclaimer?: string };
 type Assessment = { capture?: { mode: "VIDEO_SAMPLE"; frames: 3 }; source: { kind: "UPLOAD" | "CAMERA"; name?: string }; status: string; pen?: { id: string; name: string } };
@@ -272,7 +272,7 @@ export default function VisionPage() {
           }}>
             <option value="">Choose a connected camera</option>
             {cameras.map((camera) => <option key={camera.name} value={camera.name}>
-              {camera.name} ({camera.source === "blink" ? "Blink" : "Network camera"})
+              {camera.name} ({camera.source === "blink" ? "Blink" : camera.source === "wyze" ? "Wyze" : "Network camera"})
             </option>)}
           </select></label>
           {selectedCamera?.liveSampling && selectedCamera.pen && <label>Camera inspection type
