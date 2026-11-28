@@ -1,6 +1,7 @@
 "use client";
 
 import { WyzeBridgeLink } from "@/components/wyze-bridge-link";
+import { WyzeCloudSignIn } from "@/components/wyze-cloud-sign-in";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -78,10 +79,11 @@ export function SettingsCameraProviders() {
       </label>
     </section>
 
+    {provider === "wyze" && <WyzeCloudSignIn />}
     {provider === "wyze" && <section className="section card">
-      <h2>Wyze sign-in</h2>
-      <p>Sign in on the Wyze website. To see a Wyze camera in Flockence, connect its snapshot gateway below.</p>
-      <a className="button button-primary" href="https://my.wyze.com/live" target="_blank" rel="noopener noreferrer">Open Wyze sign-in</a>
+      <h2>Live Wyze video</h2>
+      <p>Watch live on the Wyze website, or connect an on-farm bridge below for a camera feed inside Flockence.</p>
+      <a className="button" href="https://my.wyze.com/live" target="_blank" rel="noopener noreferrer">Open Wyze live view</a>
       <p><a href="https://support.wyze.com/hc/en-us/articles/360026245231-Wyze-Cam-RTSP" target="_blank" rel="noopener noreferrer">Check Wyze model compatibility</a></p>
     </section>}
 
