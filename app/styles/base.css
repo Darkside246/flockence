@@ -153,6 +153,7 @@ a.card:hover { border-color: var(--ds-border-strong); box-shadow: var(--elev-2);
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr)); gap: 1px; overflow: hidden; background: var(--ds-border); border: 1px solid var(--ds-border); border-radius: var(--ds-card-radius); }
 .stats > div { background: var(--ds-surface); padding: var(--space-3) var(--space-4); min-width: 0; }
 .stats span { display: block; color: var(--ds-text-2); font-size: var(--text-xs); margin-bottom: 2px; }
+.stats small { display: block; color: var(--ds-text-2); font-size: 11px; margin-top: 2px; }
 .stats strong { display: block; font-size: var(--text-xl); font-weight: var(--weight-heavy); letter-spacing: -.01em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 
 /* Wide tables scroll inside their own box instead of widening the page. */

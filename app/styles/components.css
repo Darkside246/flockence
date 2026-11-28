@@ -260,3 +260,26 @@
 .ops-transport .ds-chip { display: inline-flex; margin-top: 4px; }
 .ops-note { padding: var(--space-3) var(--space-4); border-inline-start: 3px solid var(--ds-border-strong); color: var(--ds-text-2); font-size: var(--text-sm); }
 .ops-note h3 { margin: 0 0 4px; font-size: var(--text-sm); color: var(--ds-text); }
+
+/* ======================= Pages: House and Pens (phase 8) ======================= */
+/* Recommended layout: lanes across the house; each lane's first letter is a bold badge and the
+   rest of the word follows it ("[F]eed"). */
+.house-plan { list-style: none; margin: 0; padding: var(--space-2); display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; border: 1px dashed var(--ds-border-strong); border-radius: var(--ds-card-radius); background: var(--ds-surface-2); }
+.house-cell { --lane: var(--ds-accent); display: flex; align-items: center; gap: 2px; min-height: 64px; padding: var(--space-2); border-radius: var(--radius-md); background: color-mix(in srgb, var(--lane) 12%, var(--ds-surface)); border: 1px solid color-mix(in srgb, var(--lane) 35%, var(--ds-border)); border-top-width: 3px; color: var(--ds-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.house-cell.feed { --lane: var(--accent-secondary); }
+.house-cell.water { --lane: var(--ds-info); }
+.house-cell.space { --lane: var(--ds-success); }
+.house-cell.air { --lane: var(--ds-text-2); }
+.house-cell b { flex: none; display: inline-grid; place-items: center; width: 26px; height: 26px; margin-right: 2px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--lane) 30%, var(--ds-surface)); border: 1.5px solid var(--lane); color: var(--ds-text); font-size: var(--text-md); font-weight: var(--weight-heavy); line-height: 1; }
+.house-cell span { min-width: 0; overflow-wrap: anywhere; }
+.house-flow { margin-top: var(--space-3); }
+.house-issues { margin: 0; padding: 0; list-style: none; display: grid; }
+.house-issues li { position: relative; padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5); font-size: var(--text-sm); border-bottom: 1px solid var(--ds-border); }
+.house-issues li:last-child { border-bottom: 0; }
+.house-issues li::before { content: ""; position: absolute; left: 6px; top: 15px; width: 7px; height: 7px; border-radius: 50%; background: var(--ds-warning); }
+.house-standards .grid2 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.house-standards p { margin: 2px 0 0; }
+.pen-picker { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 var(--space-3); }
+.pen-pick { min-height: var(--control-h-sm); padding: 0 var(--space-3); border: 1px solid var(--ds-border-strong); border-radius: var(--radius-pill); background: var(--ds-surface); color: var(--ds-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+.pen-pick:hover { border-color: var(--ds-accent); }
+.pen-pick[aria-pressed="true"] { background: var(--ds-accent-soft); border-color: var(--ds-accent); color: var(--text-link, var(--ds-accent)); }
