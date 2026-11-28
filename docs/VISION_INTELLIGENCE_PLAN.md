@@ -96,6 +96,14 @@ frames on purpose, and the reports say how much footage was actually analysed.
 - A CPU bird detector on the VPS for visible counts, positions and still-bird tracking across samples. The general
   model keeps describing the pen.
 
+- **Built (28 Nov 2026):** Farm Vision → Accuracy. Owners and supervisors label recent checks with the birds really in view, dead or down birds and floor eggs. The tab shows:
+  - the average count miss for Farm Vision and the bird counter
+  - dead birds found, dead birds missed, and false alarms
+  - how many reviewed dead-bird alerts were real
+  - a CSV of the labelled set, for evaluating the detector
+
+  New checks save the model's own counts (`seen`), and older checks are read back from their notes. Labels are kept in `VISION_LABEL_V1::<observationId>` settings and never change farm records. Measuring the licensed datasets and training or adopting the CPU detector remain to do.
+
 **Phase 3: recordings and time-of-day sampling.** Sample archived clips across morning, feeding, midday, evening and
 night. Deduplicate, keep short evidence around findings, and disclose missing recordings and camera clock drift.
 
