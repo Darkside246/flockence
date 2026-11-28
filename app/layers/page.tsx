@@ -354,13 +354,9 @@ export default function LayersPage() {
   }
 
   return <div className="shell">
-    <header className="topbar"><div className="brand"><div><h1>Egg production</h1><p>Daily collection, grading and traceable egg stock.</p></div><span className="badge">LAYER WORKSPACE</span></div></header>
+    <header className="topbar"><div className="brand"><div><h1>Egg production</h1><p>Daily collection, grading and traceable egg stock. Record each flock once; reconciled grades become traceable inventory automatically.</p></div><div className="ds-actions"><a className="button" href="/batches">Manage flocks</a><a className="button button-primary" href="/inventory">View egg inventory</a></div></div></header>
     <Nav/>
     <main className="main">
-      <section className="dashboard-head">
-        <div><div className="hero-kicker">Layer operations</div><h2>Today's egg round</h2><p>Record each flock once. Reconciled grades become traceable inventory automatically.</p></div>
-        <div className="header-actions"><a className="button" href="/batches">Manage flocks</a><a className="button button-primary" href="/inventory">View egg inventory</a></div>
-      </section>
 
       {error && <section className="section card" role="alert"><strong>Could not complete that action</strong><p>{error}</p></section>}
       {message && <section className="section card" role="status"><strong>{message}</strong><p>Product cost basis is not automatically estimated. Configure prices and complete layer feed/overhead allocation before using margin reports.</p></section>}
@@ -374,38 +370,11 @@ export default function LayersPage() {
         <div className="card metric-card"><div className="metric-label">Non-saleable eggs</div><div className="metric-value">{selectedDayRows.length && missingLayerCollections === 0 ? selectedDayNonSaleable.toLocaleString() : "—"}</div><div className="metric-foot">{missingLayerCollections > 0 ? `${missingLayerCollections} laying flock collection(s) missing` : selectedDayWithdrawalCondemned > 0 ? `${selectedDayWithdrawalCondemned.toLocaleString()} condemned under withdrawal` : "Dirty, cracked, floor and rejected"}</div></div>
       </section>
 
-      <section className="section card">
-        <div className="section-head">
-          <div><div className="hero-kicker">Production insight</div><h3>Seven-day egg production</h3><p>Window ending {date}. Rates use only complete, reconciled collections and their recorded live-hen counts.</p></div>
-          <div><strong>{trendTotalEggs.toLocaleString()} eggs</strong><p className="muted">total recorded in window</p></div>
-        </div>
-        <div className="layer-trend" role="group" aria-label="Daily egg collection for the seven days ending on the selected date">
-          {trendDays.map((day) => {
-            const height = day.eggs > 0 ? Math.max(5, (day.eggs / trendMaxEggs) * 100) : 0;
-            const label = new Date(Number(day.date.slice(0,4)), Number(day.date.slice(5,7))-1, Number(day.date.slice(8,10))).toLocaleDateString(undefined, { weekday: "short" });
-            return <div className="layer-trend-day" key={day.date} aria-label={`${day.date}: ${day.eggs} eggs`}>
-              <strong className="layer-trend-count">{day.eggs > 0 ? day.eggs.toLocaleString() : "—"}</strong>
-              <div className="layer-trend-track"><div className="layer-trend-bar" style={{ height: `${height}%` }}/></div>
-              <span className="layer-trend-label">{label}</span>
-            </div>;
-          })}
-        </div>
-        <div className="layer-trend-table">
-          <div className="layer-trend-table-head"><span>Day</span><span>Hen-day</span><span>Saleable</span><span>Coverage</span></div>
-          {trendDays.map((day) => <div className="layer-trend-table-row" key={day.date}>
-            <strong>{day.date}</strong>
-            <span>{day.henDayRate == null ? "—" : day.henDayRate.toFixed(1) + "%"}</span>
-            <span>{day.saleableRate == null ? "—" : day.saleableRate.toFixed(1) + "%"}</span>
-            <span>{day.layingFlocks === 0 ? "No lay flocks" : day.missing > 0 ? `${day.missing} missing` : `${day.layingFlocks}/${day.layingFlocks} flocks`}</span>
-          </div>)}
-        </div>
-        <p className="muted">A dash means no complete denominator or no production record. The app does not replace missing flock counts or collections with estimates.</p>
-      </section>
-
-      <section className="section card">
+      <div className="layers-layout">
+      <section className="card layers-capture">
         <div className="section-head"><div><div className="hero-kicker">Fast capture</div><h3>{selectedCollection ? "Edit daily collection" : "Record a flock collection"}</h3><p>Enter the egg outcomes, then split saleable eggs by size. A saved flock/date opens with its recorded values so you can make a controlled correction.</p></div><span className="badge">ONE ENTRY</span></div>
         {loading ? <div className="empty">Loading layer flocks and collections…</div> : layerBatches.length === 0 ? <div className="empty"><strong>No layer flocks yet</strong><span>Create a flock and set its production type to Layer. Broiler flocks stay in the meat-production workflow.</span><p><a href="/batches" className="button button-primary">Create a layer flock</a></p></div> : <div className="form">
-          <div className="card form">
+          <div className="form layers-stage">
             <div className="section-head"><div><h3>Flock lifecycle stage</h3><p>Egg collection is enabled only when the flock is in the Laying stage.</p></div><span className="badge">{selectedBatch?.layerStage ? selectedBatch.layerStage.replaceAll("_", " ") : "STAGE NOT SET"}</span></div>
             <label>Layer flock
               <select value={batchId} onChange={(event) => selectLayerBatch(event.target.value)} required>
@@ -433,19 +402,19 @@ export default function LayersPage() {
             </div>}
           </div>
           {stageOnCollectionDate !== "LAYING" && <div className="card"><strong>Egg collection is locked for this flock and date.</strong><p className="muted">The selected date must fall within the flock's Laying stage. Historical collections can still be corrected when the flock has since moved to Spent or Closed.</p></div>}
-          <form className="form" onSubmit={submit}>
+          <form className="form layers-collection" onSubmit={submit}>
           <div className="grid2">
             <label>Collection date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} required/></label>
             <label>Live hens on this date<input type="number" min="1" step="1" value={liveHensOnDate} onChange={(event) => setLiveHensOnDate(event.target.value)} required/><span className="muted">Worked out from the flock's records for this date (birds placed and added, less deaths, culls and birds sent). Change it only if you counted the hens.</span></label>
           </div>
           <div className="section-head"><div><h3>Egg outcome</h3><p>Use exclusive categories so every egg is counted once.</p></div><strong>{currentTotal.toLocaleString()} total eggs</strong></div>
-          <div className="grid">
+          <div className="ds-form-grid layers-counts">
             <label>Saleable eggs<input type="number" min="0" step="1" value={saleableEggs} onChange={(event) => updateSaleable(event.target.value)}/></label>
             <label>Dirty eggs<input type="number" min="0" step="1" value={dirtyEggs} onChange={(event) => setDirtyEggs(event.target.value)}/></label>
             <label>Cracked / broken<input type="number" min="0" step="1" value={crackedEggs} onChange={(event) => setCrackedEggs(event.target.value)}/></label>
             <label>Floor eggs<input type="number" min="0" step="1" value={floorEggs} onChange={(event) => setFloorEggs(event.target.value)}/></label>
           </div>
-          <div className="grid2">
+          <div className="ds-form-grid layers-counts">
             <label>Broken eggs<input type="number" min="0" step="1" value={brokenEggs} onChange={(event) => setBrokenEggs(event.target.value)}/></label>
             <label>Other rejected eggs<input type="number" min="0" step="1" value={rejectedEggs} onChange={(event) => setRejectedEggs(event.target.value)}/></label>
             <label>Kept for the house<input type="number" min="0" step="1" value={householdEggs} onChange={(event) => setHouseholdEggs(event.target.value)}/></label>
@@ -453,7 +422,7 @@ export default function LayersPage() {
             <label>Average egg weight (g), optional<input type="number" min="0.1" step="0.1" value={averageEggWeightG} onChange={(event) => setAverageEggWeightG(event.target.value)} placeholder="Sample average"/></label>
           </div>
           <div className="section-head"><div><h3>Saleable egg grades</h3><p>Ungraded is used until eggs are sized. Grade totals must equal saleable eggs.</p></div><strong>{gradeTotal.toLocaleString()} / {number(saleableEggs).toLocaleString()}</strong></div>
-          <div className="grid">
+          <div className="ds-form-grid layers-counts">
             {gradeOrder.map((grade) => <label key={grade}>{gradeLabels[grade]}
               <input type="number" min="0" step="1" value={grades[grade]} onChange={(event) => setGrades((current) => ({ ...current, [grade]: event.target.value }))}/>
             </label>)}
@@ -464,6 +433,36 @@ export default function LayersPage() {
           </form>
         </div>}
       </section>
+
+      <section className="card layers-trend">
+        <div className="section-head">
+          <div><div className="hero-kicker">Production insight</div><h3>Seven-day egg production</h3><p>Window ending {date}. Rates use only complete, reconciled collections and their recorded live-hen counts.</p></div>
+          <div><strong>{trendTotalEggs.toLocaleString()} eggs</strong><p className="muted">total recorded in window</p></div>
+        </div>
+        <div className="layer-trend" role="group" aria-label="Daily egg collection for the seven days ending on the selected date">
+          {trendDays.map((day) => {
+            const height = day.eggs > 0 ? Math.max(5, (day.eggs / trendMaxEggs) * 100) : 0;
+            const label = new Date(Number(day.date.slice(0,4)), Number(day.date.slice(5,7))-1, Number(day.date.slice(8,10))).toLocaleDateString(undefined, { weekday: "short" });
+            return <div className="layer-trend-day" key={day.date} aria-label={`${day.date}: ${day.eggs} eggs`}>
+              <strong className="layer-trend-count">{day.eggs > 0 ? day.eggs.toLocaleString() : "—"}</strong>
+              <div className="layer-trend-track"><div className="layer-trend-bar" style={{ height: `${height}%` }}/></div>
+              <span className="layer-trend-label">{label}</span>
+            </div>;
+          })}
+        </div>
+        <div className="layer-trend-table">
+          <div className="layer-trend-table-head"><span>Day</span><span>Hen-day</span><span>Saleable</span><span>Coverage</span></div>
+          {trendDays.map((day) => <div className="layer-trend-table-row" key={day.date}>
+            <strong>{day.date}</strong>
+            <span>{day.henDayRate == null ? "—" : day.henDayRate.toFixed(1) + "%"}</span>
+            <span>{day.saleableRate == null ? "—" : day.saleableRate.toFixed(1) + "%"}</span>
+            <span>{day.layingFlocks === 0 ? "No lay flocks" : day.missing > 0 ? `${day.missing} missing` : `${day.layingFlocks}/${day.layingFlocks} flocks`}</span>
+          </div>)}
+        </div>
+        <p className="muted">A dash means no complete denominator or no production record. The app does not replace missing flock counts or collections with estimates.</p>
+      </section>
+
+      </div>
 
       <section className="section">
         <div className="section-head"><div><div className="hero-kicker">Traceable production</div><h3>Recent egg collections</h3><p>Each grade links to an inventory lot. Sales and stock changes remain in the shared inventory ledger.</p></div><span className="badge">{collections.length} RECORDS</span></div>
