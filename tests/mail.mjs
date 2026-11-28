@@ -22,3 +22,17 @@ test("welcome email uses the configured verified sender and never blocks on disa
   assert.equal(await sendWelcomeEmail("owner@example.test", "fixture"), true);
   assert.equal(globalThis.fetch.mock.callCount(), 1);
 });
+
+test("a refused email returns Resend's reason and logs it without the key or the full address", async (t) => {
+  const { sendEmailWithResult } = await import("../lib/mail.ts");
+  t.mock.method(globalThis, "fetch", async () => new Response(JSON.stringify({ message: "API key is invalid", name: "validation_error", statusCode: 401 }), { status: 401 }));
+  const warned = [];
+  t.mock.method(console, "warn", (line) => warned.push(String(line)));
+  process.env.RESEND_API_KEY = "ci-test-secret";
+  process.env.RESEND_FROM = "Flockence <noreply@example.test>";
+  const result = await sendEmailWithResult("owner@example.test", { subject: "x", text: "y" });
+  assert.deepEqual(result, { ok: false, status: 401, reason: "API key is invalid" });
+  assert.equal(warned.length, 1);
+  assert.match(warned[0], /401 API key is invalid/);
+  assert.ok(!warned[0].includes("ci-test-secret") && !warned[0].includes("owner@"), warned[0]);
+});
