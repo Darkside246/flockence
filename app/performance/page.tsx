@@ -53,13 +53,9 @@ export default function PerformancePage() {
   ], [data]);
 
   return <div className="shell">
-    <header className="topbar"><div className="brand"><div><h1>Performance</h1><p>Actual flock performance from the records already entered in Flockence.</p></div><span className="badge">ACTUAL DATA</span></div></header>
+    <header className="topbar"><div className="brand"><div><h1>Performance</h1><p>Actual flock performance from the records already entered in Flockence. Broilers and layers use different performance logic. Missing measurements stay visible instead of becoming invented estimates.</p></div><div className="ds-actions"><a className="button" href="/operations">Daily round</a><a className="button button-primary" href="/reports">Reports</a></div></div></header>
     <Nav/>
     <main className="main">
-      <section className="dashboard-head">
-        <div><div className="hero-kicker">Production intelligence</div><h2>Know what is happening before it becomes a problem.</h2><p>Broilers and layers use different performance logic. Missing measurements stay visible instead of becoming invented estimates.</p></div>
-        <div className="header-actions"><a className="button" href="/operations">Daily round</a><a className="button button-primary" href="/reports">Reports</a></div>
-      </section>
 
       {error && <section className="section card" role="alert"><strong>Performance data unavailable</strong><p>{error}</p></section>}
 
@@ -73,9 +69,9 @@ export default function PerformancePage() {
       <section className="section card">
         <div className="section-head">
           <div><div className="hero-kicker">Production selector</div><h3>Choose the production system</h3><p>The metrics below change with the production model. No broiler harvest assumptions are applied to layers.</p></div>
-          <div className="segmented">
-            <button className={view === "broilers" ? "active" : ""} onClick={() => setView("broilers")}>Broilers</button>
-            <button className={view === "layers" ? "active" : ""} onClick={() => setView("layers")}>Layers</button>
+          <div className="segmented" role="tablist" aria-label="Production system">
+            <button type="button" role="tab" aria-selected={view === "broilers"} className={view === "broilers" ? "selected" : ""} onClick={() => setView("broilers")}>Broilers</button>
+            <button type="button" role="tab" aria-selected={view === "layers"} className={view === "layers" ? "selected" : ""} onClick={() => setView("layers")}>Layers</button>
           </div>
         </div>
 
@@ -88,7 +84,7 @@ export default function PerformancePage() {
               <div><span>Interval FCR</span><strong>{row.intervalFcr == null ? "—" : row.intervalFcr.toFixed(2)}</strong></div>
               <div><span>Dressing yield</span><strong>{row.dressingYieldPercent == null ? "—" : row.dressingYieldPercent.toFixed(1) + "%"}</strong></div>
             </div>
-            <div className="stats" style={{marginTop:10}}>
+            <div className="stats perf-stats-2">
               <div><span>7-day feed</span><strong>{row.feedUsed7dKg.toFixed(1)} kg</strong></div>
               <div><span>7-day feed cost</span><strong>{money(row.feedCost7dMinor)}</strong></div>
               <div><span>Weight gap</span><strong>{row.weightGapKg == null ? "—" : (row.weightGapKg > 0 ? "+" : "") + row.weightGapKg.toFixed(2) + " kg"}</strong></div>
@@ -105,7 +101,7 @@ export default function PerformancePage() {
               <div><span>Saleable rate</span><strong>{row.sevenDay.saleableRate == null ? "—" : row.sevenDay.saleableRate.toFixed(1) + "%"}</strong></div>
               <div><span>Collection coverage</span><strong>{(row.sevenDay.collectionCoverage * 100).toFixed(0)}%</strong></div>
             </div>
-            <div className="stats" style={{marginTop:10}}>
+            <div className="stats perf-stats-2">
               <div><span>Feed used</span><strong>{row.sevenDay.feedKg.toFixed(1)} kg</strong></div>
               <div><span>Feed / dozen</span><strong>{row.sevenDay.feedKgPerDozen == null ? "—" : row.sevenDay.feedKgPerDozen.toFixed(2) + " kg"}</strong></div>
               <div><span>Feed cost / dozen</span><strong>{money(row.sevenDay.feedCostPerDozenMinor)}</strong></div>
@@ -121,7 +117,7 @@ export default function PerformancePage() {
         {alerts.length ? <div className="list">{alerts.slice(0, 20).map((item, index) => <div className="row" key={item.flock + "-" + item.signal + "-" + index}><div><strong>{item.flock}</strong><span>{item.type} · {signalLabel(item.signal)}</span></div><a className="button" href={item.type === "Layer" ? "/layers" : "/operations"}>Open</a></div>)}</div> : <div className="empty"><strong>No calculated warnings.</strong><span>Continue the normal daily round and keep measurements current.</span></div>}
       </section>
 
-      <section className="section card"><h3>Data quality rule</h3><p>{data?.dataQuality.note ?? "Performance uses recorded data only."}</p></section>
+      <section className="section ops-note"><h3>Data quality rule</h3><p>{data?.dataQuality.note ?? "Performance uses recorded data only."}</p></section>
     </main>
   </div>;
 }

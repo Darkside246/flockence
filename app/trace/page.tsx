@@ -25,7 +25,7 @@ export default function Trace(){
  const groups=useMemo(()=>{const map=new Map<string,TraceItem[]>();for(const item of data?.items||[]){const arr=map.get(item.stage)||[];arr.push(item);map.set(item.stage,arr)}return [...map.entries()]},[data]);
  return <div className="shell"><header className="topbar"><div className="brand"><div><h1>Trace</h1><p>End-to-end accountability from chick registration through harvest, product lots and sale.</p></div><span className="badge">FARMER TRACE</span></div></header><Nav/><main className="main">
  {error&&<section className="section card"><strong>{error}</strong></section>}
- <section className="section card"><div className="form grid2">
+ <section className="section card trace-pick"><div className="form grid2">
   <label>Batch<select value={selected} onChange={e=>setSelected(e.target.value)}><option value="">Select batch</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name} · {b.traceCode}</option>)}</select></label>
   <form onSubmit={e=>{e.preventDefault();if(code.trim())void load(code,"code")}} className="form"><label>Trace code<input value={code} onChange={e=>setCode(e.target.value)} placeholder="Paste a trace code"/></label><button className="button">Open trace code</button></form>
  </div></section>
