@@ -330,6 +330,23 @@ export default function CamerasPage() {
       <p>Ask your Flockence administrator to start this farm’s private camera service. The Blink sign-in form appears here when the service is ready.</p>
       <button type="button" className="button" onClick={() => void load()}>Check connection again</button>
     </section>}
+    {status?.available && <>
+      {cameras.length === 0 && <>
+        <div className="card"><p>No cameras are connected yet. A farm owner can connect a camera or add recordings.</p></div>
+        <div className="camera-section"><Recordings cameras={cameras} /></div>
+      </>}
+      {cameras.length > 0 && <>
+        <div className="ds-tabs" role="tablist" aria-label="Camera views">{(["live", "stills", "recordings", "vision"] as Tab[]).map((t) => <button key={t} type="button" role="tab" className="ds-tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t === "live" ? "Live" : t === "stills" ? "Pictures" : t === "recordings" ? "Recordings" : "Vision"}</button>)}</div>
+        {tab === "live" && <>
+          <label>Camera<select value={selected} onChange={(e) => setSelected(e.target.value)}>{cameras.map((c) => <option key={c.name}>{c.name}</option>)}</select></label>
+          {selected && <LiveView key={selected} camera={selected} source={cameras.find((c) => c.name === selected)?.source ?? "rtsp"} ffmpeg={Boolean(status.ffmpeg)} />}</>}
+        {tab === "stills" && <Stills cameras={cameras} />}
+        {tab === "recordings" && <Recordings cameras={cameras} />}
+        {tab === "vision" && <VisionIntelligence cameras={cameras} />}
+      </>}
+    </>}
+    <details className="card camera-setup" open={cameras.length === 0 || undefined}>
+      <summary><strong>Camera setup</strong> <span className="muted">Connect cameras, Blink settings and farm gateways</span></summary>
     {(status?.canManage || gatewayOwner) && <>
       <section className="card" aria-label="Camera brand">
         <div className="section-head"><div><h2>Connect a camera</h2><p>Choose the brand or connection type for this farm.</p></div></div>
@@ -347,20 +364,6 @@ export default function CamerasPage() {
     </>}
     {status?.available && status.connected && <BlinkSettings owner={status.canManage} />}
     <CameraGateways brand={provider === "wyze" || provider === "network" ? provider : null} onOwner={setGatewayOwner} />
-    {status?.available && <>
-      {cameras.length === 0 && <>
-        <div className="card"><p>No cameras are connected yet. A farm owner can connect a camera or add recordings.</p></div>
-        <div style={{ marginTop: 16 }}><Recordings cameras={cameras} /></div>
-      </>}
-      {cameras.length > 0 && <>
-        <div className="segmented" style={{ marginBottom: 18 }}>{(["live", "stills", "recordings", "vision"] as Tab[]).map((t) => <button key={t} className={tab === t ? "selected" : ""} onClick={() => setTab(t)}>{t === "live" ? "Live" : t === "stills" ? "Pictures" : t === "recordings" ? "Recordings" : "Vision"}</button>)}</div>
-        {tab === "live" && <>
-          <label>Camera<select value={selected} onChange={(e) => setSelected(e.target.value)}>{cameras.map((c) => <option key={c.name}>{c.name}</option>)}</select></label>
-          {selected && <LiveView key={selected} camera={selected} source={cameras.find((c) => c.name === selected)?.source ?? "rtsp"} ffmpeg={Boolean(status.ffmpeg)} />}</>}
-        {tab === "stills" && <Stills cameras={cameras} />}
-        {tab === "recordings" && <Recordings cameras={cameras} />}
-        {tab === "vision" && <VisionIntelligence cameras={cameras} />}
-      </>}
-    </>}
+    </details>
   </main></div>;
 }

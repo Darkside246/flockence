@@ -1,0 +1,64 @@
+/* Farm Vision and Cameras layout (2026 redesign, phase 13). A separate sheet on purpose:
+   app/vision/vision.css is also being extended on the feature/readable-reports-counting branch,
+   so layout lives here to keep both changes mergeable. Loaded after the theme sheets. */
+
+/* ---------- photo check: what and photo on the left, details and the button on the right ---------- */
+.vision-check { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr); gap: var(--space-5); align-items: start; margin: 0; }
+.vision-check-main, .vision-check-side { display: grid; gap: var(--space-3); min-width: 0; align-content: start; }
+.vision-check-side { padding-inline-start: var(--space-5); border-inline-start: 1px solid var(--ds-border); }
+.vision-check .section-head { margin: 0; }
+.vision-check .section-head h3, .vision-check-title { margin: 0; font-size: var(--text-md); }
+.vision-check .section-head p { font-size: var(--text-xs); }
+
+.vision-check .vision-category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.vision-check .vision-category { display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: var(--space-2); align-items: start; padding: var(--space-2); border-radius: var(--ds-control-radius); }
+.vision-check .vision-category:hover { transform: none; box-shadow: none; border-color: var(--ds-border-strong); }
+.vision-check .vision-category .vision-icon { grid-row: span 2; width: 24px; height: 24px; margin: 0; border-radius: var(--radius-sm); font-size: 12px; }
+.vision-check .vision-category strong { margin: 0; font-size: var(--text-sm); }
+.vision-check .vision-category small { font-size: 11px; line-height: 1.35; }
+.vision-check .vision-category.selected { background: var(--ds-accent-soft); }
+
+.vision-check .upload-zone { min-height: 104px; padding: var(--space-3); gap: 4px; border-radius: var(--ds-card-radius); }
+.vision-check .upload-icon { width: 32px; height: 32px; font-size: 20px; border-radius: var(--radius-md); }
+.vision-check .vision-preview { margin: 0; border-radius: var(--ds-card-radius); }
+.vision-check .vision-preview img { max-height: 260px; }
+
+/* Details column: one field per row, the share tick box on one line with its text. */
+.vision-check-camera, .vision-check-fields { display: grid; gap: var(--space-3); }
+.vision-check-side .vision-known { margin: 0; padding: var(--space-2) var(--space-3); }
+.vision-check-side .vision-known dl { grid-template-columns: 1fr; gap: var(--space-2); }
+.vision-assign { display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--space-2); font-size: var(--text-xs); color: var(--ds-text-2); }
+.vision-assign .button { min-height: var(--control-h-sm); padding: 0 var(--space-3); font-size: var(--text-xs); }
+.vision-submit { display: grid; gap: var(--space-2); }
+.vision-submit .button-primary { width: 100%; }
+.vision-usage { margin: 0; font-size: var(--text-xs); }
+
+@media (max-width: 1100px) {
+  .vision-check { grid-template-columns: minmax(0, 1fr); }
+  .vision-check-side { padding-inline-start: 0; border-inline-start: 0; padding-top: var(--space-3); border-top: 1px solid var(--ds-border); }
+}
+@media (max-width: 640px) {
+  .vision-check .vision-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ---------- report areas: the status label sat flush against the area name ---------- */
+/* The area grid was only defined in camera-recordings.css (Cameras page), so on Farm Vision every
+   area was a full-width row. */
+.vision-intel-areas { display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); }
+.vision-intel-area { padding: var(--space-3); margin: 0; }
+.vision-intel-area.is-monitor .vision-intel-area-status { color: var(--ds-info); border-color: color-mix(in srgb, var(--ds-info) 35%, var(--ds-border)); background: var(--ds-info-soft); }
+.vision-intel-area-status { display: inline-block; margin: 0 var(--space-2) 4px 0; padding: 1px 8px; border-radius: var(--radius-pill); border: 1px solid var(--ds-border); background: var(--ds-surface-2); color: var(--ds-text-2); font-size: 11px; font-weight: var(--weight-bold); }
+.vision-intel-area > strong { display: inline; }
+.vision-intel-area.is-good .vision-intel-area-status { color: var(--ds-success); border-color: color-mix(in srgb, var(--ds-success) 35%, var(--ds-border)); background: var(--ds-success-soft); }
+.vision-intel-area.is-attention .vision-intel-area-status { color: var(--ds-warning); border-color: color-mix(in srgb, var(--ds-warning) 35%, var(--ds-border)); background: var(--ds-warning-soft); }
+.vision-intel-area.is-urgent .vision-intel-area-status { color: var(--ds-danger); border-color: color-mix(in srgb, var(--ds-danger) 35%, var(--ds-border)); background: var(--ds-danger-soft); }
+
+/* ---------- Cameras: viewing first, owner setup in one collapsible section ---------- */
+.camera-section { margin-top: var(--space-3); }
+.camera-setup { margin-top: var(--space-4); }
+.camera-setup > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--space-2); cursor: pointer; list-style: none; }
+.camera-setup > summary::-webkit-details-marker { display: none; }
+.camera-setup > summary::before { content: "▸"; color: var(--ds-text-2); }
+.camera-setup[open] > summary::before { content: "▾"; }
+.camera-setup[open] > summary { margin-bottom: var(--space-3); }
+.camera-setup > .card, .camera-setup > section { box-shadow: none; margin-top: var(--space-3); }
