@@ -55,7 +55,11 @@ export const visionResultSchema = z.object({
   medicalDisclaimer: detail.optional(),
   signals: z.array(signal).max(7).default([]),
   // Approximate count of the birds visible in the picture (never the whole flock), and questions when unsure.
-  birdCount: z.object({ visible: z.number().int().min(0).max(100000).nullable(), confidence: confidence.optional(), note: detail.optional() }).nullable().optional().catch(null),
+  birdCount: z.object({
+    visible: z.number().int().min(0).max(100000).nullable(), confidence: confidence.optional(), note: detail.optional(),
+    // The 3x3 grid count (lib/vision-glance-rules.mjs gridTotal): nine cells, top-left to bottom-right.
+    byArea: z.array(z.number().int().min(0).max(2000)).length(9).optional().catch(undefined),
+  }).nullable().optional().catch(null),
   questions: z.array(detail.min(1)).max(3).optional().catch([]),
   notVisible: z.array(detail.min(1)).max(8).optional().catch([]),
   stillBirds: z.array(z.object({ where: detail.min(1), why: detail.optional(), confidence: confidence.optional() })).max(10).optional().catch([]),
@@ -94,6 +98,12 @@ export const visionAssessmentSchema = z.object({
   eggs: eggsSchema.optional().catch(undefined),
   animals: animalsSchema.optional().catch(undefined),
   people: peopleSchema.optional().catch(undefined),
+  /** Birds: the count in view, the camera-adjusted pen estimate, the records and still birds (quick view). */
+  birds: z.object({
+    visible: z.number().int().nullable(), confidence: z.string().max(10).nullable().optional(),
+    estimate: z.object({ estimate: z.number().int(), factor: z.number(), samples: z.number().int(), shows: z.number().int() }).nullable().optional(),
+    recorded: z.number().int().nullable().optional(), still: z.number().int().min(0).optional(),
+  }).optional().catch(undefined),
   /** The bird counter's result, when the farm has it switched on (lib/bird-detector.ts). */
   detector: z.object({
     model: z.string().max(80), count: z.number().int().min(0), counts: z.array(z.number().int().min(0)).max(3),
@@ -112,6 +122,7 @@ export function createVisionAssessment(result: VisionResult, input: {
   /** Keep people in view (the farm's people timeline is on). When false, nothing about people is saved. */
   keepPeople?: boolean;
   detector?: VisionAssessment["detector"];
+  birds?: VisionAssessment["birds"];
 }): VisionAssessment {
   const { keepPeople, ...saved } = input;
   const signals = assessmentCategories.map((categoryName) => {

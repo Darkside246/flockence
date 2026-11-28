@@ -43,7 +43,7 @@ Return ONLY valid JSON with this exact shape:
   "concerns": [{"title":"", "whyItMatters":""}],
   "checks": ["practical next check 1", "practical next check 2"],
   "signals": [{"category":"LITTER","state":"NOT_OBSERVED"}],
-  "birdCount": {"visible": null, "confidence": "LOW|MEDIUM|HIGH", "note": ""},
+  "birdCount": {"visible": null, "byArea": [0, 0, 0, 0, 0, 0, 0, 0, 0], "confidence": "LOW|MEDIUM|HIGH", "note": ""},
   "questions": [],
   "notVisible": ["parts of the pen or checks that are out of view, for example the drinker line"],
   "stillBirds": [{"where": "where in the picture", "why": "lying flat on its side in the same place as in the earlier picture", "confidence": "LOW|MEDIUM|HIGH"}],
@@ -57,6 +57,8 @@ Return ONLY valid JSON with this exact shape:
 }
 
 Signals have categories BEHAVIOR, DISTRIBUTION, LITTER, COMFORT, FEED_WATER, EQUIPMENT, VISIBLE_HEALTH and states NOT_OBSERVED, NORMAL, ATTENTION, WARNING, CRITICAL. For every state except NOT_OBSERVED, add a brief "evidence" string describing what is visible. Omit a category if it cannot be assessed. Do not infer movement over time from a single image; with several images (an earlier picture or video frames), compare them. Treat blocked views and insufficient image quality as NOT_OBSERVED. Never infer ammonia, temperature, humidity, water quality or a diagnosis from the picture.
+
+How to count birds: use the clearest image (the newest one when there are several). Divide it into a 3 x 3 grid (top-left, top-centre, top-right, then the middle row, then the bottom row). In each cell, count every bird whose body centre is in that cell, including birds partly hidden by others or by equipment when you can see part of the body; count each bird once. Put the nine numbers in birdCount.byArea in that order; birdCount.visible must equal their sum. Take your time over crowded cells.
 
 birdCount.visible is your best count of the birds you can actually see (in the clearest image when there are several), or null when birds cannot be counted (none in view, too dark, too crowded or blurred). It is never the size of the whole flock; the farm context gives the recorded live count. Say in birdCount.note what limited the count.
 
