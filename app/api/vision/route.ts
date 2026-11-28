@@ -15,6 +15,7 @@ import { monthUsage } from "@/lib/vision-usage";
 import { runVisionInspection } from "@/lib/vision-inspection";
 import { validRequestId } from "@/lib/photo-size.mjs";
 import { earlierReply, runOnce, uploadStatus } from "@/lib/vision-upload-requests";
+import { penRecordDenied } from "@/lib/pen-access";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -107,6 +108,8 @@ async function inspect(request: Request, requestId?: string, preparedForm?: Form
     const file = form.get("image");
     const categoryRaw = String(form.get("category") || "OTHER");
     const batchIdRaw = String(form.get("batchId") || "");
+    const penDenied = await penRecordDenied(session.user, { batchId: batchIdRaw || null });
+    if (penDenied) return penDenied;
     const notes = String(form.get("notes") || "").trim().slice(0, 2000);
 
     const penId = form.get("penId");

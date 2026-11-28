@@ -8,6 +8,7 @@ import { calendarDateInTimeZone, isCalendarDateNotFuture, parseCalendarDate } fr
 import { meterUsage, tankUsage } from "@/lib/farm-engine.mjs";
 import { convertFeed } from "@/lib/feed-entry";
 import { closeIfEmpty, liveBirdsOn, loadFlockLedger } from "@/lib/flock-ledger";
+import { penRecordDenied } from "@/lib/pen-access";
 
 function invalidNumber(value: unknown, min = 0) {
   return value !== "" && value != null && validNumber(value, min) === null;
@@ -46,6 +47,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Offline feed entries accept only the flock, date and feed amount." }, { status: 400 });
     }
     const batchId = String(input.batchId || "");
+    const penDenied = await penRecordDenied(session.user, { batchId });
+    if (penDenied) return penDenied;
     // Owner, 2026-11-02: deaths are easy to record, live birds are hard to count. The live count is optional: left
     // blank, it is worked out from the starting birds, recorded deaths and birds sent to slaughter; a number typed in
     // is a head count and becomes the new starting point.

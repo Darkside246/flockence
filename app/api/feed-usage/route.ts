@@ -6,6 +6,7 @@ import { isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metric
 import { convertFeed } from "@/lib/feed-entry";
 import { feedCostPerKg, feedLabel } from "@/lib/feed-catalogue";
 import { kgToBags } from "@/lib/farm-engine.mjs";
+import { penRecordDenied } from "@/lib/pen-access";
 
 /**
  * Feed used, recorded on its own in a few seconds: flock, amount and how it was counted (bags, kg, g, lb or the farm's
@@ -28,6 +29,8 @@ export async function POST(request: Request) {
   const input = await request.json().catch(() => ({}));
   const farmId = currentFarmId();
   const batchId = String(input.batchId || "");
+  const penDenied = await penRecordDenied(session.user, { batchId });
+  if (penDenied) return penDenied;
   const date = parseCalendarDate(String(input.date || ""));
   if (!batchId || !date || !isCalendarDateNotFuture(date)) return NextResponse.json({ error: "Choose the flock and a date that is today or earlier." }, { status: 400 });
   const id = typeof input.submissionId === "string" && /^[A-Za-z0-9-]{8,64}$/.test(input.submissionId) ? "use:" + input.submissionId : undefined;

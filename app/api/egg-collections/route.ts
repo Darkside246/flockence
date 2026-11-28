@@ -8,6 +8,7 @@ import { recordInventoryMovement } from "@/lib/inventory-ledger";
 import { validateEggCollectionInput, isCollectionDateWithinWithdrawal, isCalendarDateNotFuture } from "@/lib/poultry-metrics.mjs";
 import { condemnLayerEggLotsForWithdrawal } from "@/lib/layer-withdrawal";
 import { lockFlockOperations } from "@/lib/poultry-lock";
+import { penRecordDenied } from "@/lib/pen-access";
 
 const GRADE_LABELS = {
   SMALL: "Small",
@@ -64,6 +65,8 @@ export async function POST(request: Request) {
     if (syncId === null) return NextResponse.json({ error: "Sign in as the original farm account to sync this entry." }, { status: 403 });
     const batchId = String(input.batchId ?? "").trim();
     if (!batchId) return NextResponse.json({ error: "Select a layer flock." }, { status: 400 });
+    const penDenied = await penRecordDenied(session.user, { batchId });
+    if (penDenied) return penDenied;
 
     const batch = await prisma.batch.findFirst({
       where: { id: batchId, farmId: currentFarmId() },

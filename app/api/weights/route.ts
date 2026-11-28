@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { calculateLiveBirdsAtDate, isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
+import { penRecordDenied } from "@/lib/pen-access";
 
 class OfflineWeightConflict extends Error {}
 
@@ -31,6 +32,8 @@ export async function POST(request: Request) {
     await ensureFarm();
     const input = await request.json();
     const batchId = typeof input.batchId === "string" ? input.batchId : "";
+    const penDenied = await penRecordDenied(session.user, { batchId });
+    if (penDenied) return penDenied;
     const syncId = input.offline === undefined ? undefined : offlineEventId(request, input.offline, session.user);
     if (syncId === null) return NextResponse.json({ error: "Sign in as the original farm account to sync this entry." }, { status: 403 });
     const date = parseCalendarDate(input.date);

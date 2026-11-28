@@ -6,6 +6,7 @@ import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-
 import { offlineEventId } from "@/lib/offline-event";
 import { isCalendarDateNotFuture, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
 import { prisma } from "@/lib/prisma";
+import { penRecordDenied } from "@/lib/pen-access";
 
 const category = "FIELD_INSPECTION";
 const photoPrefix = "FIELD_INSPECTION_PHOTO::";
@@ -74,6 +75,8 @@ export async function POST(request: Request) {
     const parsed = form.safeParse(await readAccountForm(request, 360 * 1024));
     if (!parsed.success) return fail("Check the inspection details and photo size.", 400);
     const { offline, photo, date: day, batchId, ...fields } = parsed.data;
+    const penDenied = await penRecordDenied(session.user, { batchId });
+    if (penDenied) return penDenied;
     const id = offlineEventId(request, offline, session.user);
     if (!id) return fail("Sign in as the original farm account to sync this inspection.", 403);
     if (photo && !validPhoto(photo)) return fail("Use a JPEG photo no larger than 256 KB.", 400);

@@ -3,6 +3,7 @@ import { currentUserOrResponse, currentUserOrRoleResponse } from "@/lib/current-
 import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { meterUsage, tankUsage } from "@/lib/farm-engine.mjs";
+import { penRecordDenied } from "@/lib/pen-access";
 
 /**
  * Water meter and tank readings. GET returns each meter or tank's readings with the water used between them, worked out
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
   if ([addedL, otherUseL].some(v => v != null && (!Number.isFinite(v) || v < 0))) return NextResponse.json({ error: "Refill and other use must be zero or more litres." }, { status: 400 });
   if (!Number.isFinite(readAt.getTime()) || readAt.getTime() > Date.now() + 5 * 60000) return NextResponse.json({ error: "The reading time must be now or earlier." }, { status: 400 });
   const batchId = typeof input.batchId === "string" && input.batchId ? input.batchId : null;
+  const penDenied = await penRecordDenied(session.user, { batchId }, true);
+  if (penDenied) return penDenied;
   if (batchId && !(await prisma.batch.findFirst({ where: { id: batchId, farmId: currentFarmId() }, select: { id: true } }))) return NextResponse.json({ error: "Flock not found." }, { status: 404 });
   const id = typeof input.submissionId === "string" && /^[A-Za-z0-9-]{8,64}$/.test(input.submissionId) ? "water:" + input.submissionId : undefined;
   if (id) {

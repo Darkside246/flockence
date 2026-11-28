@@ -6,6 +6,7 @@ import { ensureFarm, currentFarmId } from "@/lib/operations";
 import { lockFlockOperations } from "@/lib/poultry-lock";
 import { closeIfEmpty, loadFlockLedger, rebuildBirdProjections } from "@/lib/flock-ledger";
 import { calculateLiveBirdsAtDate, isCalendarDateNotFuture, isWithinInitialFlockCount, parseCalendarDate } from "@/lib/poultry-metrics.mjs";
+import { penRecordDenied } from "@/lib/pen-access";
 
 class MortalityConflict extends Error {}
 
@@ -35,6 +36,8 @@ export async function POST(request: Request) {
     await ensureFarm();
     const input = await request.json();
     const batchId = typeof input.batchId === "string" ? input.batchId : "";
+    const penDenied = await penRecordDenied(session.user, { batchId });
+    if (penDenied) return penDenied;
     const date = parseCalendarDate(input.date);
     const quantity = Number(input.quantity);
     const reason = typeof input.reason === "string" && input.reason.trim() ? input.reason.trim() : null;
