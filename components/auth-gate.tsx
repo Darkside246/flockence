@@ -24,6 +24,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [failed, setFailed] = useState(false);
+  const [locked, setLocked] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
   const isPublicPath = PUBLIC_PATHS.has(pathname);
 
@@ -46,6 +47,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           if (active) { setUser(data.user as SessionUser); setFailed(false); }
           return;
         }
+        if (response.status === 423) { if (active) setLocked(true); return; }
         if (response.status === 401 || response.status === 403) {
           const next = pathname && pathname !== "/" ? "?next=" + encodeURIComponent(pathname) : "";
           router.replace("/login" + next);
@@ -65,6 +67,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (isPublicPath) return <ThemeProvider>{children}</ThemeProvider>;
+  if (locked) return <main className="auth-shell">
+    <section className="auth-card" aria-live="polite">
+      <div className="auth-brand"><div className="brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div>
+      <div className="auth-heading"><h1>Farm closing</h1><p>This farm is scheduled for deletion.</p></div>
+      <p className="auth-message">Only the farm owner can sign in now. Ask the owner if you think this is a mistake.</p>
+      <p className="auth-links"><a href="/login">Sign in with another account</a></p>
+    </section>
+  </main>;
   if (failed && !user) return <main className="auth-shell">
     <section className="auth-card" aria-live="polite">
       <div className="auth-brand"><div className="brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div>

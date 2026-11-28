@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { currentFarmId, ensureFarm } from "@/lib/operations";
 import { sessionCookieFromRequest, sessionFromToken } from "@/lib/auth";
 import { beginRequestScope, setRequestFarm } from "@/lib/farm-scope";
+import { farmLockedForDeletion } from "@/lib/farm-deletion";
 
 export async function requireCurrentUser(request: Request) {
   // The farm of this request (many farms on one server): opened before the first await so the calling route shares
@@ -22,12 +23,15 @@ export async function requireCurrentUser(request: Request) {
   await ensureFarm();
   const user = await prisma.user.findFirst({ where: { id: userId, farmId: currentFarmId() }, select: { id: true, farmId: true, name: true, email: true, role: true } });
   if (!user) throw new Error("USER_NOT_FOUND");
+  // A farm scheduled for deletion is locked: only its owner can still sign in, to download the data or cancel.
+  if (user.role !== "OWNER" && await farmLockedForDeletion(user.farmId)) throw new Error("FARM_LOCKED");
   return user;
 }
 
 export function authError(error: unknown) {
   const code = error instanceof Error ? error.message : "";
   if (code === "AUTH_REQUIRED") return new Response(JSON.stringify({ error: "Sign-in is required." }), { status: 401, headers: { "Content-Type": "application/json" } });
+  if (code === "FARM_LOCKED") return new Response(JSON.stringify({ error: "This farm is scheduled for deletion. Only the farm owner can sign in now." }), { status: 423, headers: { "Content-Type": "application/json" } });
   if (code === "USER_NOT_FOUND") return new Response(JSON.stringify({ error: "User account was not found." }), { status: 403, headers: { "Content-Type": "application/json" } });
   return null;
 }

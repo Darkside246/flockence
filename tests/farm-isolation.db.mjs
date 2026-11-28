@@ -999,3 +999,30 @@ test("bird counter: off unless the server and the farm switch it on; then it cou
     await runAsFarm(A, () => setDetectorForFarm(false));
   }
 });
+
+test("farm deletion: a due request removes the farm and everything in it, and nothing of another farm", async () => {
+  const { runDueFarmDeletions, farmLockedForDeletion, DELETION_KEY } = await import("../lib/farm-deletion.ts");
+  const D = "iso-farm-delete";
+  await runUnscoped(async () => { await prisma.farm.deleteMany({ where: { id: D } }); await prisma.farm.create({ data: { id: D, name: "Farm to delete" } }); });
+  const keepA = await runAsFarm(A, () => prisma.batch.create({ data: batchData("A keeps this") }));
+  await runAsFarm(D, async () => {
+    await prisma.user.create({ data: { name: "D owner", email: `d-${Date.now()}@d.test`, role: "OWNER" } });
+    const batch = await prisma.batch.create({ data: batchData("D flock") });
+    const product = await prisma.product.create({ data: { name: "Eggs L", unit: "egg" } });
+    const item = await prisma.inventoryItem.create({ data: { productId: product.id, quantity: 30 } });
+    const run = await prisma.eggPackRun.create({ data: { date: new Date(), grade: "LARGE", packSize: 30, packCount: 1, totalEggs: 30, packCode: `D-${Date.now()}`, packedAt: new Date() } });
+    await prisma.eggPackInput.create({ data: { packRunId: run.id, inventoryItemId: item.id, quantityEggs: 30 } });
+    await prisma.feedPurchase.create({ data: { batchId: batch.id, date: new Date(), feedType: "Grower", bagSizeKg: 25, quantityBags: 2, unitCostMinor: 5600 } });
+    await prisma.visionMedia.create({ data: { storageKey: `del-${Date.now()}.jpg`, mimeType: "image/jpeg", byteSize: 10 } });
+    const requestedAt = new Date(Date.now() - 31 * 86_400_000);
+    await prisma.setting.create({ data: { key: DELETION_KEY, value: JSON.stringify({ requestedAt: requestedAt.toISOString(), deleteAfter: new Date(requestedAt.getTime() + 30 * 86_400_000).toISOString(), requestedBy: "x" }) } });
+  });
+  assert.equal(await farmLockedForDeletion(D), true, "locked while pending");
+  const results = await runDueFarmDeletions("/nonexistent-test-dir");
+  assert.deepEqual(results.filter((r) => r.farmId === D), [{ farmId: D, deleted: true }]);
+  assert.equal(await runUnscoped(() => prisma.farm.count({ where: { id: D } })), 0);
+  for (const table of ["user", "batch", "product", "eggPackRun", "visionMedia", "setting", "feedPurchase"]) {
+    assert.equal(await runUnscoped(() => prisma[table].count({ where: { farmId: D } })), 0, table + " left behind");
+  }
+  assert.ok(await runAsFarm(A, () => prisma.batch.findUnique({ where: { id: keepA.id } })), "another farm's records stay");
+});

@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { runVisionRounds } from "@/lib/vision-schedule";
 import { runDailyReports } from "@/lib/vision-daily-report";
 import { runPeopleRetention } from "@/lib/vision-people";
+import { runDueFarmDeletions } from "@/lib/farm-deletion";
+import { visionStorageDir } from "@/lib/vision-inspection";
 
 export const runtime = "nodejs";
 export const maxDuration = 900;
@@ -23,5 +25,7 @@ export async function POST(request: Request) {
   const dailyReports = await runDailyReports().catch((error) => [{ farmId: "*", sent: 0, skipped: `error: ${error instanceof Error ? error.name : "unknown"}` }]);
   // People data past each farm's keep period (or all of it, when the timeline is off) is removed.
   const peopleRemoved = await runPeopleRetention().catch(() => 0);
-  return NextResponse.json({ farms: results.length, results, dailyReports, peopleRemoved }, { headers });
+  // Farms whose 30-day deletion grace period is over (lib/farm-deletion.ts).
+  const farmDeletions = await runDueFarmDeletions(visionStorageDir()).catch(() => []);
+  return NextResponse.json({ farms: results.length, results, dailyReports, peopleRemoved, farmDeletions }, { headers });
 }

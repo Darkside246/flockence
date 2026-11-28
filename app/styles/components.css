@@ -374,3 +374,7 @@
 .email-template > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); cursor: pointer; font-size: var(--text-sm); }
 .email-template[open] > summary { margin-bottom: var(--space-2); }
 .email-template .ds-field-hint { margin: 0 0 var(--space-2); }
+
+/* Settings > Farm profile: delete this farm */
+.danger-zone { border-color: color-mix(in srgb, var(--ds-danger) 40%, var(--ds-border)); }
+.danger-zone h2 { color: var(--ds-danger); }

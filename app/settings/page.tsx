@@ -6,6 +6,7 @@ import { DashboardSettings } from "@/components/dashboard-settings";
 import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { SettingsCameraProviders } from "@/components/settings-camera-providers";
+import { FarmDeletionCard } from "@/components/farm-deletion-card";
 import { SettingsEmailTemplates } from "@/components/settings-email-templates";
 import { useSession } from "@/components/auth-gate";
 import { farmRoleLabels, type FarmRole } from "@/lib/farm-roles";
@@ -148,6 +149,7 @@ export default function SettingsPage() {
           </fieldset>
           {editable && <button className="button button-primary" type="submit" disabled={saving || !loaded}>{saving ? "Saving…" : "Save location"}</button>}
         </form>
+        {editable && <FarmDeletionCard />}
       </>}
 
       {section === "operations" && <><form className="section card form" onSubmit={(event) => save(event, costFields.map(({ key }) => key))}>
