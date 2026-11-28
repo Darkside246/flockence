@@ -334,3 +334,17 @@
 @media (max-width: 1280px) and (min-width: 1101px), (max-width: 560px) {
   .house-plan { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ======================= Pages: Reports, Performance, Planning, Trace (phase 12) ======================= */
+.report-exports .ds-actions .button { min-height: var(--control-h-sm); font-size: var(--text-xs); }
+.planning-intro h2 { margin: 0 0 4px; font-size: var(--text-md); color: var(--ds-text); }
+.planning-table td > strong { display: block; font-weight: var(--weight-semibold); }
+.planning-table .ds-chip { margin-top: 4px; }
+.rule-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--space-3) var(--space-5); }
+.rule-list > div { display: grid; gap: 2px; font-size: var(--text-sm); }
+.rule-list span { color: var(--ds-text-2); }
+.perf-stats-2 { margin-top: var(--space-2); }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: var(--space-3); }
+.grid3 > .card h2 { margin: 2px 0; font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
+.grid3 > .card p { margin: 0; color: var(--ds-text-2); font-size: var(--text-sm); }
+.trace-pick .grid2 { align-items: end; }
