@@ -60,7 +60,7 @@ export async function alertOnFindings(findings: RecordedFinding[], now = new Dat
       const when = new Intl.DateTimeFormat("en-GB", { timeZone: FARM_TIME_ZONE, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(now);
       const email = alertEmail(plan.send, farm?.name ?? "Your farm", when, link);
       const key = `flockence-vision-alert-${farmId}-${plan.send.map((f) => f.id + f.reason).join("-")}-${now.getTime()}`.slice(0, 250);
-      for (const p of wanting) if (await send(p.email, email, `${key}-${p.id}`.slice(0, 256)).catch(() => false)) emailed += 1;
+      for (const p of wanting) if (await send(p.email, email, `${key}-${p.id}`.slice(0, 256), farmId).catch(() => false)) emailed += 1;
       if (!emailed) {
         // Nobody could be reached: put the state back, so the next inspection that sees it tries again.
         await writeJson(prisma, STATE_KEY, plan.before ?? { incidents: {}, sentAt: [] }).catch(() => undefined);
