@@ -98,6 +98,7 @@ jobs:
           bash -n ops/systemd/enable-local-stack.sh
           bash -n services/blink/install-vps.sh
           bash -n ops/release/switch-release.sh
+          bash -n ops/cameras/add-farm-camera-worker.sh
           bash -n ops/systemd/enable-vision-rounds.sh
           node --experimental-strip-types --test tests/mail.mjs
           node --experimental-strip-types --test tests/vision-assessment.mjs
