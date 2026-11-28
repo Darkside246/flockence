@@ -1,13 +1,18 @@
 import { applyEmailTemplate, type EmailCategoryId, type EmailMessage } from "./email-templates.mjs";
 
+/** What happened to one email: sent, or Resend's own reason (never the key). */
+export type SendResult = { ok: boolean; status: number | null; reason: string | null };
+
 /**
  * Outgoing email through Resend. RESEND_API_KEY and RESEND_FROM are server settings for the developer/administrator
- * (the private service environment), never stored in the app. Without both, nothing is sent and the caller gets false.
+ * (the private service environment), never stored in the app. Without both, nothing is sent.
+ * A refusal is written to the server log with Resend's reason (for example "API key is invalid" or an unverified
+ * domain) and the recipient's domain only, so a failure can be diagnosed without server commands.
  */
-export async function sendEmail(to: string, message: { subject: string; text?: string; html?: string }, key?: string) {
+export async function sendEmailWithResult(to: string, message: { subject: string; text?: string; html?: string }, key?: string): Promise<SendResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.RESEND_FROM;
-  if (!apiKey || !from) return false;
+  if (!apiKey || !from) return { ok: false, status: null, reason: "Email is not set up on this server (RESEND_API_KEY and RESEND_FROM)." };
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     signal: AbortSignal.timeout(6000),
@@ -18,7 +23,15 @@ export async function sendEmail(to: string, message: { subject: string; text?: s
     },
     body: JSON.stringify({ from, to: [to], ...message }),
   });
-  return response.ok;
+  if (response.ok) return { ok: true, status: response.status, reason: null };
+  const body = await response.json().catch(() => null) as { message?: unknown } | null;
+  const reason = typeof body?.message === "string" ? body.message.slice(0, 300) : `Resend answered ${response.status}.`;
+  console.warn(`[flockence-mail] Resend refused an email to @${to.split("@").pop()}: ${response.status} ${reason}`);
+  return { ok: false, status: response.status, reason };
+}
+
+export async function sendEmail(to: string, message: { subject: string; text?: string; html?: string }, key?: string) {
+  return (await sendEmailWithResult(to, message, key)).ok;
 }
 
 /**
