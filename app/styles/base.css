@@ -98,6 +98,10 @@ form button:not([class]):not([type="button"]):not([type="reset"]):hover:enabled,
 :is(button, .button):disabled { opacity: .6; cursor: not-allowed; }
 .notice { color: var(--ds-accent); font-size: var(--text-sm); margin-left: var(--space-2); }
 
+/* Submit buttons size to their label and sit at the start of the row instead of stretching
+   across a grid column. Layouts that want a full-width button say so (e.g. .flocks-submit). */
+:is(.form, .grid2, .ds-form-grid) > :is(button, .button) { justify-self: start; align-self: end; width: auto; min-width: 140px; }
+
 /* ---------- page furniture shared by every route ---------- */
 .card {
   background: var(--ds-surface); color: var(--ds-text);

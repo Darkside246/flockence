@@ -110,7 +110,7 @@ export function ChangeBirdNumbers({ batches }: { batches: Batch[] }) {
     </>}
     <label>{kind === "CULLED" || kind === "MISSING" ? "Reason (optional)" : "Note (optional)"}<input value={reason} onChange={e => setReason(e.target.value)} maxLength={120} /></label>
     {msg && <p className="notice" role="status">{msg}</p>}
-    <button type="submit" disabled={busy || !batchId}>{busy ? "Saving…" : "Save"}</button>
+    <button type="submit" className="button button-primary" disabled={busy || !batchId}>{busy ? "Saving…" : "Save"}</button>
   </form>;
 }
 
@@ -188,7 +188,7 @@ export function FeedAndWater({ batches }: { batches: Batch[] }) {
       <label>Used for other things litres (cleaning, people)<input type="number" min="0" step="0.1" value={other} onChange={e => setOther(e.target.value)} placeholder="0" /></label>
     </>}
     {msg && <p className="notice" role="status">{msg}</p>}
-    <button type="submit" disabled={busy}>{busy ? "Saving…" : "Save reading"}</button>
+    <button type="submit" className="button button-primary" disabled={busy}>{busy ? "Saving…" : "Save reading"}</button>
   </form>;
 }
 

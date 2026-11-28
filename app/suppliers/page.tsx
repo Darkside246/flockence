@@ -59,7 +59,7 @@ export default function SuppliersPage() {
       <label>Location<input value={form.location} onChange={set("location")} maxLength={160} /></label>
       <label className="span-2">What they supply<input value={form.productsSupplied} onChange={set("productsSupplied")} maxLength={400} placeholder="e.g. Super Feeds broiler grower, 30 kg bags" /></label>
       <label className="span-2">Notes<textarea value={form.notes} onChange={set("notes")} maxLength={1000} rows={2} /></label>
-      <div className="row-actions span-2"><button type="submit" disabled={busy}>{busy ? "Saving…" : form.id ? "Save changes" : "Add supplier"}</button>{form.id && <button type="button" className="button" onClick={() => setForm(blank)}>Cancel</button>}</div>
+      <div className="row-actions span-2"><button type="submit" className="button button-primary" disabled={busy}>{busy ? "Saving…" : form.id ? "Save changes" : "Add supplier"}</button>{form.id && <button type="button" className="button" onClick={() => setForm(blank)}>Cancel</button>}</div>
     </form>}
     <section className="section card">
       <div className="toolbar-row">
