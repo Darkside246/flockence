@@ -246,3 +246,17 @@
   .flocks-actions { width: auto; }
   .flocks-actions .row-actions { flex-direction: row; justify-content: flex-start; flex-wrap: wrap; }
 }
+
+/* ======================= Page: Daily round / farm operations (phase 7) ======================= */
+.ops-message { margin: 0 0 var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid color-mix(in srgb, var(--ds-success) 35%, var(--ds-border)); border-radius: var(--ds-control-radius); background: var(--ds-success-soft); color: var(--ds-text); font-size: var(--text-sm); }
+[role="tabpanel"] > :first-child, [role="tabpanel"] > section:first-child > .grid2:first-child { margin-top: 0; }
+[role="tabpanel"] > .section:first-child { margin-top: 0; }
+.ops-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: var(--space-3); align-items: start; }
+.ops-grid > * { margin: 0; min-width: 0; }
+.ops-grid h3, [role="tabpanel"] .card > h3:first-child { margin: 0 0 var(--space-1); font-size: var(--text-md); }
+.ops-transport-form { grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+.ops-transport :is(th[scope="row"], td) > span { display: block; font-size: var(--text-xs); color: var(--ds-text-2); line-height: 1.45; }
+.ops-transport th[scope="row"] strong { display: block; font-size: var(--text-sm); text-transform: capitalize; }
+.ops-transport .ds-chip { display: inline-flex; margin-top: 4px; }
+.ops-note { padding: var(--space-3) var(--space-4); border-inline-start: 3px solid var(--ds-border-strong); color: var(--ds-text-2); font-size: var(--text-sm); }
+.ops-note h3 { margin: 0 0 4px; font-size: var(--text-sm); color: var(--ds-text); }
