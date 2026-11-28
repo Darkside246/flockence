@@ -1062,3 +1062,27 @@ test("pen access: a Farm Hand limited to some pens records only for flocks place
   await runAsFarm(A, () => savePenAssignment(hand.id, []));
   assert.equal(await runAsFarm(B, () => penAssignment(hand.id)), null);
 });
+
+test("two-factor sign-in: turn on with a code, no code twice, recovery codes once each, off again", async () => {
+  process.env.AUTH_SECRET ??= "t".repeat(40);
+  const tf = await import("../lib/two-factor.ts");
+  const { codeForStep, stepAt } = await import("../lib/totp.mjs");
+  const user = await runAsFarm(A, () => prisma.user.create({ data: { name: "2FA", email: `tf-${Date.now()}@a.test`, role: "WORKER" } }));
+  const now = Date.now();
+  const { secret } = await runAsFarm(A, () => tf.startTwoFactor(user.id, user.email));
+  assert.equal(await runAsFarm(A, () => tf.twoFactorEnabled(user.id)), false, "not on until confirmed");
+  assert.equal(await runAsFarm(A, () => tf.confirmTwoFactor(user.id, "000000", now)), null);
+  const recovery = await runAsFarm(A, () => tf.confirmTwoFactor(user.id, codeForStep(secret, stepAt(now)), now));
+  assert.equal(recovery.length, 10);
+  assert.equal(await runAsFarm(A, () => tf.twoFactorEnabled(user.id)), true);
+  const next = codeForStep(secret, stepAt(now) + 1);
+  assert.equal(await runAsFarm(A, () => tf.checkSecondFactor(user.id, next, now)), true);
+  assert.equal(await runAsFarm(A, () => tf.checkSecondFactor(user.id, next, now)), false, "a code works once");
+  assert.equal(await runAsFarm(A, () => tf.checkSecondFactor(user.id, recovery[0], now)), true);
+  assert.equal(await runAsFarm(A, () => tf.checkSecondFactor(user.id, recovery[0], now)), false, "a recovery code works once");
+  assert.equal((await runAsFarm(A, () => tf.twoFactorStatus(user.id))).recoveryLeft, 9);
+  const row = await runAsFarm(A, () => prisma.setting.findUnique({ where: { farmId_key: { farmId: A, key: "TWO_FACTOR_V1::" + user.id } } }));
+  assert.ok(!row.value.includes(secret), "the secret is stored encrypted");
+  await runAsFarm(A, () => tf.disableTwoFactor(user.id));
+  assert.equal(await runAsFarm(A, () => tf.twoFactorEnabled(user.id)), false);
+});

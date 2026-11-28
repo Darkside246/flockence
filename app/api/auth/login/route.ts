@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getPasswordHash, createSession, setSessionCookie, normalizeEmail, verifyPassword, lockPasswordAccount } from "@/lib/auth";
 import { ensureFarm } from "@/lib/operations";
 import { runAsFarm, runUnscoped } from "@/lib/farm-scope";
+import { checkSecondFactor, twoFactorEnabled } from "@/lib/two-factor";
 
 export async function POST(request: Request) {
   // Oriya-only server: accounts come only from Oriya ("Sign in with Oriya"); no local passwords.
@@ -44,6 +45,16 @@ export async function POST(request: Request) {
     if (!user || !stored || !(await verifyPassword(password, stored))) {
       // People who joined from Oriya have no password here: they open Flockence from Oriya.
       return NextResponse.json({ error: "Email or password is incorrect. If you joined from Oriya, open Flockence from Oriya instead." }, { status: 401 });
+    }
+
+    // Two-factor sign-in (Account page): after a correct password, a code from the authenticator app or a recovery code.
+    // The email rate limit above also limits code guesses.
+    if (await runAsFarm(user.farmId, () => twoFactorEnabled(user.id))) {
+      const code = typeof body.code === "string" ? body.code.slice(0, 32) : "";
+      if (!code) return NextResponse.json({ twoFactorRequired: true, error: "Enter the 6-digit code from your authenticator app, or one of your recovery codes." }, { status: 401 });
+      if (!(await runAsFarm(user.farmId, () => checkSecondFactor(user.id, code)))) {
+        return NextResponse.json({ twoFactorRequired: true, error: "That code is not right or has already been used. Check the time on your phone and try the newest code." }, { status: 401 });
+      }
     }
 
     const session = await runAsFarm(user.farmId, async () => {

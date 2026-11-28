@@ -1,0 +1,16 @@
+export const STEP_SECONDS: number;
+export const DIGITS: number;
+export const WINDOW: number;
+export const RECOVERY_CODES: number;
+export function base32Encode(bytes: Uint8Array): string;
+export function base32Decode(text: string): Buffer;
+export function newSecret(): string;
+export function stepAt(ms: number): number;
+export function codeForStep(secretBase32: string, step: number): string;
+export function verifyCode(secretBase32: string, typed: unknown, nowMs: number, lastStep?: number): number | null;
+export function otpauthUrl(secretBase32: string, account: string, issuer?: string): string;
+export function newRecoveryCodes(): string[];
+export function hashRecoveryCode(code: string): string;
+export function findRecoveryCode(hashes: string[] | undefined, typed: unknown): number;
+export function encryptSecret(secretBase32: string, authSecret: string | undefined): string;
+export function decryptSecret(sealed: string, authSecret: string | undefined): string;

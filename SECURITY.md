@@ -22,3 +22,20 @@ Application-level password and token secrets are protected by hashing. Operation
 For the requested full at-rest protection, the production Droplet/database storage and backups must use encrypted storage. DigitalOcean states that volume snapshots are encrypted at rest by default. The production deployment should keep PostgreSQL data on encrypted storage and ensure backups/snapshots inherit the provider's at-rest encryption controls.
 
 Do not commit `.env`, database passwords, API keys, reset links, session values, or other secrets to Git.
+
+## Two-factor sign-in
+
+Anyone with a Flockence password can switch on two-factor sign-in on their Account page. After the password, sign-in
+asks for a 6-digit code from an authenticator app (RFC 6238; one step of clock drift allowed, no code accepted twice)
+or one of ten single-use recovery codes. The app secret is stored encrypted (AES-256-GCM, key derived from
+`AUTH_SECRET`), and recovery codes only as hashes. Turning it off or making new recovery codes needs the password and a
+code. Accounts that sign in through Oriya are unaffected: Oriya's sign-in applies.
+
+If someone loses both their phone and their recovery codes, an administrator can switch it off for that person on the
+server (their password still applies):
+
+```bash
+sudo -u postgres psql flockence_staging -c "DELETE FROM \"Setting\" WHERE key = 'TWO_FACTOR_V1::<user id>';"
+```
+
+Changing `AUTH_SECRET` makes stored two-factor secrets unreadable; everyone who uses two-factor sign-in must then set it up again.
