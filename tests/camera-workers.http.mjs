@@ -576,7 +576,8 @@ try {
       await page.getByRole("link", { name: "Brooder camera", exact: true }).waitFor();
       assert.equal(await page.getByRole("link", { name: "Network barn camera", exact: true }).count(), 0);
       await provider.selectOption("wyze");
-      assert.equal(await page.getByRole("link", { name: "Open Wyze sign-in" }).getAttribute("href"), "https://my.wyze.com/live");
+      assert.equal(await page.getByRole("link", { name: "Open Wyze live view" }).getAttribute("href"), "https://my.wyze.com/live");
+      await page.getByRole("heading", { name: "Wyze account" }).waitFor();
       await page.getByRole("heading", { name: "Wyze hatchery" }).waitFor();
       assert.equal(await page.getByLabel("Blink password").count(), 0);
       assert.equal(await page.getByRole("heading", { name: "Other gateway" }).count(), 0);
