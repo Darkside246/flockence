@@ -98,7 +98,8 @@ try {
 
       for (const [route, name] of pages) {
         const response = await page.goto(origin + route);
-        assert.ok(response?.ok(), route + " returned " + response?.status());
+        // A hash route (/operations#records) on the same page is an in-page change with no response.
+        assert.ok(route.includes("#") || response?.ok(), route + " returned " + response?.status());
         await page.locator("main").filter({ hasNotText: "Checking your session" }).first().waitFor({ state: "visible" });
         await page.waitForFunction((id) => document.documentElement.dataset.theme === id, theme);
         if (route === "/" && process.env.VISUAL_SEED_DASHBOARD === "true") {
