@@ -113,13 +113,9 @@ export default function LayerPerformancePage() {
   const selectedBatchName = batches.find(batch=>batch.id===batchId)?.name || "All layer flocks";
 
   return <div className="shell">
-    <header className="topbar"><div className="brand"><div><h1>Layer performance</h1><p>Production, quality, feed and survival in one view.</p></div><span className="badge">LAYER INSIGHTS</span></div></header>
+    <header className="topbar"><div className="brand"><div><h1>Layer performance</h1><p>Production, quality, feed and survival in one view. Use recorded egg collections and feed usage to see what is happening across the selected period.</p></div><div className="ds-actions"><a className="button" href="/layers">Daily egg round</a><a className="button button-primary" href="/layers/packing">Pack eggs</a></div></div></header>
     <Nav/>
     <main className="main">
-      <section className="dashboard-head">
-        <div><div className="hero-kicker">Production intelligence</div><h2>Understand your laying flock</h2><p>Use recorded egg collections and feed usage to see what is happening across the selected period.</p></div>
-        <div className="header-actions"><a className="button" href="/layers">Daily egg round</a><a className="button button-primary" href="/layers/packing">Pack eggs</a></div>
-      </section>
 
       <section className="section card">
         <div className="section-head"><div><div className="hero-kicker">Reporting window</div><h3>Choose what to compare</h3><p>Up to 90 days. Historical rates use each collection's recorded live-hen count.</p></div><span className="badge">{selectedBatchName}</span></div>
