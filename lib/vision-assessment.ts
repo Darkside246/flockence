@@ -99,6 +99,8 @@ export const visionAssessmentSchema = z.object({
     model: z.string().max(80), count: z.number().int().min(0), counts: z.array(z.number().int().min(0)).max(3),
     still: z.array(z.object({ where: z.string().max(40), box: z.array(z.number()).length(4) })).max(50),
   }).optional().catch(undefined),
+  /** What the model itself counted (Vision Intelligence phase 2: measured against the farmer's labels). */
+  seen: z.object({ birds: z.number().int().min(0).max(100000).nullable(), stillBirds: z.number().int().min(0).max(50) }).optional().catch(undefined),
   /** The phone's upload id, so a retried upload is recognised (lib/vision-upload-requests.ts). */
   requestId: z.string().regex(/^[A-Za-z0-9-]{16,64}$/).optional(),
 });
@@ -132,6 +134,7 @@ export function createVisionAssessment(result: VisionResult, input: {
   return {
     version: 1, ...saved, status, signals,
     confidence: result.confidence ?? null, summary: result.summary, checks: result.checks,
+    seen: { birds: result.birdCount?.visible ?? null, stillBirds: result.stillBirds?.length ?? 0 },
     ...(result.layout ? { layout: result.layout } : {}),
     ...(result.eggs ? { eggs: result.eggs } : {}),
     ...(Array.isArray(result.animals) ? { animals: result.animals } : {}),
