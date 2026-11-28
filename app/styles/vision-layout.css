@@ -67,3 +67,8 @@
 .vision-intel-controls { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: var(--space-2) var(--space-3); align-items: end; }
 .vision-intel-area .vision-intel-area-status { display: table; margin: 0 0 4px; }
 .vision-intel-area > strong { display: block; font-size: var(--text-sm); }
+
+/* Report tabs (components/vision-intelligence.tsx): each panel stacks its cards. */
+.vision-intel-panel { display: grid; gap: var(--space-3); }
+.vision-intel-panel > * { margin: 0; }
+.vision-intel > .ds-tabs { margin-bottom: var(--space-3); }
