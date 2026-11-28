@@ -48,3 +48,19 @@ within their permitted roles. A recipient with an existing Flockence account
 needs the existing account support path. Each account currently belongs to
 one farm. Existing manual codes remain available through the original API
 and signup page.
+
+## Email templates (Settings > Email)
+
+The farm owner can change the wording of each email Flockence sends, by category: sign-up verification, welcome,
+password reset (account emails, edited by the owner of the home farm `FARM_ID`), and team invitation, daily Farm Vision
+report and Farm Vision alert (farm emails, each farm's own). For each one the owner sets a subject, an opening paragraph
+and a closing line; `{farm}` and `{subject}` are filled in. The working part of the email (link, expiry, report) is
+always included, so a template cannot break it. Empty fields use the standard wording from `lib/mail.ts`. Templates are
+stored as farm `Setting` rows (`email_template.<category>.<field>`); no schema change.
+
+"Send me a test" sends the saved template, with a sample link or report, to the signed-in owner's own email (10 an hour).
+
+The sending service is a server setting for the developer/administrator only: `RESEND_API_KEY`, `RESEND_FROM` and
+`FLOCKENCE_WELCOME_EMAIL` live in the private service environment (the release's `.env`, copied forward by
+`ops/release/switch-release.sh`). They are never stored in the database or shown in the app; Settings and /platform only
+show whether sending is configured.

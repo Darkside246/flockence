@@ -6,6 +6,7 @@ import { DashboardSettings } from "@/components/dashboard-settings";
 import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { SettingsCameraProviders } from "@/components/settings-camera-providers";
+import { SettingsEmailTemplates } from "@/components/settings-email-templates";
 import { useSession } from "@/components/auth-gate";
 import { farmRoleLabels, type FarmRole } from "@/lib/farm-roles";
 import { useTheme } from "@/components/theme-provider";
@@ -18,6 +19,7 @@ const sections = [
   ["team", "Team & permissions"],
   ["devices", "Devices & plan"],
   ["cameras", "Camera connections"],
+  ["email", "Email"],
   ["appearance", "Appearance"],
   ["storage", "Storage & sync"],
 ] as const;
@@ -191,6 +193,8 @@ export default function SettingsPage() {
       </section>}
 
       {section === "cameras" && <SettingsCameraProviders />}
+
+      {section === "email" && <SettingsEmailTemplates />}
 
       {section === "appearance" && <>
         <section className="section card">

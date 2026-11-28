@@ -75,7 +75,7 @@ export async function runFarmDailyReport(now: Date, send = sendVisionReportEmail
 
   let sent = 0, failed = 0;
   for (const person of people) {
-    const ok = await send(person.email, email, `flockence-vision-daily-${farmId}-${local.date}-${person.id}`).catch(() => false);
+    const ok = await send(person.email, email, `flockence-vision-daily-${farmId}-${local.date}-${person.id}`, farmId).catch(() => false);
     if (ok) { sent += 1; today.sentTo.push(person.id); await saveState(today); } else failed += 1;
   }
   if (!failed) await saveState({ ...today, done: true });

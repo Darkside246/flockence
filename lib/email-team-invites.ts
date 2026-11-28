@@ -68,7 +68,7 @@ export async function issueEmailTeamInvite(actorId: string, email: string, role:
   });
 
   try {
-    if (!await sendTeamInvitationEmail(email, url.href, row.farmName, expiresAt, row.id)) throw new Error("MAIL_REJECTED");
+    if (!await sendTeamInvitationEmail(email, url.href, row.farmName, expiresAt, row.id, farmId)) throw new Error("MAIL_REJECTED");
   } catch {
     await prisma.setting.deleteMany({ where: { farmId, key } }).catch(() => undefined);
     throw new Error("EMAIL_INVITE_DELIVERY_FAILED");
