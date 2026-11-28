@@ -27,7 +27,7 @@ export default function PlanPage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Plan &amp; devices</h1><p>See which tools your farm can use.</p></div></div></header>
     <Nav />
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
       <section className="section card">
         <Link href="/settings#devices">Back to settings</Link>
         <h2>{plan?.state === "PREMIUM" ? "Premium" : plan?.state === "STANDARD" ? "Standard" : plan?.state === "FREE" ? "Free" : plan?.state === "EXISTING" ? "Existing access" : plan ? "Plan unavailable" : "Checking plan…"}</h2>

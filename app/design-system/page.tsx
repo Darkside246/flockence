@@ -14,7 +14,7 @@ export default function DesignSystemPage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Flockence design system</h1><p>Theme matrix, accessibility tokens and operator stress-test surface.</p></div><span className="badge">A11Y / UI</span></div></header>
     <Nav />
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
       <section className="hero"><div className="hero-kicker">Design system lead</div><h2>One product. Five operating moods.</h2><p>Every theme changes the visual character while preserving the same information hierarchy, touch targets, status language and semantic data roles.</p></section>
 
       <section className="section card">

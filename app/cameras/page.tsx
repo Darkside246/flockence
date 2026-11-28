@@ -320,7 +320,7 @@ export default function CamerasPage() {
     } catch (e) { setStatus(null); setCameras([]); setError(e instanceof Error ? e.message : "Unable to reach the camera service."); }
   }, []);
   useEffect(() => { load(); }, [load]);
-  return <div className="shell"><header className="topbar"><div className="brand"><div><div className="hero-kicker">Site security</div><h1>Cameras</h1><p>Live view, latest pictures and recordings from Blink and local network cameras.</p></div><span className="badge">LIVE · STILLS · RECORDINGS</span></div></header><Nav /><main className="main">
+  return <div className="shell"><header className="topbar"><div className="brand"><div><div className="hero-kicker">Site security</div><h1>Cameras</h1><p>Live view, latest pictures and recordings from Blink and local network cameras.</p></div><span className="badge">LIVE · STILLS · RECORDINGS</span></div></header><Nav /><main id="main" tabIndex={-1} className="main">
     {error && <div className="card" role="alert"><p>{error}</p>
       <button type="button" className="button" onClick={() => void load()}>Check connection again</button>
       {error.includes("requires Flockence Premium") && <p><a href="/settings/plan">View your farm plan</a></p>}

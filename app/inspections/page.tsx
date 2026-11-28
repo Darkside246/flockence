@@ -57,7 +57,7 @@ export default function InspectionsPage() {
 
   return <div className="shell">
     <Nav />
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
       <section className="section card">
         <div className="section-head"><div><h1>Flock inspections</h1><p>Observations and photos synced from the offline workspace.</p></div>
           <Link href="/offline.html" className="button button-primary">Record an inspection</Link>

@@ -115,7 +115,7 @@ export default function LayerPerformancePage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Layer performance</h1><p>Production, quality, feed and survival in one view. Use recorded egg collections and feed usage to see what is happening across the selected period.</p></div><div className="ds-actions"><a className="button" href="/layers">Daily egg round</a><a className="button button-primary" href="/layers/packing">Pack eggs</a></div></div></header>
     <Nav/>
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
 
       <section className="section card">
         <div className="section-head"><div><div className="hero-kicker">Reporting window</div><h3>Choose what to compare</h3><p>Up to 90 days. Historical rates use each collection's recorded live-hen count.</p></div><span className="badge">{selectedBatchName}</span></div>

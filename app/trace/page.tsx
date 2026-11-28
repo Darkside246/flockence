@@ -23,7 +23,7 @@ export default function Trace(){
  const load=async(idOrCode:string, mode:"batch"|"code")=>{setLoading(true);setError("");try{const q=mode==="batch"?"batchId="+encodeURIComponent(idOrCode):"code="+encodeURIComponent(idOrCode.trim());const r=await fetch("/api/trace?"+q,{cache:"no-store"});const d=await r.json();if(!r.ok)throw new Error(d.error||"Trace not found.");setData(d)}catch(e){setData(null);setError(e instanceof Error?e.message:"Could not load trace.")}finally{setLoading(false)}};
  useEffect(()=>{if(selected)void load(selected,"batch")},[selected]);
  const groups=useMemo(()=>{const map=new Map<string,TraceItem[]>();for(const item of data?.items||[]){const arr=map.get(item.stage)||[];arr.push(item);map.set(item.stage,arr)}return [...map.entries()]},[data]);
- return <div className="shell"><header className="topbar"><div className="brand"><div><h1>Trace</h1><p>End-to-end accountability from chick registration through harvest, product lots and sale.</p></div><span className="badge">FARMER TRACE</span></div></header><Nav/><main className="main">
+ return <div className="shell"><header className="topbar"><div className="brand"><div><h1>Trace</h1><p>End-to-end accountability from chick registration through harvest, product lots and sale.</p></div><span className="badge">FARMER TRACE</span></div></header><Nav/><main id="main" tabIndex={-1} className="main">
  {error&&<section className="section card"><strong>{error}</strong></section>}
  <section className="section card trace-pick"><div className="form grid2">
   <label>Batch<select value={selected} onChange={e=>setSelected(e.target.value)}><option value="">Select batch</option>{batches.map(b=><option key={b.id} value={b.id}>{b.name} · {b.traceCode}</option>)}</select></label>

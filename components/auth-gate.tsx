@@ -67,7 +67,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (isPublicPath) return <ThemeProvider>{children}</ThemeProvider>;
-  if (locked) return <main className="auth-shell">
+  if (locked) return <main id="main" tabIndex={-1} className="auth-shell">
     <section className="auth-card" aria-live="polite">
       <div className="auth-brand"><div className="brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div>
       <div className="auth-heading"><h1>Farm closing</h1><p>This farm is scheduled for deletion.</p></div>
@@ -75,7 +75,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <p className="auth-links"><a href="/login">Sign in with another account</a></p>
     </section>
   </main>;
-  if (failed && !user) return <main className="auth-shell">
+  if (failed && !user) return <main id="main" tabIndex={-1} className="auth-shell">
     <section className="auth-card" aria-live="polite">
       <div className="auth-brand"><div className="brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div>
       <div className="auth-heading"><h1>Connection issue</h1><p>Flockence could not verify your account.</p></div>

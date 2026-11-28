@@ -54,7 +54,7 @@ export function FreeSignupForm({ captchaSiteKey, captchaMode }: { captchaSiteKey
     }
   }
 
-  return <main className="auth-shell"><section className="auth-card">
+  return <main id="main" tabIndex={-1} className="auth-shell"><section className="auth-card">
     <div className="auth-brand"><div className="brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div>
     <div className="auth-heading">
       <h1>{token ? "Create your farm account" : sent ? "Check your inbox" : "Start your Free farm"}</h1>

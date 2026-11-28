@@ -42,7 +42,7 @@ export default function SuppliersPage() {
   }
   const set = (k: string) => (e: { target: { value: string } }) => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  return <div className="shell"><header className="topbar"><div className="brand"><div><h1>Suppliers and dealers</h1><p>Hatcheries, feed dealers, vets, processors and anyone else you buy from. Purchases can also add a supplier as you go.</p></div></div></header><Nav /><main className="main">
+  return <div className="shell"><header className="topbar"><div className="brand"><div><h1>Suppliers and dealers</h1><p>Hatcheries, feed dealers, vets, processors and anyone else you buy from. Purchases can also add a supplier as you go.</p></div></div></header><Nav /><main id="main" tabIndex={-1} className="main">
     {msg && <p className="notice" role="status">{msg}</p>}
     <div className="resource-layout">
     <section className="card">

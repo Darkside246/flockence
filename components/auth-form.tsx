@@ -29,7 +29,7 @@ async function confirmSignedIn() {
 }
 
 function Shell({ children, title, subtitle }: { children: React.ReactNode; title: string; subtitle: string }) {
-  return <main className="auth-shell"><section className="auth-card"><div className="auth-brand"><div className="brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div><div className="auth-heading"><h1>{title}</h1><p>{subtitle}</p></div>{children}</section></main>;
+  return <main id="main" tabIndex={-1} className="auth-shell"><section className="auth-card"><div className="auth-brand"><div className="brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div><div className="auth-heading"><h1>{title}</h1><p>{subtitle}</p></div>{children}</section></main>;
 }
 
 function Message({ error, success }: { error: string; success: string }) {

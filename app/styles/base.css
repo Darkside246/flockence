@@ -244,3 +244,8 @@ html[data-theme="workhorse"] :is(.metric-value, .metric-label, td, th, input, se
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* Accessibility (28 Nov 2026): keyboard users can jump past the navigation; the link shows only when focused. */
+.skip-link { position: absolute; left: var(--space-3); top: -60px; z-index: 1000; padding: 10px 16px; border-radius: var(--ds-control-radius); background: var(--ds-accent); color: var(--ds-on-accent); font-weight: var(--weight-semibold); text-decoration: none; }
+.skip-link:focus, .skip-link:focus-visible { top: var(--space-3); color: var(--ds-on-accent); }
+#main:focus, #main:focus-visible { outline: none; box-shadow: none; }

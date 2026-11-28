@@ -151,7 +151,7 @@ export default function EggPackingPage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Pack eggs</h1><p>Turn graded eggs into traceable carton inventory. Flockence consumes the oldest available graded egg lots first and keeps the source lots attached to each carton batch.</p></div><div className="ds-actions"><a className="button" href="/layers">Daily egg round</a><a className="button button-primary" href="/inventory">Egg inventory</a></div></div></header>
     <Nav/>
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
 
       {error && <section className="section card" role="alert"><strong>Could not complete packing</strong><p>{error}</p></section>}
       {message && <section className="section card" role="status"><strong>{message}</strong><p>Carton stock is now available in inventory. Egg input stock and the carton output both have ledger movements.</p></section>}

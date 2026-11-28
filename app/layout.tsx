@@ -52,5 +52,5 @@ const appearanceBootstrap = `try {
 } catch {}`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en" data-theme={DEFAULT_THEME} suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: appearanceBootstrap }} /></head><body><PwaRegister /><BannerPhoto /><AuthGate>{children}</AuthGate></body></html>;
+  return <html lang="en" data-theme={DEFAULT_THEME} suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: appearanceBootstrap }} /></head><body><a className="skip-link" href="#main">Skip to content</a><PwaRegister /><BannerPhoto /><AuthGate>{children}</AuthGate></body></html>;
 }

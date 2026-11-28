@@ -97,7 +97,7 @@ export default function DevicesPage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Devices</h1><p>Camera feeds and smart devices linked to your farm.</p></div></div></header>
     <Nav />
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
       <section className="card"><div className="section-head">
         <div><h2>Cameras</h2><p>View your farm’s feeds or connect Blink, Wyze, and compatible network cameras.</p></div>
         <Link className="button" href="/cameras">Open Cameras</Link>

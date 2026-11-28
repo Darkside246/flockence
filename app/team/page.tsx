@@ -114,7 +114,7 @@ export default function TeamPage() {
   return <div className="shell">
     <header className="topbar"><div className="brand"><div><h1>Farm team</h1><p>Manage access to production and business records. Give each person the access they need to do their work, without giving everyone control of the farm.</p></div><span className="badge">ACCESS CONTROL</span></div></header>
     <Nav/>
-    <main className="main">
+    <main id="main" tabIndex={-1} className="main">
       {error && <section className="section card" role="alert"><strong>Could not complete that action</strong><p>{error}</p></section>}
       {message && <section className="section card" role="status"><strong>{message}</strong></section>}
 
