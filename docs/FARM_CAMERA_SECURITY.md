@@ -17,3 +17,25 @@ Oriya still uses the install's default camera allowlist. Per-customer Oriya vide
 The policy file is exercised by CI with an unprivileged role and direct SQL. It covers farm-owned rows and child records that inherit their farm through a parent. The app's existing cross-farm link validation still applies.
 
 Live rollout requires a restricted, non-owner request role and a transaction-local app.farm_id on every tenant query, including existing transactions and background jobs. The application must derive the ID from verified identity. Bootstrap, authentication and migrations need separately scoped database access. A role able to issue arbitrary SQL can change its own transaction settings, so database credentials and raw-query paths remain server-only. The policy file alone does not wire Prisma into that role and scope. Apply it only to a disposable database or staging environment until that wiring, a restored-backup rehearsal and a sign-in/signup test pass.
+
+## Adding a camera worker for another farm (one command)
+
+`ops/cameras/add-farm-camera-worker.sh` does the per-farm set-up above. On the VPS, after the home camera service is
+installed (`services/blink/install-vps.sh`):
+
+```bash
+sudo bash /opt/flockence-release-<short>/app/ops/cameras/add-farm-camera-worker.sh <farm-id>
+sudo bash /opt/flockence-release-<short>/app/ops/cameras/add-farm-camera-worker.sh --list
+```
+
+It checks the farm exists and is not the home farm, then creates a non-login account `fcam-<hash>`, a private state
+directory, a random token and Blink encryption key (`BLINK_REQUIRE_ENCRYPTION=1`) in `/etc/flockence/camera-<hash>.env`,
+and `flockence-cam-<hash>.service` on the next free port from 8766. It reuses the installed camera code read-only. It
+checks the worker answers, adds it to `/etc/flockence/camera-workers.env` (`FLOCKENCE_CAMERA_WORKERS`, read by the app
+through a systemd drop-in) and restarts Flockence. Any failure removes what it made for that farm and leaves the app as
+it was. The farm's owner then connects their cameras under Cameras.
+
+When a farm is deleted (Settings > Farm profile), stop and remove its worker by hand: `systemctl disable --now
+flockence-cam-<hash>.service`, remove its unit, env file and state directory, delete its entry from
+`camera-workers.env`, and restart Flockence.
+
