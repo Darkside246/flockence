@@ -66,12 +66,15 @@ export async function deleteFarmNow(storageDir: string) {
 /** Every farm whose grace period is over. One farm's failure never stops the others; it is tried again next round. */
 export async function runDueFarmDeletions(storageDir: string, now = new Date()) {
   const pending = await runUnscoped(() => prisma.setting.findMany({ where: { key: DELETION_KEY }, select: { farmId: true, value: true } }));
-  const results: { farmId: string; deleted: boolean; error?: string }[] = [];
+  type Result = { farmId: string; deleted: boolean; error?: string };
+  const results: Result[] = [];
   for (const row of pending) {
-    if (!canDeleteFarm(row.farmId, DEFAULT_FARM_ID) || !deletionStatus(parseDeletion(row.value), now).due) continue;
-    const r = await runAsFarm(row.farmId, () => deleteFarmNow(storageDir))
-      .then(() => ({ farmId: row.farmId, deleted: true }))
-      .catch((error) => ({ farmId: row.farmId, deleted: false, error: error instanceof Error ? error.message.slice(0, 120) : "unknown" }));
+    if (!canDeleteFarm(row.farmId, DEFAULT_FARM_ID)) continue;
+    const status = deletionStatus(parseDeletion(row.value), now);
+    if (!status.pending || !status.due) continue;
+    const r: Result = await runAsFarm(row.farmId, () => deleteFarmNow(storageDir))
+      .then((): Result => ({ farmId: row.farmId, deleted: true }))
+      .catch((error): Result => ({ farmId: row.farmId, deleted: false, error: error instanceof Error ? error.message.slice(0, 120) : "unknown" }));
     if (!r.deleted) console.warn(`[farm-deletion] could not delete farm ${row.farmId}: ${r.error}`);
     results.push(r);
   }
