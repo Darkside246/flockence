@@ -840,8 +840,23 @@ test("recording checks: one clip per part of the day, filed at its filming time,
   const camera = { name: `Rec cam ${stamp}`, source: "blink", deviceKey: "k" };
   await runAsFarm(A, () => saveCameraPen(camera, pen.id, owner.id));
   const now = new Date();
-  const at = (hoursAgo) => new Date(now.getTime() - hoursAgo * 3_600_000).toISOString();
-  const clips = [1, 6, 11, 16].map((h, i) => ({ id: `blink:c${i}-${stamp}`, camera: camera.name, createdAt: at(h), source: "blink", media: `/api/v1/c${i}` }));
+  // One clip in each of four different parts of the farm's day (Barbados time), all in the last 24 hours. Fixed
+  // "hours ago" offsets landed two clips in the same part at some times of day (e.g. CI after 00:00 UTC), and the rule
+  // then rightly keeps only the one nearest the middle of that part, so the test failed overnight.
+  const { FARM_TIME_ZONE } = await import("../lib/poultry-metrics.mjs");
+  const farmHour = (d) => Number(new Intl.DateTimeFormat("en-GB", { timeZone: FARM_TIME_ZONE, hour: "2-digit", hourCycle: "h23" }).format(d));
+  const nowHour = farmHour(now);
+  const partHours = [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9, 10], [11, 12, 13, 14], [15, 16, 17, 18]];   // night, morning, midday, afternoon
+  const clipTimes = partHours.map((hours) => {
+    const hour = hours.find((h) => h !== nowHour);
+    for (let back = 1; back < 24; back += 1) {
+      const t = new Date(now.getTime() - back * 3_600_000);
+      if (farmHour(t) === hour) return t;
+    }
+    throw new Error("no clip time for farm hour " + hour);
+  });
+  const clips = clipTimes.map((t, i) => ({ id: `blink:c${i}-${stamp}`, camera: camera.name, createdAt: t.toISOString(), source: "blink", media: `/api/v1/c${i}` }));
+  const oldest = clips.reduce((a, b) => (Date.parse(a.createdAt) <= Date.parse(b.createdAt) ? a : b));
   const inspected = [];
   const deps = {
     visionCameras: async () => [camera],
@@ -853,7 +868,7 @@ test("recording checks: one clip per part of the day, filed at its filming time,
   assert.equal(first.used, 1, "never more than the remaining daily budget");
   assert.equal(inspected.length, 1);
   assert.equal(inspected[0].recording.frames.length, 3);
-  assert.equal(inspected[0].recording.clipAt.toISOString(), clips[3].createdAt, "the oldest part of the day first, filed at filming time");
+  assert.equal(inspected[0].recording.clipAt.toISOString(), oldest.createdAt, "the oldest part of the day first, filed at filming time");
   assert.equal(inspected[0].automatic, true);
 
   const second = await runAsFarm(A, () => runRecordingChecks([camera.name], 10, now, deps));
