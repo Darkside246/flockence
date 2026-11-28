@@ -1017,7 +1017,9 @@ test("farm deletion: a due request removes the farm and everything in it, and no
     const requestedAt = new Date(Date.now() - 31 * 86_400_000);
     await prisma.setting.create({ data: { key: DELETION_KEY, value: JSON.stringify({ requestedAt: requestedAt.toISOString(), deleteAfter: new Date(requestedAt.getTime() + 30 * 86_400_000).toISOString(), requestedBy: "x" }) } });
   });
-  assert.equal(await farmLockedForDeletion(D), true, "locked while pending");
+  // Checked inside the farm's request scope, as lib/current-user.ts does on every signed-in request.
+  assert.equal(await runAsFarm(D, () => farmLockedForDeletion(D)), true, "locked while pending");
+  assert.equal(await runAsFarm(A, () => farmLockedForDeletion(A)), false, "other farms are not locked");
   const results = await runDueFarmDeletions("/nonexistent-test-dir");
   assert.deepEqual(results.filter((r) => r.farmId === D), [{ farmId: D, deleted: true }]);
   assert.equal(await runUnscoped(() => prisma.farm.count({ where: { id: D } })), 0);
