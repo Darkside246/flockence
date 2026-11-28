@@ -85,6 +85,16 @@ legend { padding: 0 var(--space-1); font-size: var(--text-sm); font-weight: var(
 .button-primary:hover:enabled, a.button-primary:hover { background: var(--ds-accent-hover); border-color: var(--ds-accent-hover); color: var(--ds-on-accent); }
 .button-primary > :is(span, svg) { color: inherit; }
 .button-danger, .button.danger { background: var(--ds-danger-soft); border-color: color-mix(in srgb, var(--ds-danger) 45%, var(--ds-border)); color: var(--ds-danger); }
+/* Older forms use a plain <button> (or class="primary") to submit. They get the primary look,
+   and plain non-submit buttons get the standard one, instead of the browser's grey default. */
+form button:not([class]):not([type="button"]):not([type="reset"]), button.primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: var(--control-h); padding: 0 var(--space-4); align-self: end;
+  border: 1px solid var(--ds-accent); border-radius: var(--ds-control-radius);
+  background: var(--ds-accent); color: var(--ds-on-accent);
+  font-size: var(--text-sm); font-weight: var(--weight-bold); line-height: 1.2;
+}
+form button:not([class]):not([type="button"]):not([type="reset"]):hover:enabled, button.primary:hover:enabled { background: var(--ds-accent-hover); border-color: var(--ds-accent-hover); }
 :is(button, .button):disabled { opacity: .6; cursor: not-allowed; }
 .notice { color: var(--ds-accent); font-size: var(--text-sm); margin-left: var(--space-2); }
 
