@@ -12,7 +12,7 @@ const pages = [
   ["/", "dashboard"], ["/pens", "housing"], ["/batches", "flocks"],
   ["/layers", "eggs"], ["/layers/performance", "layer-performance"], ["/inventory", "inventory-feed"], ["/reports", "reports"],
   ["/settings", "appearance"], ["/farm-setup", "farm-setup"], ["/team", "team"],
-  ["/operations", "daily-round"], ["/health", "health"], ["/health/treatments", "treatments"], ["/health/tests", "diagnostics"],
+  ["/operations", "daily-round"], ["/operations#records", "daily-round-records"], ["/operations#harvest", "daily-round-harvest"], ["/operations#transport", "daily-round-transport"], ["/health", "health"], ["/health/treatments", "treatments"], ["/health/tests", "diagnostics"],
   ["/layers/packing", "packing"], ["/house", "house"], ["/finances", "finances"], ["/performance", "performance"],
   ["/planning", "planning"], ["/trace", "trace"], ["/account", "account"], ["/vision", "vision"], ["/cameras", "cameras"],
 ];
