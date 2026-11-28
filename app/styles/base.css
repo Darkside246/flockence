@@ -40,7 +40,7 @@ hr { border: 0; border-top: 1px solid var(--ds-border); margin: var(--space-4) 0
 
 /* ---------- forms ---------- */
 .form { display: grid; gap: var(--space-3); }
-label { display: grid; gap: 6px; color: var(--ds-text-2); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
+label { display: grid; align-content: start; gap: 6px; color: var(--ds-text-2); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 /* Check boxes and radios sit on one line with their text instead of a stacked grid row. */
 label:has(> input:is([type="checkbox"], [type="radio"])) {
   display: flex; align-items: flex-start; gap: var(--space-2);
