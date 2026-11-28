@@ -261,7 +261,7 @@
 /* ======================= Pages: House and Pens (phase 8) ======================= */
 /* Recommended layout: lanes across the house; each lane's first letter is a bold badge and the
    rest of the word follows it ("[F]eed"). */
-.house-plan { list-style: none; margin: 0; padding: var(--space-2); display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; border: 1px dashed var(--ds-border-strong); border-radius: var(--ds-card-radius); background: var(--ds-surface-2); }
+.house-plan { list-style: none; margin: 0; padding: var(--space-2); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; border: 1px dashed var(--ds-border-strong); border-radius: var(--ds-card-radius); background: var(--ds-surface-2); }
 .house-cell { --lane: var(--ds-accent); display: flex; align-items: center; gap: 2px; min-height: 64px; padding: var(--space-2); border-radius: var(--radius-md); background: color-mix(in srgb, var(--lane) 12%, var(--ds-surface)); border: 1px solid color-mix(in srgb, var(--lane) 35%, var(--ds-border)); border-top-width: 3px; color: var(--ds-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .house-cell.feed { --lane: var(--accent-secondary); }
 .house-cell.water { --lane: var(--ds-info); }
@@ -330,4 +330,7 @@
 @media (max-width: 1100px) {
   .resource-layout, .finance-lists { grid-template-columns: minmax(0, 1fr); }
   .resource-form { position: static; }
+}
+@media (max-width: 1280px) and (min-width: 1101px), (max-width: 560px) {
+  .house-plan { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
