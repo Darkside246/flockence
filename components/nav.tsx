@@ -7,13 +7,18 @@ import { useSession } from "@/components/auth-gate";
 
 type NavItem = readonly [string, string, string];
 
+// Six task groups (2026 redesign). Every route from the previous Operate / Control / Understand
+// layout is still here; only the grouping and order changed. Team stays Owner/Supervisor only.
 const groups: { label: string; items: NavItem[] }[] = [
-  { label: "Operate", items: [["Overview", "/", "home"], ["Flocks", "/batches", "flock"], ["Daily round", "/operations", "operations"], ["Egg production", "/layers", "eggs"], ["Layer performance", "/layers/performance", "performance"], ["Pack eggs", "/layers/packing", "package"], ["House", "/house", "house"], ["Pens", "/pens", "pens"], ["Health", "/health", "health"]] },
-  { label: "Control", items: [["Trace", "/trace", "trace"], ["Cameras", "/cameras", "camera"], ["Farm Vision", "/vision", "vision"], ["Devices", "/devices", "devices"], ["Inventory", "/inventory", "inventory"], ["Finances", "/finances", "money"], ["Suppliers", "/suppliers", "users"], ["Production", "/planning", "production"]] },
-  { label: "Understand", items: [["Performance", "/performance", "performance"], ["Reports", "/reports", "reports"]] }
+  { label: "Overview", items: [["Overview", "/", "home"]] },
+  { label: "Daily operations", items: [["Daily round", "/operations", "operations"], ["Flocks", "/batches", "flock"], ["Health", "/health", "health"], ["Farm Vision", "/vision", "vision"]] },
+  { label: "Production", items: [["Egg production", "/layers", "eggs"], ["Pack eggs", "/layers/packing", "package"], ["Planning", "/planning", "production"], ["Trace", "/trace", "trace"]] },
+  { label: "Farm resources", items: [["House", "/house", "house"], ["Pens", "/pens", "pens"], ["Inventory", "/inventory", "inventory"], ["Suppliers", "/suppliers", "users"], ["Cameras", "/cameras", "camera"], ["Devices", "/devices", "devices"]] },
+  { label: "Insights", items: [["Performance", "/performance", "performance"], ["Layer performance", "/layers/performance", "performance"], ["Reports", "/reports", "reports"]] },
 ];
-const teamGroup = { label: "Manage", items: [["Team", "/team", "users"]] as NavItem[] };
+const teamItem: NavItem = ["Team", "/team", "users"];
 const settings: NavItem = ["Settings", "/settings", "settings"];
+const managementGroup = (canManage: boolean) => ({ label: "Management", items: [["Finances", "/finances", "money"], ...(canManage ? [teamItem] : []), settings] as NavItem[] });
 
 function NavIcon({name}:{name:string}) {
   const paths:Record<string,React.ReactNode>={
@@ -78,7 +83,7 @@ export function Nav() {
   }
   const session = useSession();
   const canManage = session?.role === "OWNER" || session?.role === "MANAGER";
-  const visibleGroups = useMemo(() => canManage ? [...groups, teamGroup] : groups, [canManage]);
+  const visibleGroups = useMemo(() => [...groups, managementGroup(canManage)], [canManage]);
   const visibleItems = useMemo(() => visibleGroups.flatMap(group => group.items), [visibleGroups]);
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState("");
@@ -94,7 +99,9 @@ export function Nav() {
       setSigningOut(false);
     }
   }
-  const isActive = (href: string) => href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const allHrefs = useMemo(() => visibleItems.map(([, href]) => href), [visibleItems]);
+  // Most specific match wins, so Egg production is not highlighted on Pack eggs or Layer performance.
+  const isActive = (href: string) => href === "/" ? pathname === "/" : (pathname === href || pathname.startsWith(href + "/")) && !allHrefs.some(other => other !== href && other.startsWith(href + "/") && (pathname === other || pathname.startsWith(other + "/")));
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? visibleItems.filter(([label, href]) => (label + " " + href).toLowerCase().includes(q)) : visibleItems;
@@ -131,7 +138,7 @@ export function Nav() {
         <button type="button" onClick={(event) => openSearch(event.currentTarget)} aria-label="Search Flockence"><span className="nav-command-icon" aria-hidden="true">⌕</span><span>Search</span><kbd>⌘K</kbd></button>
       </div>
       {visibleGroups.map(group => <div className="nav-group" key={group.label}><div className="nav-group-label">{group.label}</div>{links(group.items)}</div>)}
-      <div className="nav-bottom">{links([settings])}<div className="nav-footer-status"><i /> Farm workspace</div>{process.env.NODE_ENV !== "development" && <><button className="nav-signout" type="button" onClick={() => void signOut()} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>{signOutError && <p className="nav-signout-error" role="alert">{signOutError}</p>}</>}</div>
+      <div className="nav-bottom">{process.env.NODE_ENV !== "development" && <><button className="nav-signout" type="button" onClick={() => void signOut()} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>{signOutError && <p className="nav-signout-error" role="alert">{signOutError}</p>}</>}</div>
     </nav>
 
     <nav className="bottom-nav" aria-label="Quick navigation">
@@ -151,7 +158,7 @@ export function Nav() {
       <div className="drawer-head"><div className="brand-main"><div className="brand-mark">F</div><div><strong>Flockence</strong><p>Farmer operating system</p></div></div><button className="icon-button" aria-label="Close menu" onClick={() => { setOpen(false); drawerTrigger.current?.focus(); }}>×</button></div>
       <button className="drawer-search" type="button" onClick={() => { setOpen(false); openSearch(drawerTrigger.current); }}><span>⌕</span> Find anything <kbd>⌘K</kbd></button>
       {visibleGroups.map(group => <div className="drawer-group" key={group.label}><div className="drawer-group-label">{group.label}</div><div className="drawer-links">{links(group.items, true)}</div></div>)}
-      <div className="drawer-group"><div className="drawer-group-label">Workspace</div><div className="drawer-links">{links([settings], true)}</div>{process.env.NODE_ENV !== "development" && <><button className="nav-signout" type="button" onClick={() => { setOpen(false); void signOut(); }} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>{signOutError && <p className="nav-signout-error" role="alert">{signOutError}</p>}</>}</div>
+      <div className="drawer-group">{process.env.NODE_ENV !== "development" && <><button className="nav-signout" type="button" onClick={() => { setOpen(false); void signOut(); }} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>{signOutError && <p className="nav-signout-error" role="alert">{signOutError}</p>}</>}</div>
     </aside>
 
     {commandOpen && <div className="command-backdrop" role="presentation" onMouseDown={closeSearch}>

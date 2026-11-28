@@ -155,10 +155,10 @@ jobs:
           retention-days: 7
 
   screenshots:
-    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/design-system-rebuild' || github.head_ref == 'feature/poultry-farm-refinement')
+    if: github.event_name == 'pull_request' && (github.head_ref == 'feature/design-system-rebuild' || github.head_ref == 'feature/poultry-farm-refinement' || startsWith(github.head_ref, 'feature/premium-'))
     name: Theme visual review (${{ matrix.revision }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -179,7 +179,7 @@ jobs:
       AUTH_COOKIE_SECURE: "true"
       FARM_OWNER_SETUP_CODE: disposable-visual-ci-owner-setup
       APP_URL: http://localhost:3000
-      VISUAL_SEED_DASHBOARD: ${{ github.head_ref == 'feature/poultry-farm-refinement' }}
+      VISUAL_SEED_DASHBOARD: ${{ github.head_ref == 'feature/poultry-farm-refinement' || startsWith(github.head_ref, 'feature/premium-') }}
       VISUAL_THEMES: ${{ github.head_ref == 'feature/poultry-farm-refinement' && 'poultry' || '' }}
       VISUAL_REVISION: ${{ matrix.revision }}
       VISUAL_OUTPUT: ${{ github.workspace }}/theme-screenshots

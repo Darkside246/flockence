@@ -1,22 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import "./globals.css";
-import "./accessibility-theme.css";
-import "./premium.css";
-import "./premium-fixes.css";
+// Stylesheet order (2026 redesign): font, design tokens, base elements, components, shell,
+// page sheets, then the theme layers (Crystal skin, per-theme palettes, photography, Poultry
+// Farm brand palette). See docs/REDESIGN_WIREFRAMES.md, "Design-system plan".
+import "@fontsource-variable/manrope";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/components.css";
+import "./styles/shell.css";
 import "./vision/vision.css";
 import "./auth.css";
 import "./crystal.css";
-import "./crystal-depth.css";
-import "./crystal-pages.css";
-import { PwaRegister } from "@/components/pwa-register";
-import { AuthGate } from "@/components/auth-gate";
-import { BannerPhoto } from "@/components/banner-photo";
-import "./crystal-photos.css";
-import "./poultry.css";
 import "./theme-system.css";
 import "./theme-photography.css";
 import "./poultry-refinement.css";
 import "./farm-records.css";
+import { PwaRegister } from "@/components/pwa-register";
+import { AuthGate } from "@/components/auth-gate";
+import { BannerPhoto } from "@/components/banner-photo";
 import { DEFAULT_THEME, themeIds } from "@/lib/theme-registry";
 
 export const metadata: Metadata = {
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#F7F8F4",
+  themeColor: "#F5F6F1",
   width: "device-width",
   initialScale: 1
 };

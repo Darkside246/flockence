@@ -76,7 +76,9 @@ try {
     const context = await browser.newContext({ viewport, reducedMotion: "reduce" });
     const email = device + "@visual.example.test";
     const password = "Flockence-V1sual!";
+    // Account forms only accept same-site JSON posts (lib/account-form-security.ts), as a browser would send.
     const response = await context.request.post(origin + (device === "desktop" ? "/api/auth/signup" : "/api/auth/login"), {
+      headers: { origin, "content-type": "application/json" },
       data: { name: "Visual Test Owner", email: device === "desktop" ? email : "desktop@visual.example.test", password, inviteCode: process.env.FARM_OWNER_SETUP_CODE },
     });
     assert.ok(response.ok(), "Could not authenticate visual test: " + await response.text());
@@ -84,7 +86,8 @@ try {
     const page = await context.newPage();
     for (const theme of themes) {
       // A fresh page startup exercises the real first-paint bootstrap and persisted-preference path.
-      await page.goto(origin + "/settings");
+      // Settings opens on Account; the theme picker is in the Appearance section.
+      await page.goto(origin + "/settings#appearance");
       await page.locator(".theme-grid button").first().waitFor();
       const label = { poultry: "Poultry Farm", crystal: "Cyber Crystal", aero: "Aero Glass",
         heritage: "Heritage Sovereign", workhorse: "Field Workhorse", sol: "Sol Tactical", terra: "Terra Flora" }[theme];
@@ -129,7 +132,20 @@ try {
         report.push({ device, theme, route, ...metrics, overflow });
         await snapshot(page, device + "-" + theme + "-" + name);
         if (process.env.VISUAL_REVISION === "after" && process.env.VISUAL_SEED_DASHBOARD === "true") {
-          assert.equal(overflow, false, "Horizontal overflow on " + device + " " + route);
+          if (overflow) {
+            // Name the widest offenders so a failure says what to fix.
+            const culprits = await page.evaluate(() => {
+              const limit = document.documentElement.clientWidth + 1;
+              return [...document.querySelectorAll("body *")].filter((el) => el.getBoundingClientRect().right > limit)
+                .filter((el) => ![...el.children].some((child) => child.getBoundingClientRect().right > limit))
+                .slice(0, 8).map((el) => {
+                  const name = (node) => node.tagName.toLowerCase() + (typeof node.className === "string" && node.className.trim() ? "." + node.className.trim().split(/\s+/).join(".") : "") + (node.getAttribute("type") ? "[type=" + node.getAttribute("type") + "]" : "");
+                  const path = []; for (let node = el; node && node !== document.body && path.length < 5; node = node.parentElement) path.unshift(name(node) + "(" + Math.round(node.getBoundingClientRect().width) + ")");
+                  return path.join(" > ") + " right=" + Math.round(el.getBoundingClientRect().right) + " text=" + (el.textContent || "").trim().slice(0, 40);
+                });
+            });
+            assert.fail("Horizontal overflow on " + device + " " + route + ": " + culprits.join(" | "));
+          }
         }
       }
 
