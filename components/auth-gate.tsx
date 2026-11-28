@@ -13,37 +13,37 @@ const LOCAL_DEV_USER: SessionUser = { id: "local-development-owner", farmId: "de
 const SessionContext = createContext<SessionUser | null>(null);
 export function useSession() { return useContext(SessionContext); }
 
+/**
+ * Session for the signed-in pages. Pages render straight away, like any website: there is no full-screen
+ * "Checking your session" step on first load or when moving between pages (owner, 28 Nov 2026). The session is
+ * confirmed in the background; a signed-out visitor is sent to sign in, and every API still refuses data without a
+ * valid session, so nothing is shown that the server would not give. Only a real connection failure before the
+ * first confirmation shows the error card.
+ */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [state, setState] = useState<"checking" | "ready" | "error">("checking");
+  const [failed, setFailed] = useState(false);
   const [user, setUser] = useState<SessionUser | null>(null);
   const isPublicPath = PUBLIC_PATHS.has(pathname);
 
   useEffect(() => {
     if (LOCAL_DEV_BYPASS) {
       setUser(LOCAL_DEV_USER);
-      setState("ready");
       if (isPublicPath) router.replace("/");
       return;
     }
-
     if (isPublicPath) {
       setUser(null);
-      setState("ready");
       return;
     }
 
     let active = true;
-    setState("checking");
     fetch("/api/auth/me", { cache: "no-store" })
       .then(async (response) => {
         if (response.ok) {
           const data = await response.json();
-          if (active) {
-            setUser(data.user as SessionUser);
-            setState("ready");
-          }
+          if (active) { setUser(data.user as SessionUser); setFailed(false); }
           return;
         }
         if (response.status === 401 || response.status === 403) {
@@ -53,9 +53,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         }
         throw new Error("Unable to verify your sign-in. Check your connection and try again.");
       })
-      .catch(() => {
-        if (active) setState("error");
-      });
+      // A failed re-check while already signed in keeps the page; only a first check that fails shows the card.
+      .catch(() => { if (active) setFailed(true); });
 
     return () => { active = false; };
   }, [isPublicPath, pathname, router]);
@@ -66,20 +65,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (isPublicPath) return <ThemeProvider>{children}</ThemeProvider>;
-  if (state === "ready") return <SessionContext.Provider value={user}><ThemeProvider key={user?.id} accountId={user?.id} freeAppearance={user?.freeAppearance}>{children}</ThemeProvider></SessionContext.Provider>;
-
-  return <main className="auth-shell">
+  if (failed && !user) return <main className="auth-shell">
     <section className="auth-card" aria-live="polite">
       <div className="auth-brand"><div className="brand-mark">F</div><div><strong>Flockence</strong><span>Intelligent poultry management</span></div></div>
-      {state === "checking" ? <>
-        <div className="auth-heading"><h1>Checking your session</h1><p>Securing your farm workspace.</p></div>
-        <div className="loading-line" />
-      </> : <>
-        <div className="auth-heading"><h1>Connection issue</h1><p>Flockence could not verify your account.</p></div>
-        <p className="auth-message auth-error">Your farm data has not been loaded. Check your connection and try again.</p>
-        <button className="button button-primary" type="button" onClick={() => window.location.reload()}>Try again</button>
-        <p className="auth-links"><a href="/login">Go to sign in</a></p>
-      </>}
+      <div className="auth-heading"><h1>Connection issue</h1><p>Flockence could not verify your account.</p></div>
+      <p className="auth-message auth-error">Your farm data has not been loaded. Check your connection and try again.</p>
+      <button className="button button-primary" type="button" onClick={() => window.location.reload()}>Try again</button>
+      <p className="auth-links"><a href="/login">Go to sign in</a></p>
     </section>
   </main>;
+  // No key on the provider: when the session arrives the page keeps its state; the theme reloads that account's choice.
+  return <SessionContext.Provider value={user}><ThemeProvider accountId={user?.id} freeAppearance={user?.freeAppearance}>{children}</ThemeProvider></SessionContext.Provider>;
 }
