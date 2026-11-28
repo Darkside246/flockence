@@ -50,8 +50,8 @@ test("design-system sheets use tokens, not new important overrides or hard-coded
   for (const file of ["app/styles/base.css", "app/styles/components.css", "app/styles/shell.css"]) {
     const css = read(file).replace(/\/\*[\s\S]*?\*\//g, "").replace(/@media print\s*\{[\s\S]*?\n\}/, "");
     const important = (css.match(/!important/g) || []).length;
-    // Allowed: reduced-motion reset and the Sol theme blur switch-off in base.css.
-    assert.ok(important <= 6, `${file} has ${important} !important`);
+    // Allowed in base.css: the reduced-motion reset, the Sol theme blur switch-off and [hidden] (tab panels).
+    assert.ok(important <= 7, `${file} has ${important} !important`);
   }
 });
 
