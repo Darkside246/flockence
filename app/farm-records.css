@@ -77,7 +77,7 @@ dialog.ui-dialog .check-line input { width: 18px; height: 18px; min-height: 0; f
 
 /* A destructive action (delete a flock). Same shape as .button, in the theme's danger colour. */
 .button.button-danger, dialog.ui-dialog .button.button-danger {
-  background: var(--status-danger) !important; border-color: var(--status-danger) !important; color: #fff !important;
+  background: var(--status-danger) !important; border-color: var(--status-danger) !important; color: var(--bg-canvas) !important; /* dark themes use a light danger colour, so white text failed contrast */
 }
 .button.button-danger:hover:enabled { filter: brightness(1.08); }
 .button:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
