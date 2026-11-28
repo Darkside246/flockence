@@ -244,18 +244,21 @@ export default function VisionPage() {
   }
 
   return <div className="shell">
-    <header className="topbar"><div className="brand"><div className="brand-main"><div className="brand-mark">F</div><div><h1>Farm Vision</h1><p>See the flock. Find what needs checking.</p></div></div><span className="badge">AI VISION</span></div></header>
+    <header className="topbar"><div className="brand"><div><h1>Farm Vision</h1><p>See the flock. Find what needs checking. Photograph the pen, birds, feed, water or equipment for visible conditions and practical checks; it does not confirm disease.</p></div><span className="badge">AI VISION</span></div></header>
     <Nav />
     <main className="main">
-      <section className="hero"><div className="hero-kicker">Visual inspection</div><h2>Show Flockence what you see.</h2><p>Take a photo of the pen, birds, feed, water or equipment. Farm Vision looks for visible conditions and gives you practical checks. It does not confirm disease.</p></section>
-
-      <form className="section card" onSubmit={analyze}>
+      <form className="card vision-check" onSubmit={analyze}>
+        <div className="vision-check-main">
         <div className="section-head"><div><h3>1. What are you photographing?</h3><p>Choose the closest match so the inspection knows what to focus on.</p></div></div>
         <div className="vision-category-grid">{categories.map(([value, title, desc]) => <button type="button" key={value} className={`vision-category ${category === value ? "selected" : ""}`} onClick={() => setCategory(value)}><span className="vision-icon">{value === "PEN" ? "⌂" : value === "BIRD" || value === "FLOCK" ? "◉" : value === "WATER" ? "≈" : value === "FEED" ? "≋" : value === "EQUIPMENT" ? "⚙" : value === "DROPPINGS" ? "•" : value === "DEAD_BIRD" ? "†" : "＋"}</span><strong>{title}</strong><small>{desc}</small></button>)}</div>
 
-        <div className="section-head" style={{ marginTop: 24 }}><div><h3>2. Add the photo</h3><p>On a phone, this can open the camera. Maximum image size: 8 MB.</p></div></div>
+        <div className="section-head"><div><h3>2. Add the photo</h3><p>On a phone, this can open the camera. Maximum image size: 8 MB.</p></div></div>
         <label className="upload-zone"><input type="file" accept="image/*" capture="environment" onChange={pickFile} /><span className="upload-icon">+</span><strong>{preparing ? "Preparing photo…" : file ? file.name : "Take photo or choose image"}</strong><small>{preparing ? "Making it ready to send" : file ? (sizeNote || "Ready for inspection") : "Use a clear photo with good lighting"}</small></label>
-        {cameras.length > 0 && <div className="grid2" style={{ marginTop: 18 }}>
+        {preview && <div className="vision-preview"><img src={preview} alt="Selected poultry inspection" /></div>}
+        </div>
+        <div className="vision-check-side">
+        <h3 className="vision-check-title">3. Details</h3>
+        {cameras.length > 0 && <div className="vision-check-camera">
           <label>Farm camera<select value={cameraName} disabled={savingAssignment} onChange={(event) => {
             setCameraName(event.target.value);
             setPenId(cameras.find(camera => camera.name === event.target.value)?.pen?.id ?? "");
@@ -285,27 +288,27 @@ export default function VisionPage() {
               : "Send one new camera image to the vision provider for this inspection and save it in farm history."}
           </label>}
         </div>}
-        {preview && <div className="vision-preview"><img src={preview} alt="Selected poultry inspection" /></div>}
 
-        <div className="grid2" style={{ marginTop: 18 }}><label>Batch<select value={batchId} onChange={e => setBatchId(e.target.value)}><option value="">Farm-wide</option>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label><label>Anything the records do not show?<input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Example: birds went off feed this morning; new litter yesterday" maxLength={2000} /></label></div>
+        <div className="vision-check-fields"><label>Batch<select value={batchId} onChange={e => setBatchId(e.target.value)}><option value="">Farm-wide</option>{batches.map(batch => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></label><label>Anything the records do not show?<input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Example: birds went off feed this morning; new litter yesterday" maxLength={2000} /></label></div>
         <VisionKnown category={category} batchId={batchId} penId={penId} />
 
         {pens.length > 0 && <label>Pen<select value={penId} disabled={savingAssignment} onChange={(event) => setPenId(event.target.value)}>
           <option value="">No pen assigned</option>
           {pens.map((pen) => <option key={pen.id} value={pen.id}>{pen.name}</option>)}
         </select></label>}
-        {selectedCamera && <div className="actions">
+        {selectedCamera && <div className="actions vision-assign">
           <button className="button" type="button" disabled={savingAssignment || busy || !penId || selectedCamera.pen?.id === penId} onClick={() => void saveAssignment(penId)}>Save camera assignment</button>
           {selectedCamera.pen && <button className="button" type="button" disabled={savingAssignment || busy} onClick={() => void saveAssignment(null)}>Remove camera assignment</button>}
           {selectedCamera.pen && <span>Assigned to {selectedCamera.pen.name}</span>}
           {assignmentMessage && <span role="status">{assignmentMessage}</span>}
         </div>}
-        <div style={{ marginTop: 18 }}><button className="button button-primary" type="submit" disabled={busy || preparing || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? (captureVideo ? "Capturing and analyzing…" : "Analyzing photo…") : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
-        {usage && <p className="muted" style={{ marginTop: 8 }}>{usage.label} plan: {usage.left} of {usage.manualPerMonth} photo checks left this month.{!usage.cameras ? " Camera and automatic checks come with Premium." : ""}</p>}
-        {queued > 0 && <p className="notice" role="status" style={{ marginTop: 12 }}>
+        <div className="vision-submit"><button className="button button-primary" type="submit" disabled={busy || preparing || savingAssignment || Boolean(selectedCamera?.pen && selectedCamera.pen.id !== penId)}>{busy ? (captureVideo ? "Capturing and analyzing…" : "Analyzing photo…") : "Check my flock"}</button>{message && <span className="notice">{moneyish(message)}</span>}</div>
+        {usage && <p className="muted vision-usage">{usage.label} plan: {usage.left} of {usage.manualPerMonth} photo checks left this month.{!usage.cameras ? " Camera and automatic checks come with Premium." : ""}</p>}
+        {queued > 0 && <p className="notice" role="status">
           {queued} photo{queued === 1 ? "" : "s"} saved on this phone, waiting for a signal.{" "}
           <button type="button" className="button" disabled={sendingQueued} onClick={() => { flushQueue().catch(() => undefined); }}>{sendingQueued ? "Sending…" : "Send now"}</button>
         </p>}
+        </div>
       </form>
       {cameras.length > 0 && <VisionSchedule cameras={cameras} />}
       <VisionFindings pens={pens} canReview={session?.role === "OWNER" || session?.role === "MANAGER" || session?.role === "WORKER"} />

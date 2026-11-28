@@ -15,6 +15,7 @@ import "./theme-photography.css";
 import "./poultry-refinement.css";
 import "./farm-records.css";
 import "./styles/dashboard.css";
+import "./styles/vision-layout.css";
 import { PwaRegister } from "@/components/pwa-register";
 import { AuthGate } from "@/components/auth-gate";
 import { BannerPhoto } from "@/components/banner-photo";
