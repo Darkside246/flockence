@@ -42,27 +42,11 @@ export default function SuppliersPage() {
   }
   const set = (k: string) => (e: { target: { value: string } }) => setForm(f => ({ ...f, [k]: e.target.value }));
 
-  return <div className="shell"><Nav /><main className="main">
-    <header className="dashboard-head"><div><div className="hero-kicker">Business</div><h2>Suppliers and dealers</h2><p className="muted">Hatcheries, feed dealers, vets, processors and anyone else you buy from. Purchases can also add a supplier as you go.</p></div></header>
+  return <div className="shell"><header className="topbar"><div className="brand"><div><h1>Suppliers and dealers</h1><p>Hatcheries, feed dealers, vets, processors and anyone else you buy from. Purchases can also add a supplier as you go.</p></div></div></header><Nav /><main className="main">
     {msg && <p className="notice" role="status">{msg}</p>}
-    {canEdit && <form className="card form grid2" onSubmit={save}>
-      <h3 className="span-2">{form.id ? `Edit ${form.name}` : "Add a supplier"}</h3>
-      <label>Name<input value={form.name} onChange={set("name")} required maxLength={120} placeholder="Dealer or person's name" /></label>
-      <label>Kind of supplier<select value={categories.includes(form.category) ? form.category : "__custom"} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
-        {categories.map(c => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? c}</option>)}<option value="__custom">Another kind…</option></select></label>
-      {form.category === "__custom" && <label>Name this kind<input value={form.customCategory ?? ""} onChange={set("customCategory")} maxLength={40} placeholder="e.g. Packaging" /></label>}
-      <label>Business name<input value={form.businessName} onChange={set("businessName")} maxLength={160} /></label>
-      <label>Contact person<input value={form.contactPerson} onChange={set("contactPerson")} maxLength={120} /></label>
-      <label>Phone<input value={form.phone} onChange={set("phone")} inputMode="tel" maxLength={40} /></label>
-      <label>WhatsApp<input value={form.whatsapp} onChange={set("whatsapp")} inputMode="tel" maxLength={40} /></label>
-      <label>Email<input value={form.email} onChange={set("email")} type="email" maxLength={120} /></label>
-      <label>Location<input value={form.location} onChange={set("location")} maxLength={160} /></label>
-      <label className="span-2">What they supply<input value={form.productsSupplied} onChange={set("productsSupplied")} maxLength={400} placeholder="e.g. Super Feeds broiler grower, 30 kg bags" /></label>
-      <label className="span-2">Notes<textarea value={form.notes} onChange={set("notes")} maxLength={1000} rows={2} /></label>
-      <div className="row-actions span-2"><button type="submit" className="button button-primary" disabled={busy}>{busy ? "Saving…" : form.id ? "Save changes" : "Add supplier"}</button>{form.id && <button type="button" className="button" onClick={() => setForm(blank)}>Cancel</button>}</div>
-    </form>}
-    <section className="section card">
-      <div className="toolbar-row">
+    <div className="resource-layout">
+    <section className="card">
+      <div className="toolbar-row ds-filters">
         <label>Find<input value={q} onChange={e => setQ(e.target.value)} placeholder="Name, business or product" /></label>
         <label>Kind<select value={cat} onChange={e => setCat(e.target.value)}><option value="">All kinds</option>{categories.map(c => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? c}</option>)}</select></label>
         <label className="check-line"><input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} /> Show inactive</label>
@@ -80,5 +64,22 @@ export default function SuppliersPage() {
           </tr>)}</tbody>
         </table></div>}
     </section>
+    {canEdit && <form className="card form grid2 resource-form" onSubmit={save}>
+      <h3 className="span-2">{form.id ? `Edit ${form.name}` : "Add a supplier"}</h3>
+      <label>Name<input value={form.name} onChange={set("name")} required maxLength={120} placeholder="Dealer or person's name" /></label>
+      <label>Kind of supplier<select value={categories.includes(form.category) ? form.category : "__custom"} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+        {categories.map(c => <option key={c} value={c}>{CATEGORY_LABEL[c] ?? c}</option>)}<option value="__custom">Another kind…</option></select></label>
+      {form.category === "__custom" && <label>Name this kind<input value={form.customCategory ?? ""} onChange={set("customCategory")} maxLength={40} placeholder="e.g. Packaging" /></label>}
+      <label>Business name<input value={form.businessName} onChange={set("businessName")} maxLength={160} /></label>
+      <label>Contact person<input value={form.contactPerson} onChange={set("contactPerson")} maxLength={120} /></label>
+      <label>Phone<input value={form.phone} onChange={set("phone")} inputMode="tel" maxLength={40} /></label>
+      <label>WhatsApp<input value={form.whatsapp} onChange={set("whatsapp")} inputMode="tel" maxLength={40} /></label>
+      <label>Email<input value={form.email} onChange={set("email")} type="email" maxLength={120} /></label>
+      <label>Location<input value={form.location} onChange={set("location")} maxLength={160} /></label>
+      <label className="span-2">What they supply<input value={form.productsSupplied} onChange={set("productsSupplied")} maxLength={400} placeholder="e.g. Super Feeds broiler grower, 30 kg bags" /></label>
+      <label className="span-2">Notes<textarea value={form.notes} onChange={set("notes")} maxLength={1000} rows={2} /></label>
+      <div className="row-actions span-2"><button type="submit" className="button button-primary" disabled={busy}>{busy ? "Saving…" : form.id ? "Save changes" : "Add supplier"}</button>{form.id && <button type="button" className="button" onClick={() => setForm(blank)}>Cancel</button>}</div>
+    </form>}
+    </div>
   </main></div>;
 }

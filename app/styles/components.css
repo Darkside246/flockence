@@ -261,7 +261,7 @@
 /* ======================= Pages: House and Pens (phase 8) ======================= */
 /* Recommended layout: lanes across the house; each lane's first letter is a bold badge and the
    rest of the word follows it ("[F]eed"). */
-.house-plan { list-style: none; margin: 0; padding: var(--space-2); display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; border: 1px dashed var(--ds-border-strong); border-radius: var(--ds-card-radius); background: var(--ds-surface-2); }
+.house-plan { list-style: none; margin: 0; padding: var(--space-2); display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; border: 1px dashed var(--ds-border-strong); border-radius: var(--ds-card-radius); background: var(--ds-surface-2); }
 .house-cell { --lane: var(--ds-accent); display: flex; align-items: center; gap: 2px; min-height: 64px; padding: var(--space-2); border-radius: var(--radius-md); background: color-mix(in srgb, var(--lane) 12%, var(--ds-surface)); border: 1px solid color-mix(in srgb, var(--lane) 35%, var(--ds-border)); border-top-width: 3px; color: var(--ds-text); font-size: var(--text-sm); font-weight: var(--weight-semibold); }
 .house-cell.feed { --lane: var(--accent-secondary); }
 .house-cell.water { --lane: var(--ds-info); }
@@ -304,4 +304,33 @@
 @media (max-width: 1100px) {
   .layers-layout { grid-template-columns: minmax(0, 1fr); }
   .layers-trend { position: static; }
+}
+
+/* ======================= Pages: Inventory, Suppliers, Finances (phase 11) ======================= */
+/* Shared resource layout: the list or table is the page, forms sit in a side column. */
+.resource-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); gap: var(--space-4); align-items: start; margin-top: var(--space-4); }
+.main > .resource-layout:first-child { margin-top: 0; }
+.resource-layout > *, .resource-side > * { margin: 0; min-width: 0; }
+.resource-form { position: sticky; top: var(--space-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr)); }
+.resource-form .span-2 { grid-column: 1 / -1; }
+.ds-table :is(th[scope="row"], td) > span { display: block; color: var(--ds-text-2); font-size: var(--text-xs); line-height: 1.4; }
+.ds-table td.num > span { display: inline; }
+.ds-table th[scope="row"] > strong { display: block; }
+.stock-table .notice-danger { display: inline-block; margin-top: 2px; padding: 1px 6px; }
+.toolbar-row.ds-filters { align-items: end; }
+.toolbar-row.ds-filters label:not(.check-line) { min-width: 200px; }
+.toolbar-row.ds-filters .check-line { min-height: var(--control-h); }
+.finance-forms { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-4); align-items: start; }
+.finance-forms > * { margin: 0; min-width: 0; }
+.finance-forms .stats strong { font-size: var(--text-md); }
+.finance-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-items: start; margin-top: var(--space-4); }
+.finance-lists > * { margin: 0; min-width: 0; }
+.finance-lists .row { grid-template-columns: minmax(0, 1fr) auto; }
+.finance-lists .row select { width: auto; }
+@media (max-width: 1100px) {
+  .resource-layout, .finance-lists { grid-template-columns: minmax(0, 1fr); }
+  .resource-form { position: static; }
+}
+@media (max-width: 1280px) and (min-width: 1101px), (max-width: 560px) {
+  .house-plan { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
